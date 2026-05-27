@@ -1,16 +1,20 @@
-'use client'; // Zwingend erforderlich für Next.js!
+'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { createClient } from '@supabase/supabase-js'; // Normaler Import
+import { createClient } from '@supabase/supabase-js';
 import { Trophy, Home, PenTool, User, AlertCircle, ChevronRight, CheckCircle2, XCircle, Users } from 'lucide-react';
 
-// Init mit Environment Variables (Sicher!)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+// --- SUPABASE SETUP ---
+// Nutzt strikt die Environment Variables, um Secrets nicht im Code zu hardcoden
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// Fallback-ID
+let supabase;
+if (supabaseUrl && supabaseAnonKey) {
+  supabase = createClient(supabaseUrl, supabaseAnonKey);
+}
+
+// Fallback-ID für Tests ohne echtes Login-System
 const TEMP_USER_ID = '11111111-1111-1111-1111-111111111111'; 
 
 export default function App() {
@@ -25,11 +29,16 @@ export default function App() {
   // --- DATEN FETCHING ---
   useEffect(() => {
     async function loadData() {
+      if (!supabase) {
+        setErrorMsg("Supabase Environment Variables fehlen in Vercel oder .env.local");
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(true);
       setErrorMsg(null);
       
       try {
-        // 1. Hole Profile für Leaderboard & aktuellen Nutzer
         const { data: profilesData, error: profError } = await supabase
           .from('profiles')
           .select('id, display_name, total_points')
@@ -40,7 +49,6 @@ export default function App() {
         const sortedLeaderboard = profilesData || [];
         setLeaderboard(sortedLeaderboard);
 
-        // Defensive Logik: Suche den Test-User. Wenn nicht gefunden, nimm den ersten verfügbaren.
         let myProfile = sortedLeaderboard.find(p => p.id === TEMP_USER_ID);
         if (!myProfile && sortedLeaderboard.length > 0) {
           myProfile = sortedLeaderboard[0];
@@ -51,7 +59,7 @@ export default function App() {
           const myRank = sortedLeaderboard.findIndex(p => p.id === myProfile.id) + 1;
           setCurrentUserProfile({ 
             id: myProfile.id,
-            name: myProfile.display_name || 'Unbenannt', // Verhindert null-pointer bei .split()
+            name: myProfile.display_name || 'Unbenannt',
             points: myProfile.total_points || 0, 
             rank: myRank 
           });
@@ -59,7 +67,6 @@ export default function App() {
           setCurrentUserProfile({ id: null, name: 'Kein Nutzer', points: 0, rank: '-' });
         }
 
-        // 2. Hole alle Spieler für das Torschützen Modal
         const { data: playersData, error: pError } = await supabase
           .from('players')
           .select('id, name, is_in_starting_xi, team_id, teams(name)');
@@ -67,7 +74,6 @@ export default function App() {
         if (pError) throw pError;
         setPlayers(playersData || []);
 
-        // 3. Hole alle Spiele inkl. phase
         const { data: matchesData, error: mError } = await supabase
           .from('matches')
           .select(`
@@ -80,9 +86,7 @@ export default function App() {
 
         if (mError) throw mError;
 
-        // Sicherstellen, dass matchesData ein Array ist (Fallout-Schutz)
         const safeMatchesData = matchesData || [];
-
         const activeUserId = myProfile ? myProfile.id : null;
 
         const formattedMatches = safeMatchesData.map(match => {
@@ -91,7 +95,7 @@ export default function App() {
           
           return {
             id: match.id,
-            phase: match.phase || 'Unsortiert', // Fallback, falls DB-Feld leer ist
+            phase: match.phase || 'Unsortiert',
             homeTeam: match.home_team?.name || 'Unbekannt',
             homeFlag: match.home_team?.flag_url || '🏳️',
             awayTeam: match.away_team?.name || 'Unbekannt',
@@ -134,9 +138,8 @@ export default function App() {
   if (errorMsg) return (
     <div className="h-screen flex items-center justify-center bg-gray-50 p-4">
       <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-200 text-sm max-w-md w-full shadow-sm">
-        <strong className="block mb-2 flex items-center gap-2"><AlertCircle size={18}/> Datenbank-Fehler</strong>
+        <strong className="block mb-2 flex items-center gap-2"><AlertCircle size={18}/> Initialisierungs-Fehler</strong>
         <p className="break-words">{errorMsg}</p>
-        <button onClick={() => window.location.reload()} className="mt-4 bg-red-100 text-red-800 px-4 py-2 rounded font-semibold text-xs w-full">Neu laden</button>
       </div>
     </div>
   );
@@ -257,7 +260,6 @@ function DashboardView({ onNavigate, matches, userProfile, leaderboard, players 
 }
 
 function BettingView({ matches, setMatches, players, currentUser }) {
-  // Extrahiere alle einzigartigen Phasen aus den Spielen
   const phases = useMemo(() => {
     const uniquePhases = [...new Set(matches.map(m => m.phase))].filter(Boolean);
     return uniquePhases.length > 0 ? uniquePhases : ['Alle Spiele'];
@@ -265,7 +267,6 @@ function BettingView({ matches, setMatches, players, currentUser }) {
 
   const [activeTab, setActiveTab] = useState(phases[0]);
 
-  // Stelle sicher, dass der aktive Tab existiert
   useEffect(() => {
     if (!phases.includes(activeTab) && phases.length > 0) {
       setActiveTab(phases[0]);
@@ -327,7 +328,6 @@ function BettingView({ matches, setMatches, players, currentUser }) {
 
   return (
     <div className="max-w-md mx-auto">
-      {/* Dynamische Tabs basierend auf der DB Spalte 'phase' */}
       <div className="flex overflow-x-auto p-4 gap-2 no-scrollbar bg-white shadow-sm sticky top-0 z-0">
         {phases.map(phase => (
           <button 
