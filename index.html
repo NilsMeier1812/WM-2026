@@ -80,7 +80,12 @@
       </div>
       <div>
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Passwort</label>
-        <input id="inp-password" type="password" placeholder="Mindestens 6 Zeichen" onkeydown="if(event.key==='Enter')handleAuth()" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 transition bg-slate-50" />
+        <div class="relative">
+          <input id="inp-password" type="password" placeholder="Mindestens 6 Zeichen" onkeydown="if(event.key==='Enter')handleAuth()" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 transition bg-slate-50 pr-10" />
+          <button type="button" onclick="togglePw()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
       </div>
       <button id="auth-btn" onclick="handleAuth()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 mt-1">
         Anmelden
@@ -183,18 +188,39 @@ const S = {
 // HELPERS
 // ──────────────────────────────────────────
 const $  = id  => document.getElementById(id);
-function loading(el) { el.innerHTML = `<div class="flex justify-center py-16"><div class="spinner w-7 h-7"></div></div>`; }
+
+function skeletonCard() {
+  return `<div class="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 animate-pulse space-y-4">
+    <div class="h-4 bg-slate-200 rounded w-1/3"></div>
+    <div class="flex justify-between items-center"><div class="w-12 h-8 bg-slate-200 rounded"></div><div class="w-20 h-10 bg-slate-200 rounded"></div><div class="w-12 h-8 bg-slate-200 rounded"></div></div>
+    <div class="h-12 bg-slate-200 rounded w-full"></div>
+  </div>`;
+}
+
+function loading(el) { 
+  el.innerHTML = `<div class="max-w-lg mx-auto p-4 space-y-4 fade-up">${skeletonCard()}${skeletonCard()}${skeletonCard()}</div>`; 
+}
 
 function flag(team, imgCls = 'w-8 h-6') {
-  if (!team?.flag_url) return '<span class="text-2xl">🏳️</span>';
+  if (!team?.flag_url) return '<span class="text-2xl block mx-auto text-center">🏳️</span>';
   if (team.flag_url.startsWith('http') || team.flag_url.startsWith('/')) {
-    return `<img src="${team.flag_url}" class="${imgCls} object-cover rounded-sm shadow-sm" alt="${team.name}" />`;
+    return `<img src="${team.flag_url}" class="${imgCls} object-cover rounded-sm shadow-sm mx-auto" alt="${team.name}" />`;
   }
-  return `<span class="text-3xl leading-none">${team.flag_url}</span>`;
+  return `<span class="text-3xl leading-none block mx-auto text-center">${team.flag_url}</span>`;
 }
 
 function fmtTime(ts) { return new Date(ts).toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' }); }
 function fmtDate(ts) { return new Date(ts).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit' }); }
+
+function formatRelativeDate(ts) {
+  const d = new Date(ts);
+  const today = new Date();
+  const tmrw = new Date(); tmrw.setDate(today.getDate() + 1);
+  if (d.toDateString() === today.toDateString()) return 'Heute, ' + fmtTime(ts);
+  if (d.toDateString() === tmrw.toDateString()) return 'Morgen, ' + fmtTime(ts);
+  return fmtDate(ts) + ', ' + fmtTime(ts);
+}
+
 function isLocked(m) { return new Date(m.kickoff_time) <= new Date(); }
 function phases()    { return [...new Set(S.matches.map(m => m.phase).filter(Boolean))]; }
 
@@ -212,6 +238,20 @@ function getFinalScore(m, type) {
   if (type === 'home') return m.home_score_extratime !== null ? m.home_score_extratime : m.home_score;
   if (type === 'away') return m.away_score_extratime !== null ? m.away_score_extratime : m.away_score;
   return null;
+}
+
+function jumpToMatch(phase, matchId) {
+  goTo('tippen');
+  if (S.bettingPhase !== phase) setBettingPhase(phase);
+  setTimeout(() => {
+    const el = $(`match-card-${matchId}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 150);
+}
+
+function togglePw() {
+  const inp = $('inp-password');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
 }
 
 // ──────────────────────────────────────────
@@ -267,22 +307,30 @@ async function handleAuth() {
 async function fetchData() {
   loading($('main'));
 
-  const [matchRes, betRes, lbRes] = await Promise.all([
-    db.from('matches').select('*, home_team:teams!home_team_id(id,name,flag_url), away_team:teams!away_team_id(id,name,flag_url), first_goalscorer:players!first_goalscorer_id(id,name)').order('kickoff_time', { ascending: true }),
-    db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name)').eq('user_id', S.user.id),
-    db.from('profiles').select('id,display_name,total_points').order('total_points', { ascending: false }),
-  ]);
+  try {
+    const [matchRes, betRes, lbRes] = await Promise.all([
+      db.from('matches').select('*, home_team:teams!home_team_id(id,name,flag_url), away_team:teams!away_team_id(id,name,flag_url), first_goalscorer:players!first_goalscorer_id(id,name)').order('kickoff_time', { ascending: true }),
+      db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name)').eq('user_id', S.user.id),
+      db.from('profiles').select('id,display_name,total_points').order('total_points', { ascending: false }),
+    ]);
 
-  S.matches     = matchRes.data || [];
-  S.leaderboard = lbRes.data    || [];
-  S.bets = {};
-  (betRes.data || []).forEach(b => { S.bets[b.match_id] = b; });
+    if (matchRes.error) throw matchRes.error;
+    if (betRes.error) throw betRes.error;
+    if (lbRes.error) throw lbRes.error;
 
-  const ph = phases();
-  if (!S.bettingPhase  || !ph.includes(S.bettingPhase))  S.bettingPhase  = ph[0];
-  if (!S.overviewPhase || !ph.includes(S.overviewPhase)) S.overviewPhase = ph[0];
+    S.matches     = matchRes.data || [];
+    S.leaderboard = lbRes.data    || [];
+    S.bets = {};
+    (betRes.data || []).forEach(b => { S.bets[b.match_id] = b; });
 
-  renderView();
+    const ph = phases();
+    if (!S.bettingPhase  || !ph.includes(S.bettingPhase))  S.bettingPhase  = ph[0];
+    if (!S.overviewPhase || !ph.includes(S.overviewPhase)) S.overviewPhase = ph[0];
+
+    renderView();
+  } catch (err) {
+    $('main').innerHTML = `<div class="p-5 text-center"><p class="text-red-500 font-bold mb-2">Fehler beim Laden</p><p class="text-sm text-slate-500">${err.message}</p></div>`;
+  }
 }
 
 // ──────────────────────────────────────────
@@ -322,19 +370,20 @@ function renderDashboard(main) {
     const bet    = S.bets[next.id];
     const scoreOrTime = next.status === 'FINISHED'
       ? `${getFinalScore(next,'home')} : ${getFinalScore(next,'away')}${next.home_score_extratime !== null ? ' n.V.' : ''}`
-      : `${fmtTime(next.kickoff_time)} Uhr`;
+      : formatRelativeDate(next.kickoff_time) + ' Uhr';
     const badge = next.status === 'FINISHED'
       ? `<span class="text-xs font-bold bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full">Beendet</span>`
       : `<span class="text-xs font-bold bg-red-100 text-red-500 px-2.5 py-1 rounded-full pulse-badge">Bald</span>`;
 
     let action = '';
     if (next.status !== 'FINISHED' && !bet) {
-      action = `<button onclick="goTo('tippen')" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition">Jetzt Tipp abgeben &rsaquo;</button>`;
+      action = `<button onclick="jumpToMatch('${next.phase}', ${next.id})" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition">Jetzt Tipp abgeben &rsaquo;</button>`;
     } else if (next.status !== 'FINISHED' && bet) {
       action = `<div class="bg-slate-50 px-4 py-3 rounded-xl text-center border border-slate-100">
         <span class="text-slate-400 text-xs font-bold uppercase tracking-wide">Dein Tipp</span>
         <div class="text-2xl font-extrabold mt-1 tracking-tight">${bet.home_score} : ${bet.away_score}</div>
         <div class="text-slate-400 text-xs mt-0.5">⚽ ${bet.goalscorer?.name || 'Kein Torschütze'}</div>
+        <button onclick="jumpToMatch('${next.phase}', ${next.id})" class="mt-3 w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 rounded-xl text-sm transition">Tipp ändern</button>
       </div>`;
     }
 
@@ -412,7 +461,7 @@ function betCard(m) {
     const extInfo = m.home_score_extratime !== null ? '<span class="text-xs font-bold text-slate-400 mt-1 block">n.V.</span>' : '';
 
     return `
-      <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+      <div id="match-card-${m.id}" class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden" style="scroll-margin-top: 5rem;">
         <div class="bg-slate-800 px-4 py-2.5 flex justify-between items-center">
           <span class="text-xs font-bold text-slate-400 mono">${fmtDate(m.kickoff_time)}</span>
           <span class="text-xs font-bold text-slate-400">Beendet</span>
@@ -445,9 +494,9 @@ function betCard(m) {
   const badge   = locked ? `<span class="text-red-500 text-xs font-bold flex items-center gap-1">⚠ Gesperrt</span>` : `<span class="text-emerald-600 text-xs font-bold flex items-center gap-1">✓ Offen</span>`;
 
   return `
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+    <div id="match-card-${m.id}" class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden" style="scroll-margin-top: 5rem;">
       <div class="bg-slate-50 px-4 py-2.5 flex justify-between items-center border-b border-slate-100">
-        <span class="text-xs font-bold text-slate-400 mono">${fmtDate(m.kickoff_time)} · ${fmtTime(m.kickoff_time)}</span>${badge}
+        <span class="text-xs font-bold text-slate-400 mono">${formatRelativeDate(m.kickoff_time)}</span>${badge}
       </div>
       <div class="p-5">
         <div class="flex justify-between items-center mb-5">
@@ -719,33 +768,52 @@ function renderProfile(main) {
 // ──────────────────────────────────────────
 // BOOT — auth state listener
 // ──────────────────────────────────────────
-db.auth.onAuthStateChange(async (event, session) => {
-  if (session?.user) {
-    S.user = session.user;
+async function handleSession(session) {
+  S.user = session.user;
 
-    // Tiefgründige Lösung: Warte auf den Postgres-Trigger anstatt fehlerhaft selbst zu inserten.
-    let prof = null;
-    for (let i = 0; i < 4; i++) {
-      const { data } = await db.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-      if (data) { prof = data; break; }
-      await new Promise(r => setTimeout(r, 400)); // Warten auf DB Trigger
-    }
-    S.profile = prof;
-
-    $('auth-screen').classList.add('hidden');
-    const app = $('app-screen');
-    app.classList.remove('hidden'); app.classList.add('flex');
-    $('header-user').textContent = `Hallo, ${(prof?.display_name || 'Du').split(' ')[0]} 👋`;
-
-    goTo('dashboard');
-    await fetchData();
-  } else {
-    S.user = null; S.profile = null;
-    $('auth-screen').classList.remove('hidden');
-    const app = $('app-screen');
-    app.classList.add('hidden'); app.classList.remove('flex');
+  // Tiefgründige Lösung: Warte auf den Postgres-Trigger anstatt fehlerhaft selbst zu inserten.
+  let prof = null;
+  for (let i = 0; i < 4; i++) {
+    const { data } = await db.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+    if (data) { prof = data; break; }
+    await new Promise(r => setTimeout(r, 400)); // Warten auf DB Trigger
   }
-});
+  S.profile = prof;
+
+  $('auth-screen').classList.add('hidden');
+  const app = $('app-screen');
+  app.classList.remove('hidden'); app.classList.add('flex');
+  $('header-user').textContent = `Hallo, ${(prof?.display_name || 'Du').split(' ')[0]} 👋`;
+
+  goTo('dashboard');
+  await fetchData();
+}
+
+function handleSignOut() {
+  S.user = null; S.profile = null;
+  $('auth-screen').classList.remove('hidden');
+  const app = $('app-screen');
+  app.classList.add('hidden'); app.classList.remove('flex');
+}
+
+async function initApp() {
+  // 1. Initial sofort die Session aus dem LocalStorage prüfen
+  const { data: { session } } = await db.auth.getSession();
+  if (session) {
+    await handleSession(session);
+  }
+
+  // 2. Auth State Änderungen überwachen (Login/Logout Events)
+  db.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && S.user?.id !== session?.user?.id) {
+      await handleSession(session);
+    } else if (event === 'SIGNED_OUT') {
+      handleSignOut();
+    }
+  });
+}
+
+initApp();
 </script>
 </body>
 </html>
