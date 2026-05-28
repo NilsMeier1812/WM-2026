@@ -1238,7 +1238,22 @@ async function loadOverviewData() {
       if (bet) {
         if (!show) { bh='?'; ba='?'; scorerHtml='<span style="color:var(--text-3);">???</span>'; }
         else {
-          bh=bet.home_score??'?'; ba=bet.away_score??'?';
+          // Differenzierung: was wurde wirklich abgegeben?
+          const hasHome=bet.home_score!==null&&bet.home_score!==undefined;
+          const hasAway=bet.away_score!==null&&bet.away_score!==undefined;
+          const hasScorer=bet.first_goalscorer_id!==null&&bet.first_goalscorer_id!==undefined;
+          
+          if (hasHome&&hasAway) {
+            // Beide Scores eingegeben
+            bh=bet.home_score; ba=bet.away_score;
+          } else if (hasScorer&&!hasHome&&!hasAway) {
+            // Nur Torschütze eingefüllt
+            bh='?'; ba='?';
+          } else {
+            // Nur einer oder nichts
+            bh='-'; ba='-';
+          }
+          
           ptHtml=locked?`<span style="font-weight:700;color:${isLive?'var(--blue)':'var(--text-2)'};">${pts}</span>`:'';
           if (m.first_goalscorer_id&&locked) {
             scorerHtml=bet.first_goalscorer_id===m.first_goalscorer_id
