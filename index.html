@@ -180,18 +180,19 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // STATE
 // ──────────────────────────────────────────
 const S = {
-  user:          null,
-  profile:       null,
-  matches:       [],
-  bets:          {},
-  leaderboard:   [],
-  view:          'dashboard',
-  bettingPhase:  null,
-  overviewPhase: null,
-  pendingScorer: {},
-  playerCache:   {},
-  authMode:      'login',
-  allBetsCache:  null
+  user:            null,
+  profile:         null,
+  matches:         [],
+  bets:            {},
+  leaderboard:     [],
+  liveLeaderboard: [], // Berechnet mit temporären Live-Punkten
+  view:            'dashboard',
+  bettingPhase:    null,
+  overviewPhase:   null,
+  pendingScorer:   {},
+  playerCache:     {},
+  authMode:        'login',
+  allBetsCache:    null 
 };
 
 // ──────────────────────────────────────────
@@ -199,7 +200,6 @@ const S = {
 // ──────────────────────────────────────────
 const $  = id  => document.getElementById(id);
 
-// Robuste Prüfung, ob ein Spiel beendet ist (API-Football Kompatibilität)
 function isFinished(status) {
   if (!status) return false;
   return ['FINISHED', 'FT', 'AET', 'PEN'].includes(status.toUpperCase());
@@ -247,7 +247,6 @@ function flag(team, imgCls = 'w-8 h-6') {
 
 function fmtTime(ts) { return new Date(ts).toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' }); }
 
-// Manuelle Formatierung für exakt "dd.mm"
 function fmtDate(ts) { 
   const d = new Date(ts);
   const day = String(d.getDate()).padStart(2, '0');
@@ -287,6 +286,37 @@ function getFinalScore(m, type) {
   if (type === 'home') return m.home_score_extratime !== null ? m.home_score_extratime : m.home_score;
   if (type === 'away') return m.away_score_extratime !== null ? m.away_score_extratime : m.away_score;
   return null;
+}
+
+// Zentrale Logik für Live-Punkte & reguläre Punkte
+function calcBetPoints(m, b) {
+  if (!m || !b) return 0;
+  
+  const locked = isLocked(m);
+  if (!locked) return 0; // Spiel läuft noch nicht
+  
+  // Wenn das Spiel vom Backend abgerechnet wurde, hat das Backend das letzte Wort
+  if (isFinished(m.status) && b.points_awarded !== null && b.points_awarded !== undefined) {
+     return b.points_awarded;
+  }
+
+  const mh = getFinalScore(m, 'home');
+  const ma = getFinalScore(m, 'away');
+  if (mh === null || ma === null) return 0; // Kein Zwischenstand vorhanden
+
+  const bh = b.home_score;
+  const ba = b.away_score;
+  let pts = 0;
+
+  if (mh === bh && ma === ba) pts += 3;
+  else if (mh - ma === bh - ba) pts += 2;
+  else if ((mh > ma && bh > ba) || (mh < ma && bh < ba)) pts += 1;
+
+  if (m.first_goalscorer_id && b.first_goalscorer_id === m.first_goalscorer_id) {
+    pts += 1;
+  }
+  
+  return pts;
 }
 
 function jumpToMatch(phase, matchId) {
@@ -370,7 +400,7 @@ async function handleAuth() {
 async function triggerSoftRefresh() {
   const btn = $('btn-refresh');
   if (btn) btn.classList.add('animate-spin');
-  await fetchData(false); // fetch without destroying UI layout initially
+  await fetchData(false);
   if (btn) btn.classList.remove('animate-spin');
 }
 
@@ -392,6 +422,26 @@ async function fetchData(showLoadingState = true) {
     S.leaderboard = lbRes.data    || [];
     S.bets = {};
     (betRes.data || []).forEach(b => { S.bets[b.match_id] = b; });
+
+    // Live-Punkte Injektion
+    const liveMatches = S.matches.filter(m => isLocked(m) && !isFinished(m.status));
+    const livePointsMap = {}; 
+
+    if (liveMatches.length > 0) {
+      const liveMatchIds = liveMatches.map(m => m.id);
+      const { data: liveBets } = await db.from('bets').select('user_id, match_id, home_score, away_score, first_goalscorer_id').in('match_id', liveMatchIds);
+      
+      (liveBets || []).forEach(b => {
+        const m = S.matches.find(x => x.id === b.match_id);
+        const pts = calcBetPoints(m, b);
+        if (pts > 0) livePointsMap[b.user_id] = (livePointsMap[b.user_id] || 0) + pts;
+      });
+    }
+
+    S.liveLeaderboard = S.leaderboard.map(p => ({
+        ...p,
+        total_points: (p.total_points || 0) + (livePointsMap[p.id] || 0)
+    })).sort((a, b) => b.total_points - a.total_points);
 
     const ph = phases();
     if (!S.bettingPhase  || !ph.includes(S.bettingPhase))  S.bettingPhase  = ph[0];
@@ -428,44 +478,35 @@ function renderView() {
 // DASHBOARD
 // ──────────────────────────────────────────
 function renderDashboard(main) {
-  const me    = S.leaderboard.find(p => p.id === S.user.id);
-  const rank  = (S.leaderboard.findIndex(p => p.id === S.user.id) + 1) || '–';
+  const me    = S.liveLeaderboard.find(p => p.id === S.user.id);
+  const rank  = (S.liveLeaderboard.findIndex(p => p.id === S.user.id) + 1) || '–';
   const pts   = me?.total_points ?? 0;
-  const total = S.leaderboard.length;
+  const total = S.liveLeaderboard.length;
   const now  = new Date();
   
-  // 1. Suche nach Live-Spielen (angepfiffen, aber nicht beendet)
-  let activeMatches = S.matches.filter(m => new Date(m.kickoff_time) <= now && !isFinished(m.status));
+  let activeMatches = S.matches.filter(m => isLocked(m) && !isFinished(m.status));
   const hasLiveMatches = activeMatches.length > 0;
 
-  // 2. Falls keine Live-Spiele, finde die nächsten anstehenden Spiele (gleiche Uhrzeit)
   if (!hasLiveMatches) {
-    const upcoming = S.matches.filter(m => new Date(m.kickoff_time) > now && !isFinished(m.status));
+    const upcoming = S.matches.filter(m => !isLocked(m));
     if (upcoming.length > 0) {
       const nextTime = upcoming[0].kickoff_time;
       activeMatches = upcoming.filter(m => m.kickoff_time === nextTime);
     }
   }
 
-  // Suche nach dem nächsten Spiel in der Zukunft, das noch NICHT getippt wurde
-  const nextUntipped = S.matches.find(m => new Date(m.kickoff_time) > now && !isFinished(m.status) && !S.bets[m.id]);
+  const nextUntipped = S.matches.find(m => !isLocked(m) && !S.bets[m.id]);
 
   let warningHtml = '';
-  // Warn-Kachel rendern, wenn das ungetippte Spiel NICHT Teil der aktuell angezeigten activeMatches ist
   if (nextUntipped && !activeMatches.find(m => m.id === nextUntipped.id)) {
     const diffMs = new Date(nextUntipped.kickoff_time) - now;
     let countdownStr = '';
-    
     if (diffMs > 0) {
       const d = Math.floor(diffMs / 86400000);
       const h = Math.floor((diffMs % 86400000) / 3600000);
       const m = Math.floor((diffMs % 3600000) / 60000);
-      
-      if (d > 0) {
-        countdownStr = `In: ${String(d).padStart(2, '0')}:${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      } else {
-        countdownStr = `In: ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      }
+      if (d > 0) countdownStr = `In: ${String(d).padStart(2, '0')}:${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      else countdownStr = `In: ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
     } else {
       countdownStr = `Jetzt`;
     }
@@ -480,7 +521,6 @@ function renderDashboard(main) {
       </div>`;
   }
 
-  // Next/Live Matches rendern
   let nextHtml = '';
   if (activeMatches.length > 0) {
     const isLiveGroup = hasLiveMatches;
@@ -488,11 +528,11 @@ function renderDashboard(main) {
     
     const matchRows = activeMatches.map(m => {
       const bet = S.bets[m.id];
-      const isCurrentlyLive = new Date(m.kickoff_time) <= now && !isFinished(m.status);
+      const isCurrentlyLive = isLocked(m) && !isFinished(m.status);
       
-      // Anzeige Score (live von API) oder Anstoßzeit
+      const scorerHtml = m.first_goalscorer ? `<div class="text-[9px] text-slate-500 mt-1 font-bold">⚽ ${m.first_goalscorer.name}</div>` : '';
       const displayScore = isCurrentlyLive 
-        ? `<div class="text-red-500 font-extrabold">${m.home_score ?? 0}:${m.away_score ?? 0}</div><div class="text-[9px] text-red-500 uppercase animate-pulse leading-none mt-1">Live</div>`
+        ? `<div class="text-red-500 font-extrabold">${m.home_score ?? 0}:${m.away_score ?? 0}</div><div class="text-[9px] text-red-500 uppercase animate-pulse leading-none mt-1">Live</div>${scorerHtml}`
         : formatRelativeDate(m.kickoff_time);
 
       let action = '';
@@ -529,7 +569,7 @@ function renderDashboard(main) {
       </div>`;
   }
 
-  const lbRows = S.leaderboard.map((p, i) => {
+  const lbRows = S.liveLeaderboard.map((p, i) => {
     const isMe   = p.id === S.user.id;
     const medal  = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `<span class="font-bold text-slate-400 text-sm">${i+1}.</span>`;
     return `<div class="flex justify-between items-center px-3 py-2.5 rounded-xl ${isMe ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-slate-50'} transition">
@@ -597,36 +637,44 @@ function renderBettingContent() {
 function betCard(m) {
   const bet    = S.bets[m.id];
   const locked = isLocked(m);
+  const isLive = locked && !isFinished(m.status);
+  const showResults = locked;
 
-  if (isFinished(m.status)) {
-    const pts     = bet?.points_awarded ?? 0;
-    const tipLine = bet ? `${bet.home_score}:${bet.away_score} &nbsp;·&nbsp; ${bet.goalscorer?.name || 'Kein Torschütze'}` : 'Kein Tipp abgegeben';
+  if (showResults) {
+    const pts = calcBetPoints(m, bet);
+    let scorerSuffix = '';
+    if (m.first_goalscorer_id) {
+       scorerSuffix = (bet?.first_goalscorer_id === m.first_goalscorer_id) ? ' <span class="text-emerald-500 text-sm font-normal">✅</span>' : ' <span class="text-red-500 text-sm font-normal">❌</span>';
+    }
+    const tipLine = bet ? `${bet.home_score}:${bet.away_score} &nbsp;·&nbsp; ${bet.goalscorer?.name || 'Kein Torschütze'}${scorerSuffix}` : 'Kein Tipp abgegeben';
     const ptColor = pts >= 3 ? 'bg-emerald-400 text-emerald-900' : pts >= 1 ? 'bg-yellow-400 text-yellow-900' : 'bg-slate-300 text-slate-600';
-    const finalH  = getFinalScore(m, 'home');
-    const finalA  = getFinalScore(m, 'away');
+    const finalH  = getFinalScore(m, 'home') ?? 0;
+    const finalA  = getFinalScore(m, 'away') ?? 0;
     const extInfo = m.home_score_extratime !== null ? '<span class="text-xs font-bold text-slate-400 mt-1 block">n.V.</span>' : '';
+    
+    const badge = isLive 
+      ? `<span class="text-xs font-bold bg-red-100 text-red-500 px-2.5 py-1 rounded-full animate-pulse">Spiel läuft</span>`
+      : `<span class="text-xs font-bold text-slate-400">Beendet</span>`;
 
     return `
       <div id="match-card-${m.id}" class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden" style="scroll-margin-top: 140px;">
-        <div class="bg-slate-800 px-4 py-2.5 flex justify-between items-center">
-          <span class="text-xs font-bold text-slate-400 mono">${fmtDate(m.kickoff_time)}</span>
-          <span class="text-xs font-bold text-slate-400">Beendet</span>
+        <div class="bg-slate-50 px-4 py-2.5 flex justify-between items-center border-b border-slate-100">
+          <span class="text-xs font-bold text-slate-400 mono">${fmtDate(m.kickoff_time)}</span>${badge}
         </div>
         <div class="p-5 relative">
           <div class="absolute top-5 right-0 ${ptColor} font-extrabold text-sm px-4 py-1.5 rounded-l-2xl shadow">+${pts} Pkt.</div>
-          <div class="flex justify-between items-center mb-4">
+          <div class="flex justify-between items-center mb-6 mt-2">
             <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.home_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.home_team?.name||''}</div></div>
             <div class="w-1/3 text-center">
-              <div class="text-4xl font-extrabold text-slate-900 mono tracking-wider">${finalH}:${finalA}</div>
+              <div class="text-4xl font-extrabold ${isLive ? 'text-red-500' : 'text-slate-900'} mono tracking-wider">${finalH}:${finalA}</div>
               ${extInfo}
             </div>
             <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.away_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.away_team?.name||''}</div></div>
           </div>
-          <div class="bg-slate-50 px-4 py-2.5 rounded-xl text-center mb-3 border border-slate-100">
-            <div class="text-xs text-slate-400 font-bold uppercase tracking-wide mb-0.5">1. Torschütze (Offiziell)</div>
-            <div class="text-sm font-bold text-slate-800">⚽ ${m.first_goalscorer?.name || 'Kein Torschütze'}</div>
+          <div class="bg-slate-50 px-4 py-3 rounded-xl border border-slate-100 text-center">
+            <div class="text-xs text-slate-400 font-bold uppercase tracking-wide mb-1">Dein Tipp</div>
+            <div class="text-slate-700 font-bold">${tipLine}</div>
           </div>
-          <div class="text-xs text-slate-400 pt-1 border-t border-slate-100 mt-2">Dein Tipp: <span class="text-slate-600 font-semibold">${tipLine}</span></div>
         </div>
       </div>`;
   }
@@ -636,34 +684,33 @@ function betCard(m) {
   const pending = S.pendingScorer[m.id];
   const sName   = pending?.name ?? bet?.goalscorer?.name ?? '';
   const sHint   = sName ? `<span class="font-bold text-slate-800">${sName}</span>` : `<span class="text-slate-400">Torschütze auswählen …</span>`;
-  const dis     = locked ? 'disabled' : '';
-  const badge   = locked ? `<span class="text-red-500 text-xs font-bold flex items-center gap-1">⚠ Gesperrt</span>` : `<span class="text-emerald-600 text-xs font-bold flex items-center gap-1">✓ Offen</span>`;
 
   return `
     <div id="match-card-${m.id}" class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden" style="scroll-margin-top: 140px;">
       <div class="bg-slate-50 px-4 py-2.5 flex justify-between items-center border-b border-slate-100">
-        <span class="text-xs font-bold text-slate-400 mono">${formatRelativeDate(m.kickoff_time)}</span>${badge}
+        <span class="text-xs font-bold text-slate-400 mono">${formatRelativeDate(m.kickoff_time)}</span>
+        <span class="text-emerald-600 text-xs font-bold flex items-center gap-1">✓ Offen</span>
       </div>
       <div class="p-5">
         <div class="flex justify-between items-center mb-5">
           <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.home_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.home_team?.name||'Heim'}</div></div>
           <div class="flex gap-2 items-center px-3">
-            <input id="h-${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" value="${curHome}" ${dis} 
+            <input id="h-${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" value="${curHome}" 
               oninput="this.value=this.value.replace(/[^0-9]/g,''); if(this.value.length===1) document.getElementById('a-${m.id}').focus();"
               onblur="triggerAutoSave(${m.id})"
-              class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 disabled:opacity-40 disabled:bg-slate-100 transition mono" />
+              class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 transition mono" />
             <span class="font-bold text-slate-300 text-xl flex items-center">:</span>
-            <input id="a-${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" value="${curAway}" ${dis} 
+            <input id="a-${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" value="${curAway}" 
               oninput="this.value=this.value.replace(/[^0-9]/g,''); if(this.value.length===1) { triggerAutoSave(${m.id}); focusNextMatchInput(${m.id}); }"
               onblur="triggerAutoSave(${m.id})"
-              class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 disabled:opacity-40 disabled:bg-slate-100 transition mono" />
+              class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 transition mono" />
           </div>
           <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.away_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.away_team?.name||'Gast'}</div></div>
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Erster Torschütze</label>
-          <button id="sb-${m.id}" ${dis} onclick="openScorer(${m.id})" class="w-full px-4 py-3 text-left bg-slate-50 border-2 border-slate-200 rounded-2xl text-sm flex justify-between items-center active:bg-slate-100 disabled:opacity-40 transition">
-            ${sHint}${!locked ? '<span class="text-slate-400 text-lg leading-none">›</span>' : ''}
+          <button id="sb-${m.id}" onclick="openScorer(${m.id})" class="w-full px-4 py-3 text-left bg-slate-50 border-2 border-slate-200 rounded-2xl text-sm flex justify-between items-center active:bg-slate-100 transition">
+            ${sHint}<span class="text-slate-400 text-lg leading-none">›</span>
           </button>
         </div>
       </div>
@@ -673,7 +720,6 @@ function betCard(m) {
 async function triggerAutoSave(matchId) {
   const hVal = $(`h-${matchId}`)?.value;
   const aVal = $(`a-${matchId}`)?.value;
-  // Nur speichern, wenn beide Felder ausgefüllt sind (0-9)
   if (hVal === '' || aVal === '' || hVal === undefined || aVal === undefined) return;
   await performSave(matchId, parseInt(hVal), parseInt(aVal));
 }
@@ -718,7 +764,6 @@ async function performSave(matchId, h, a) {
     
     renderBettingContent(); 
     showToast('Fehler beim Speichern', 'error');
-    console.error("Save error:", e);
   }
 }
 
@@ -855,18 +900,33 @@ async function loadOverviewData() {
 
   cards.innerHTML = phaseMatches.map(m => {
     const locked = isLocked(m);
+    const isLive = locked && !isFinished(m.status);
     const fnH = getFinalScore(m, 'home'), fnA = getFinalScore(m, 'away');
     const ext = m.home_score_extratime !== null ? ' n.V.' : '';
-    const status = isFinished(m.status) ? `<span class="mono">${fnH}:${fnA}${ext}</span>` : locked ? 'LIVE' : fmtTime(m.kickoff_time);
+    
+    const statusHtml = isFinished(m.status) 
+      ? `<span class="mono">${fnH}:${fnA}${ext}</span>` 
+      : isLive ? `<span class="text-red-400 animate-pulse font-extrabold">LIVE ${fnH??0}:${fnA??0}</span>` 
+      : fmtTime(m.kickoff_time);
 
     const bets = byMatch[m.id] || [];
+    
+    // Live-Punkte kalkulieren und array sortieren
+    bets.forEach(b => b._pts = calcBetPoints(m, b));
+    if (locked) bets.sort((a, b) => b._pts - a._pts);
+
     const rows = bets.length ? bets.map(b => {
       const isMe  = b.user_id === S.user.id;
-      const show  = locked || isFinished(m.status);
+      const show  = locked;
       const bh    = show ? b.home_score : '?';
       const ba    = show ? b.away_score : '?';
-      const sc    = show ? (b.goalscorer?.name || 'Kein Torschütze') : '?';
-      const pt    = show && isFinished(m.status) ? `<span class="text-xs font-bold text-slate-400 w-8 text-right block">${b.points_awarded??0} P</span>` : '';
+      
+      let scSuffix = '';
+      if (m.first_goalscorer_id && show) scSuffix = (b.first_goalscorer_id === m.first_goalscorer_id) ? ' ✅' : ' ❌';
+      
+      const sc    = show ? ((b.goalscorer?.name || 'Kein Torschütze') + scSuffix) : '?';
+      const pt    = show ? `<span class="text-xs font-bold ${isLive ? 'text-blue-500' : 'text-slate-400'} w-8 text-right block">${b._pts} P</span>` : '';
+      
       return `<div class="flex items-center justify-between px-3 py-2 text-sm ${isMe ? 'bg-blue-50/60' : ''}">
         <span class="w-1/3 truncate font-${isMe?'bold':'medium'} text-${isMe?'blue-700':'slate-600'}">${b.user?.display_name||'?'}</span>
         <span class="w-1/4 text-center font-extrabold mono text-slate-900">${bh}:${ba}</span>
@@ -876,15 +936,13 @@ async function loadOverviewData() {
 
     const hn = (m.home_team?.name || 'HM').substring(0,3).toUpperCase();
     const an = (m.away_team?.name || 'GS').substring(0,3).toUpperCase();
-    
-    // Kleine Flaggen für die Übersicht, wie gefordert
     const hFlag = flag(m.home_team, 'w-4 h-3 rounded-[2px] shadow-sm');
     const aFlag = flag(m.away_team, 'w-4 h-3 rounded-[2px] shadow-sm');
 
     return `<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
       <div class="bg-slate-800 text-white px-4 py-2.5 flex justify-between items-center">
         <div class="font-bold text-sm flex items-center gap-2">${hFlag} <span>${hn} – ${an}</span> ${aFlag}</div>
-        <div class="text-xs font-bold mono bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">${status}</div>
+        <div class="text-xs font-bold mono bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">${statusHtml}</div>
       </div>
       <div class="divide-y divide-slate-100">${rows}</div>
     </div>`;
@@ -896,7 +954,7 @@ async function loadOverviewData() {
 // ──────────────────────────────────────────
 function renderTabelleShell(main) {
   const filterOptions = [
-    `<option value="total">Gesamtwertung (Alle Punkte)</option>`,
+    `<option value="total">Gesamtwertung (inkl. Live-Punkte)</option>`,
     `<option value="exact">Exakte Treffer (Richtige Ergebnisse)</option>`,
     `<option value="trend">Richtige Tendenz (inkl. Tordifferenz)</option>`,
     `<optgroup label="Stand nach Spieltag">`,
@@ -923,23 +981,21 @@ async function loadTabelleData(filterType) {
   if (!container) return;
   container.innerHTML = `<div class="flex justify-center py-12"><div class="spinner w-6 h-6"></div></div>`;
 
-  // Lazy Loading aller abgerechneten Bets, falls nicht im Cache
   if (!S.allBetsCache && filterType !== 'total') {
-    // Hole alle beendeten Spiele
+    // Hole alle abgerechneten ODER laufenden Spiele (kickoff <= now)
     const { data, error } = await db.from('bets')
-      .select('user_id, home_score, away_score, points_awarded, match:matches!inner(id, phase, home_score, away_score, home_score_extratime, away_score_extratime, status)');
+      .select('user_id, home_score, away_score, first_goalscorer_id, points_awarded, match:matches!inner(id, phase, home_score, away_score, home_score_extratime, away_score_extratime, status, kickoff_time, first_goalscorer_id)')
+      .lte('match.kickoff_time', new Date().toISOString());
       
     if (error) { container.innerHTML = `<p class="text-red-500 text-sm">${error.message}</p>`; return; }
-    // Nach Finished filtern
-    S.allBetsCache = (data || []).filter(b => isFinished(b.match.status));
+    S.allBetsCache = data || [];
   }
 
   let ranked = [];
 
   if (filterType === 'total') {
-    ranked = S.leaderboard.map(p => ({ id: p.id, display_name: p.display_name, value: p.total_points ?? 0 }));
+    ranked = S.liveLeaderboard.map(p => ({ id: p.id, display_name: p.display_name, value: p.total_points ?? 0 }));
   } else {
-    // Analytics auf Basis aller Bets aggregieren
     const scores = {};
     S.leaderboard.forEach(p => scores[p.id] = { name: p.display_name, val: 0 });
 
@@ -949,12 +1005,14 @@ async function loadTabelleData(filterType) {
       const finalH = m.home_score_extratime !== null ? m.home_score_extratime : m.home_score;
       const finalA = m.away_score_extratime !== null ? m.away_score_extratime : m.away_score;
       
+      const pts = calcBetPoints(m, b);
+
       if (filterType === 'exact') {
-        if (b.home_score === finalH && b.away_score === finalA) scores[b.user_id].val++;
+        if (finalH !== null && b.home_score === finalH && b.away_score === finalA) scores[b.user_id].val++;
       } 
       else if (filterType === 'trend') {
         const isExact = b.home_score === finalH && b.away_score === finalA;
-        if (!isExact) {
+        if (!isExact && finalH !== null) {
           const betDiff = b.home_score - b.away_score;
           const matchDiff = finalH - finalA;
           if ((betDiff > 0 && matchDiff > 0) || (betDiff < 0 && matchDiff < 0) || (betDiff === 0 && matchDiff === 0)) {
@@ -964,7 +1022,7 @@ async function loadTabelleData(filterType) {
       } 
       else if (filterType.startsWith('phase_')) {
         const targetPhase = filterType.replace('phase_', '');
-        if (m.phase === targetPhase) scores[b.user_id].val += (b.points_awarded || 0);
+        if (m.phase === targetPhase) scores[b.user_id].val += pts;
       }
     });
 
@@ -1069,8 +1127,8 @@ async function saveBonus(qId) {
 function renderProfile(main) {
   const p = S.profile;
   const initial = (p?.display_name || '?').charAt(0).toUpperCase();
-  const rank  = (S.leaderboard.findIndex(x => x.id === S.user.id) + 1) || '–';
-  const pts   = S.leaderboard.find(x => x.id === S.user.id)?.total_points ?? 0;
+  const rank  = (S.liveLeaderboard.findIndex(x => x.id === S.user.id) + 1) || '–';
+  const pts   = S.liveLeaderboard.find(x => x.id === S.user.id)?.total_points ?? 0;
 
   main.innerHTML = `
     <div class="p-4 max-w-lg mx-auto space-y-4 fade-up">
