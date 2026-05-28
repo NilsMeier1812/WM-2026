@@ -908,8 +908,7 @@ async function loadOverviewData() {
   const phaseMatches = S.matches.filter(m => m.phase === S.overviewPhase);
   if (!phaseMatches.length) { cards.innerHTML = '<p class="text-center text-slate-400 mt-12 font-medium">Keine Spiele in dieser Phase.</p>'; return; }
 
-  // HIER GEÄNDERT: Wir fragen secure_bets_view statt bets ab!
-  const { data: allBets, error } = await db.from('secure_bets_view').select(`*, goalscorer:players!first_goalscorer_id(id,name)`).in('match_id', phaseMatches.map(m => m.id));
+  const { data: allBets, error } = await db.from('bets').select(`*, goalscorer:players!first_goalscorer_id(id,name)`).in('match_id', phaseMatches.map(m => m.id));
   if (error) { cards.innerHTML = `<p class="text-red-500 text-sm p-4 text-center">${error.message}</p>`; return; }
 
   const byMatch = {};
@@ -946,9 +945,8 @@ async function loadOverviewData() {
       let ptHtml = '';
 
       if (bet) {
-        // HIER GEÄNDERT: Logik für die Zensur-View
-        if (bet.home_score === null && bet.away_score === null) {
-          // Die View hat den Tipp zensiert -> Spiel liegt in der Zukunft, fremder Nutzer hat aber schon getippt!
+        // Frontend-Zensur: Wir haben die Daten von der DB, verstecken sie aber optisch
+        if (!show) {
           bh = '?'; ba = '?';
           scorerHtml = '<span class="text-slate-400 font-medium">Tipp verdeckt</span>';
         } else {
