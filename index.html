@@ -51,6 +51,11 @@
 <body class="bg-slate-50 text-slate-900" style="height:100dvh; overflow:hidden;">
 
 <!-- ═══════════════════════════════════════════
+     TOAST CONTAINER
+════════════════════════════════════════════ -->
+<div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none w-11/12 max-w-sm"></div>
+
+<!-- ═══════════════════════════════════════════
      AUTH SCREEN
 ════════════════════════════════════════════ -->
 <div id="auth-screen" class="fixed inset-0 flex items-center justify-center p-5 z-50">
@@ -189,6 +194,16 @@ const S = {
 // ──────────────────────────────────────────
 const $  = id  => document.getElementById(id);
 
+function showToast(msg, type = 'success') {
+  const container = $('toast-container');
+  const toast = document.createElement('div');
+  const bgClass = type === 'success' ? 'bg-emerald-500' : 'bg-red-500';
+  toast.className = `${bgClass} text-white px-4 py-3 rounded-2xl shadow-xl text-sm font-bold fade-up transition-opacity duration-300 flex items-center justify-center`;
+  toast.innerHTML = type === 'success' ? `✓ &nbsp;${msg}` : `⚠ &nbsp;${msg}`;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2500);
+}
+
 function skeletonCard() {
   return `<div class="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 animate-pulse space-y-4">
     <div class="h-4 bg-slate-200 rounded w-1/3"></div>
@@ -216,9 +231,14 @@ function formatRelativeDate(ts) {
   const d = new Date(ts);
   const today = new Date();
   const tmrw = new Date(); tmrw.setDate(today.getDate() + 1);
-  if (d.toDateString() === today.toDateString()) return 'Heute, ' + fmtTime(ts);
-  if (d.toDateString() === tmrw.toDateString()) return 'Morgen, ' + fmtTime(ts);
-  return fmtDate(ts) + ', ' + fmtTime(ts);
+  
+  const time = fmtTime(ts);
+  if (d.toDateString() === today.toDateString()) return 'Heute ' + time;
+  if (d.toDateString() === tmrw.toDateString()) return 'Morgen ' + time;
+  
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${day}.${month}. ${time}`;
 }
 
 function isLocked(m) { return new Date(m.kickoff_time) <= new Date(); }
@@ -245,8 +265,8 @@ function jumpToMatch(phase, matchId) {
   if (S.bettingPhase !== phase) setBettingPhase(phase);
   setTimeout(() => {
     const el = $(`match-card-${matchId}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, 150);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
 }
 
 function togglePw() {
@@ -440,7 +460,7 @@ function renderBetting(main) {
   const cards = S.matches.filter(m => m.phase === S.bettingPhase).map(betCard).join('');
   main.innerHTML = `
     <div class="max-w-lg mx-auto">
-      <div class="flex overflow-x-auto p-4 gap-2 no-scrollbar bg-white shadow-sm sticky top-0 z-0 border-b border-slate-100">${phaseTabs(S.bettingPhase, 'setBettingPhase')}</div>
+      <div class="flex overflow-x-auto p-4 gap-2 no-scrollbar bg-slate-50 shadow-sm sticky top-0 z-30 border-b border-slate-200">${phaseTabs(S.bettingPhase, 'setBettingPhase')}</div>
       <div class="p-4 space-y-4 fade-up">${cards || '<p class="text-center text-slate-400 mt-12 font-medium">Keine Spiele in dieser Phase.</p>'}</div>
     </div>`;
 }
@@ -461,7 +481,7 @@ function betCard(m) {
     const extInfo = m.home_score_extratime !== null ? '<span class="text-xs font-bold text-slate-400 mt-1 block">n.V.</span>' : '';
 
     return `
-      <div id="match-card-${m.id}" class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden" style="scroll-margin-top: 5rem;">
+      <div id="match-card-${m.id}" class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden" style="scroll-margin-top: 140px;">
         <div class="bg-slate-800 px-4 py-2.5 flex justify-between items-center">
           <span class="text-xs font-bold text-slate-400 mono">${fmtDate(m.kickoff_time)}</span>
           <span class="text-xs font-bold text-slate-400">Beendet</span>
@@ -494,7 +514,7 @@ function betCard(m) {
   const badge   = locked ? `<span class="text-red-500 text-xs font-bold flex items-center gap-1">⚠ Gesperrt</span>` : `<span class="text-emerald-600 text-xs font-bold flex items-center gap-1">✓ Offen</span>`;
 
   return `
-    <div id="match-card-${m.id}" class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden" style="scroll-margin-top: 5rem;">
+    <div id="match-card-${m.id}" class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden" style="scroll-margin-top: 140px;">
       <div class="bg-slate-50 px-4 py-2.5 flex justify-between items-center border-b border-slate-100">
         <span class="text-xs font-bold text-slate-400 mono">${formatRelativeDate(m.kickoff_time)}</span>${badge}
       </div>
@@ -502,54 +522,81 @@ function betCard(m) {
         <div class="flex justify-between items-center mb-5">
           <div class="text-center flex-1 space-y-1.5">${flag(m.home_team)}<div class="text-xs font-bold text-slate-600 truncate">${m.home_team?.name||'Heim'}</div></div>
           <div class="flex gap-2 items-center px-3">
-            <input id="h-${m.id}" type="number" min="0" max="15" value="${curHome}" ${dis} class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 disabled:opacity-40 disabled:bg-slate-100 transition mono" />
-            <span class="font-bold text-slate-300 text-xl">:</span>
-            <input id="a-${m.id}" type="number" min="0" max="15" value="${curAway}" ${dis} class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 disabled:opacity-40 disabled:bg-slate-100 transition mono" />
+            <input id="h-${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" value="${curHome}" ${dis} 
+              oninput="this.value=this.value.replace(/[^0-9]/g,''); if(this.value.length===1) document.getElementById('a-${m.id}').focus();"
+              onblur="triggerAutoSave(${m.id})"
+              class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 disabled:opacity-40 disabled:bg-slate-100 transition mono" />
+            <span class="font-bold text-slate-300 text-xl flex items-center">:</span>
+            <input id="a-${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" value="${curAway}" ${dis} 
+              oninput="this.value=this.value.replace(/[^0-9]/g,''); if(this.value.length===1) triggerAutoSave(${m.id});"
+              onblur="triggerAutoSave(${m.id})"
+              class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 disabled:opacity-40 disabled:bg-slate-100 transition mono" />
           </div>
           <div class="text-center flex-1 space-y-1.5">${flag(m.away_team)}<div class="text-xs font-bold text-slate-600 truncate">${m.away_team?.name||'Gast'}</div></div>
         </div>
-        <div class="mb-4">
+        <div>
           <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Erster Torschütze</label>
           <button id="sb-${m.id}" ${dis} onclick="openScorer(${m.id})" class="w-full px-4 py-3 text-left bg-slate-50 border-2 border-slate-200 rounded-2xl text-sm flex justify-between items-center active:bg-slate-100 disabled:opacity-40 transition">
             ${sHint}${!locked ? '<span class="text-slate-400 text-lg leading-none">›</span>' : ''}
           </button>
         </div>
-        ${!locked ? `<button id="save-${m.id}" onclick="saveBet(${m.id})" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition">Tipp speichern</button>` : ''}
       </div>
     </div>`;
 }
 
-async function saveBet(matchId) {
-  const h = parseInt($(`h-${matchId}`)?.value);
-  const a = parseInt($(`a-${matchId}`)?.value);
+async function triggerAutoSave(matchId) {
+  const hVal = $(`h-${matchId}`)?.value;
+  const aVal = $(`a-${matchId}`)?.value;
+  // Nur speichern, wenn beide Felder ausgefüllt sind (0-9)
+  if (hVal === '' || aVal === '' || hVal === undefined || aVal === undefined) return;
+  await performSave(matchId, parseInt(hVal), parseInt(aVal));
+}
 
-  if (isNaN(h) || isNaN(a)) { alert('Bitte trage ein Ergebnis ein!'); return; }
-
+async function performSave(matchId, h, a) {
   const pending  = S.pendingScorer[matchId];
   const existing = S.bets[matchId];
   const scorerId = pending !== undefined ? (pending.id ?? null) : (existing?.first_goalscorer_id ?? null);
-  const btn = $(`save-${matchId}`);
-  if (btn) { btn.disabled = true; btn.innerHTML = `<div class="spinner spinner-white w-5 h-5"></div>`; }
+  
+  // Nichts tun, wenn sich de facto nichts geändert hat
+  if (existing && existing.home_score === h && existing.away_score === a && existing.first_goalscorer_id === scorerId) return;
+
+  // 1. Optimistic UI Update & Cache Backup
+  const backup = existing ? { ...existing } : null;
+  const newBet = {
+    id: existing?.id || crypto.randomUUID(), // Fix für not-null uuid Fehler
+    user_id: S.user.id,
+    match_id: matchId,
+    home_score: h,
+    away_score: a,
+    first_goalscorer_id: scorerId,
+    goalscorer: pending !== undefined ? { name: pending.name } : existing?.goalscorer
+  };
+  S.bets[matchId] = newBet;
+  
+  // UI-Indikator
+  const btn = $(`sb-${matchId}`);
+  if (btn) btn.classList.add('opacity-50');
 
   try {
-    if (existing) {
-      const { error } = await db.from('bets').update({ home_score: h, away_score: a, first_goalscorer_id: scorerId, updated_at: new Date().toISOString() }).eq('id', existing.id);
+    if (backup) {
+      const { error } = await db.from('bets').update({ home_score: h, away_score: a, first_goalscorer_id: scorerId, updated_at: new Date().toISOString() }).eq('id', backup.id);
       if (error) throw error;
     } else {
-      const { error } = await db.from('bets').insert({ user_id: S.user.id, match_id: matchId, home_score: h, away_score: a, first_goalscorer_id: scorerId });
+      const { error } = await db.from('bets').insert({ id: newBet.id, user_id: S.user.id, match_id: matchId, home_score: h, away_score: a, first_goalscorer_id: scorerId });
       if (error) throw error;
     }
-    const { data } = await db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name)').eq('user_id', S.user.id);
-    S.bets = {}; (data || []).forEach(b => { S.bets[b.match_id] = b; });
+    
     delete S.pendingScorer[matchId];
-
-    if (btn) {
-      btn.disabled = false; btn.textContent = '✓ Gespeichert!'; btn.style.background = '#10b981';
-      setTimeout(() => { if (!btn) return; btn.textContent = 'Tipp speichern'; btn.style.background = ''; }, 2200);
-    }
+    if (btn) btn.classList.remove('opacity-50');
+    showToast('Tipp gespeichert');
   } catch (e) {
-    alert('Fehler beim Speichern: ' + e.message);
-    if (btn) { btn.disabled = false; btn.textContent = 'Tipp speichern'; }
+    // 2. Rollback bei Fehler (verhindert False-State im Cache)
+    if (backup) S.bets[matchId] = backup;
+    else delete S.bets[matchId];
+    
+    renderBetting($('main')); // Render completely reverts inputs to backup state
+    showToast('Fehler beim Speichern', 'error');
+    console.error("Save error:", e);
   }
 }
 
@@ -564,29 +611,43 @@ async function openScorer(matchId) {
   const m = S.matches.find(x => x.id === matchId);
   if (!m) return;
 
+  // Zuerst Lineups (Startelf) abfragen
+  const { data: lineups, error: lErr } = await db.from('match_lineups').select('player_id').eq('match_id', matchId);
+  const lineupPlayerIds = new Set((lineups || []).map(l => l.player_id));
+  const hasLineup = lineupPlayerIds.size > 0;
+
+  // Dann alle Spieler der Teams laden
   const { data: players, error } = await db.from('players')
-    .select('id,name,is_in_starting_xi,team:teams!team_id(id,name)')
+    .select('id,name,team:teams!team_id(id,name)')
     .in('team_id', [m.home_team_id, m.away_team_id])
-    .eq('is_in_squad', true)
-    .order('is_in_starting_xi', { ascending: false }).order('name');
+    .order('name');
 
   if (error) { list.innerHTML = `<p class="text-red-500 text-sm text-center">${error.message}</p>`; return; }
 
-  (players || []).forEach(p => { S.playerCache[p.id] = p; });
-  const starters = (players || []).filter(p =>  p.is_in_starting_xi);
-  const bench    = (players || []).filter(p => !p.is_in_starting_xi);
+  const starters = [];
+  const bench = [];
 
-  const playerBtn = p => `
-    <button onclick="pickScorer(${matchId}, ${p.id})" class="w-full text-left px-4 py-3 rounded-xl border transition flex justify-between items-center ${p.is_in_starting_xi ? 'bg-slate-50 border-slate-200 active:bg-blue-50' : 'bg-white border-slate-100 active:bg-blue-50'}">
-      <span class="font-${p.is_in_starting_xi?'bold':'medium'} text-slate-${p.is_in_starting_xi?'900':'600'} text-sm">${p.name}</span>
+  (players || []).forEach(p => {
+    S.playerCache[p.id] = p;
+    if (hasLineup) {
+      if (lineupPlayerIds.has(p.id)) starters.push(p);
+      else bench.push(p);
+    } else {
+      bench.push(p); // Ohne offizielle Aufstellung sind alle im Gesamtkader
+    }
+  });
+
+  const playerBtn = (p, isStarter) => `
+    <button onclick="pickScorer(${matchId}, ${p.id})" class="w-full text-left px-4 py-3 rounded-xl border transition flex justify-between items-center ${isStarter ? 'bg-slate-50 border-slate-200 active:bg-blue-50' : 'bg-white border-slate-100 active:bg-blue-50'}">
+      <span class="font-${isStarter?'bold':'medium'} text-slate-${isStarter?'900':'600'} text-sm">${p.name}</span>
       <span class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-lg">${p.team?.name||''}</span>
     </button>`;
 
   list.innerHTML = `
     <button onclick="pickScorer(${matchId}, null)" class="w-full text-left px-4 py-3.5 rounded-2xl border-2 border-dashed border-slate-200 hover:border-slate-300 font-bold text-slate-600 active:bg-slate-50 transition text-sm mb-2">🚫 &nbsp;Kein Torschütze (0:0)</button>
-    ${starters.length ? `<div><h4 class="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-3 mt-2">Startelf / Bekannt</h4><div class="space-y-2">${starters.map(playerBtn).join('')}</div></div>` : ''}
-    ${bench.length ? `<div><h4 class="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-3 mt-4">Gesamter Kader</h4><div class="space-y-2">${bench.map(playerBtn).join('')}</div></div>` : ''}
-    ${!players?.length ? '<p class="text-center text-slate-400 text-sm py-4">Keine Spieler in der Datenbank.</p>' : ''}`;
+    ${hasLineup && starters.length ? `<div><h4 class="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-3 mt-2">Offizielle Startelf</h4><div class="space-y-2">${starters.map(p => playerBtn(p, true)).join('')}</div></div>` : ''}
+    ${bench.length ? `<div><h4 class="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-3 mt-4">${hasLineup ? 'Bank / Restkader' : 'Gesamter Kader (Aufstellung ausstehend)'}</h4><div class="space-y-2">${bench.map(p => playerBtn(p, false)).join('')}</div></div>` : ''}
+    ${!players?.length ? '<p class="text-center text-slate-400 text-sm py-4">Keine Spieler gefunden.</p>' : ''}`;
 }
 
 function pickScorer(matchId, playerId) {
@@ -595,6 +656,9 @@ function pickScorer(matchId, playerId) {
   const btn = $(`sb-${matchId}`);
   if (btn) btn.innerHTML = `<span class="font-bold text-slate-800">${S.pendingScorer[matchId].name}</span><span class="text-slate-400 text-lg leading-none">›</span>`;
   closeScorer();
+  
+  // Auto-Save nach Torschützenauswahl triggern
+  triggerAutoSave(matchId);
 }
 function closeScorer() { $('modal-scorer').classList.add('hidden'); }
 
