@@ -778,7 +778,7 @@ function renderDashboard(main) {
       if (!bet&&!isLocked(m)) {
         action=`<button onclick="jumpToMatch('${m.phase}',${m.id})" style="width:100%;margin-top:12px;background:var(--green);color:#fff;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;padding:11px;border-radius:10px;border:none;cursor:pointer;letter-spacing:.02em;">Jetzt tippen</button>`;
       } else if (bet) {
-        let displayScorer = bet.first_goalscorer_id ? `⚽ ${bet.goalscorer?.name}` : `🚫 Keiner`;
+        let displayScorer = bet.first_goalscorer_id ? `⚽ ${bet.goalscorer?.name}` : `🚫 Kein Tor`;
         action=`<div style="margin-top:12px;background:#F4F0E8;padding:10px 14px;border-radius:10px;border:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;">
           <div class="syne" style="font-size:20px;font-weight:800;letter-spacing:-.02em;">${bet.home_score??'–'}:${bet.away_score??'–'}</div>
           <div style="font-size:11px;color:var(--text-2);font-weight:600;text-align:right;max-width:60%;">${displayScorer}</div>
@@ -901,10 +901,10 @@ function betCard(m) {
           }
         }
       } else {
-        scorerHtml = `<span style="font-weight:600;color:var(--red);">🚫 Keiner</span>`;
+        scorerHtml = `<span style="font-weight:600;color:var(--red);">🚫 Kein Tor</span>`;
         // Finished game with NO scorer, and user picked Keiner -> Green
         if (isFinished(m.status) && !m.first_goalscorer_id) {
-          scorerHtml = `<span style="font-weight:700;color:var(--green);">🚫 Keiner</span>`;
+          scorerHtml = `<span style="font-weight:700;color:var(--green);">🚫 Kein Tor</span>`;
         }
       }
       tipLine=`<span class="mono" style="font-weight:700;">${bet.home_score??'-'}:${bet.away_score??'-'}</span> <span style="color:var(--text-3);">·</span> ${scorerHtml}`;
@@ -950,10 +950,10 @@ function betCard(m) {
   let sHint = '';
   if (pending !== undefined) {
     if (pending.id) sHint = `⚽ <span style="font-weight:700;color:var(--text);">${pending.name}</span>`;
-    else sHint = `🚫 <span style="font-weight:700;color:var(--red);">Keiner</span>`;
+    else sHint = `🚫 <span style="font-weight:700;color:var(--red);">Kein Tor</span>`;
   } else if (bet) {
     if (bet.first_goalscorer_id) sHint = `⚽ <span style="font-weight:700;color:var(--text);">${bet.goalscorer?.name || '–'}</span>`;
-    else sHint = `🚫 <span style="font-weight:700;color:var(--red);">Keiner</span>`;
+    else sHint = `🚫 <span style="font-weight:700;color:var(--red);">Kein Tor</span>`;
   } else {
     sHint = `<span style="color:var(--text-3);">Torschütze auswählen …</span>`;
   }
@@ -1133,13 +1133,13 @@ window.pickScorer = function(matchId, playerId) {
   const player = playerId != null ? S.playerCache[playerId] : null;
   S.pendingScorer[matchId] = {
     id: playerId, 
-    name: player?.name || 'Keiner',
+    name: player?.name || 'Kein Tor',
     team_id: player?.team_id || null
   };
   const btn=$(`sb-${matchId}`);
   if (btn) {
     if (playerId) btn.innerHTML=`<span style="font-weight:700;color:var(--text);">⚽ ${S.pendingScorer[matchId].name}</span><span style="color:var(--text-3);font-size:18px;line-height:1;">›</span>`;
-    else btn.innerHTML=`<span style="font-weight:700;color:var(--red);">🚫 Keiner</span><span style="color:var(--text-3);font-size:18px;line-height:1;">›</span>`;
+    else btn.innerHTML=`<span style="font-weight:700;color:var(--red);">🚫 Kein Tor</span><span style="color:var(--text-3);font-size:18px;line-height:1;">›</span>`;
   }
   closeScorer();
   triggerAutoSave(matchId, true); 
@@ -1250,7 +1250,7 @@ async function loadOverviewData() {
 
     let actualScorer='';
     if (locked&&m.first_goalscorer) actualScorer=`<span style="font-size:10px;color:#6EE7B7;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">⚽ ${m.first_goalscorer.name}</span>`;
-    else if (locked&&isFinished(m.status)&&!m.first_goalscorer_id) actualScorer=`<span style="font-size:10px;color:rgba(255,255,255,.4);">🚫 Keiner</span>`;
+    else if (locked&&isFinished(m.status)&&!m.first_goalscorer_id) actualScorer=`<span style="font-size:10px;color:rgba(255,255,255,.4);">🚫 Kein Tor</span>`;
 
     const matchBets=byMatch[m.id]||[];
     matchBets.forEach(b=>b._pts=calcBetPoints(m,b));
@@ -1299,9 +1299,9 @@ async function loadOverviewData() {
               scorerHtml = `<span style="color:var(--text-2);">⚽ ${sName}</span>`;
             }
           } else {
-            scorerHtml = `<span style="color:var(--red);font-weight:600;">🚫 Keiner</span>`;
+            scorerHtml = `<span style="color:var(--red);font-weight:600;">🚫 Kein Tor</span>`;
             if (locked && isFinished(m.status) && !m.first_goalscorer_id) {
-               scorerHtml = `<span style="color:var(--green);font-weight:700;">🚫 Keiner</span>`;
+               scorerHtml = `<span style="color:var(--green);font-weight:700;">🚫 Kein Tor</span>`;
             }
           }
         } else {
