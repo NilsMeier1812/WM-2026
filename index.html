@@ -920,10 +920,23 @@ async function loadOverviewData() {
     const fnH = getFinalScore(m, 'home'), fnA = getFinalScore(m, 'away');
     const ext = m.home_score_extratime !== null ? ' n.V.' : '';
     
-    const statusHtml = isFinished(m.status) 
-      ? `<span class="mono">${fnH}:${fnA}${ext}</span>` 
-      : isLive ? `<span class="text-red-400 animate-pulse font-extrabold">LIVE ${fnH??0}:${fnA??0}</span>` 
-      : fmtTime(m.kickoff_time);
+    // Anpassung: Datum/Uhrzeit oder "Heute"/"Morgen" anzeigen
+    let statusHtml = '';
+    if (isFinished(m.status)) {
+      statusHtml = `<span class="mono">${fnH}:${fnA}${ext}</span>`;
+    } else if (isLive) {
+      statusHtml = `<span class="text-red-400 animate-pulse font-extrabold">LIVE ${fnH??0}:${fnA??0}</span>`;
+    } else {
+      statusHtml = formatRelativeDate(m.kickoff_time); // Rendert "Heute 15:00" oder "12.06. 15:00"
+    }
+
+    // Anpassung: Echten ersten Torschützen in den Header holen
+    let actualScorerHeader = '';
+    if (locked && m.first_goalscorer) {
+       actualScorerHeader = `<span class="text-[10px] text-emerald-400 font-bold truncate">⚽ ${m.first_goalscorer.name}</span>`;
+    } else if (locked && isFinished(m.status) && !m.first_goalscorer_id) {
+       actualScorerHeader = `<span class="text-[10px] text-slate-400 font-medium">⚽ Keiner</span>`;
+    }
 
     const matchBets = byMatch[m.id] || [];
     matchBets.forEach(b => b._pts = calcBetPoints(m, b));
@@ -933,7 +946,24 @@ async function loadOverviewData() {
       return { player, bet: b, pts: b ? b._pts : 0 };
     });
 
-    if (locked) displayRows.sort((a, b) => b.pts - a.pts);
+    // Anpassung: Erweiterte Sortierungslogik
+    if (locked) {
+      displayRows.sort((a, b) => b.pts - a.pts); // Nach Punkten sortieren wenn gesperrt
+    } else {
+      // Wenn das Spiel noch nicht gestartet ist
+      displayRows.sort((a, b) => {
+        if (a.player.id === S.user.id) return -1; // Ich stehe immer ganz oben
+        if (b.player.id === S.user.id) return 1;
+        
+        const aHasBet = !!a.bet;
+        const bHasBet = !!b.bet;
+        
+        if (aHasBet && !bHasBet) return -1; // Leute die getippt haben vor denen, die nicht getippt haben
+        if (!aHasBet && bHasBet) return 1;
+        
+        return a.player.display_name.localeCompare(b.player.display_name); // Alphabetisch für den Rest
+      });
+    }
 
     const rows = displayRows.map(({ player, bet, pts }) => {
       const isMe = player.id === S.user.id;
@@ -944,37 +974,36 @@ async function loadOverviewData() {
       let scorerHtml = '';
       let ptHtml = '';
 
+      // Anpassung: Für die einzeilige Tabelle die Texte kürzen ("Verdeckt" statt "Tipp verdeckt", "Keiner" etc.)
       if (bet) {
-        // Frontend-Zensur: Wir haben die Daten von der DB, verstecken sie aber optisch
         if (!show) {
           bh = '?'; ba = '?';
-          scorerHtml = '<span class="text-slate-400 font-medium">Tipp verdeckt</span>';
+          scorerHtml = '<span class="text-slate-400 font-medium">Verdeckt</span>';
         } else {
-          // Normaler Fall: Wir dürfen den Tipp sehen (eigenes Spiel oder Spiel gestartet)
           bh = bet.home_score ?? '?';
           ba = bet.away_score ?? '?';
-          ptHtml = locked ? `<span class="text-xs font-bold ${isLive ? 'text-blue-500' : 'text-slate-400'} w-8 text-right block">${pts} P</span>` : '';
+          ptHtml = locked ? `<span class="font-bold ${isLive ? 'text-blue-500' : 'text-slate-500'}">${pts}</span>` : '';
           
           if (m.first_goalscorer_id && locked) {
             scorerHtml = bet.first_goalscorer_id === m.first_goalscorer_id
-              ? `<span class="text-emerald-600 font-bold">${bet.goalscorer?.name || 'Kein Torschütze'}</span>`
-              : `<span class="text-red-500 font-bold">${bet.goalscorer?.name || 'Kein Torschütze'}</span>`;
+              ? `<span class="text-emerald-600 font-bold">⚽ ${bet.goalscorer?.name || 'Keiner'}</span>`
+              : `<span class="text-red-500">⚽ ${bet.goalscorer?.name || 'Keiner'}</span>`;
           } else {
-            scorerHtml = bet.goalscorer?.name || 'Kein Torschütze';
+            scorerHtml = `<span class="text-slate-600">⚽ ${bet.goalscorer?.name || 'Keiner'}</span>`;
           }
         }
       } else {
-        // Kein Tipp in der Datenbank vorhanden
         bh = '-'; ba = '-';
-        scorerHtml = '<span class="text-slate-400 italic">Noch kein Tipp</span>';
+        scorerHtml = '<span class="text-slate-300">-</span>';
+        if (locked) ptHtml = '<span class="text-slate-300">0</span>';
       }
 
-      return `<div class="flex items-center justify-between px-3 py-2 text-sm ${isMe ? 'bg-blue-50/60' : ''}">
-        <span class="w-1/4 text-center font-extrabold mono text-slate-900">${bh}:${ba}</span>
-        <span class="w-1/2 truncate font-${isMe?'bold':'medium'} text-${isMe?'blue-700':'slate-600'}">${player.display_name||'?'}
-          <div class="text-xs text-slate-400 mt-0.5 truncate">${scorerHtml}</div>
-        </span>
-        <span class="w-1/4 text-right">${ptHtml}</span>
+      // Anpassung: Kompaktes, einzeiliges Flex-Layout mit Prozentualen Breiten
+      return `<div class="flex items-center px-3 py-2 text-[11px] sm:text-xs border-b border-slate-50 last:border-0 ${isMe ? 'bg-blue-50/60' : 'hover:bg-slate-50'}">
+        <span class="w-[30%] truncate font-${isMe?'bold text-blue-700':'semibold text-slate-700'} pr-1">${player.display_name||'?'}</span>
+        <span class="w-[15%] text-center font-extrabold mono text-slate-900">${bh}:${ba}</span>
+        <span class="w-[45%] truncate pl-1">${scorerHtml}</span>
+        <span class="w-[10%] text-right">${ptHtml}</span>
       </div>`;
     }).join('');
 
@@ -984,11 +1013,14 @@ async function loadOverviewData() {
     const aFlag = flag(m.away_team, 'w-4 h-3 rounded-[2px] shadow-sm');
 
     return `<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-      <div class="bg-slate-800 text-white px-4 py-2.5 flex justify-between items-center">
-        <div class="font-bold text-sm flex items-center gap-2">${hFlag} <span>${hn} – ${an}</span> ${aFlag}</div>
-        <div class="text-xs font-bold mono bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">${statusHtml}</div>
+      <div class="bg-slate-800 text-white px-3 py-2 flex justify-between items-center gap-2">
+        <div class="font-bold text-[11px] sm:text-xs flex items-center gap-1.5 shrink-0">${hFlag} <span>${hn}-${an}</span> ${aFlag}</div>
+        <div class="flex items-center gap-2 overflow-hidden justify-end">
+          ${actualScorerHeader}
+          <div class="text-[10px] font-bold mono bg-slate-900 px-2 py-1 rounded-md border border-slate-700 whitespace-nowrap shrink-0">${statusHtml}</div>
+        </div>
       </div>
-      <div class="divide-y divide-slate-100">${rows}</div>
+      <div class="flex flex-col">${rows}</div>
     </div>`;
   }).join('');
 }
