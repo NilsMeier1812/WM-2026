@@ -408,22 +408,38 @@ async function fetchData(showLoadingState = true) {
   if (showLoadingState) loading($('main'));
 
   try {
-    const [matchRes, betRes, lbRes, teamsRes] = await Promise.all([
+    const [matchRes, betRes, profRes, teamsRes, rankRes] = await Promise.all([
       db.from('matches').select('*, home_team:teams!home_team_id(id,name,flag_url), away_team:teams!away_team_id(id,name,flag_url), first_goalscorer:players!first_goalscorer_id(id,name)').order('kickoff_time', { ascending: true }),
       db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name)').eq('user_id', S.user.id),
-      db.from('profiles').select('id,display_name,total_points').order('total_points', { ascending: false }),
-      db.from('teams').select('*').order('name', { ascending: true })
+      db.from('profiles').select('id,display_name'),
+      db.from('teams').select('*').order('name', { ascending: true }),
+      db.from('user_rankings').select('*')
     ]);
 
     if (matchRes.error) throw matchRes.error;
     if (betRes.error) throw betRes.error;
-    if (lbRes.error) throw lbRes.error;
+    if (profRes.error) throw profRes.error;
+    if (teamsRes.error) throw teamsRes.error;
+    if (rankRes.error) throw rankRes.error;
 
     S.matches     = matchRes.data || [];
-    S.leaderboard = lbRes.data    || [];
     S.teams       = teamsRes.data || [];
     S.bets = {};
     (betRes.data || []).forEach(b => { S.bets[b.match_id] = b; });
+
+    // Leaderboard aus Profiles und User_Rankings mergen
+    const profiles = profRes.data || [];
+    const rankings = rankRes.data || [];
+    
+    S.leaderboard = profiles.map(p => {
+      const r = rankings.find(x => x.user_id === p.id);
+      return {
+        id: p.id,
+        display_name: p.display_name,
+        total_points: r && r.total_points !== null ? Number(r.total_points) : 0,
+        total_bets: r ? Number(r.total_bets) : 0
+      };
+    }).sort((a, b) => b.total_points - a.total_points);
 
     // Live-Punkte Injektion
     const liveMatches = S.matches.filter(m => isLocked(m) && !isFinished(m.status));
