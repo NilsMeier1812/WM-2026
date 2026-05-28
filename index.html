@@ -248,7 +248,7 @@ function formatRelativeDate(ts) {
   
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
-  return `${day}.${month}. ${time}`;
+  return `${day}.${month} ${time}`; // Punkt nach Monat entfernt
 }
 
 function isLocked(m) { return new Date(m.kickoff_time) <= new Date(); }
@@ -424,10 +424,10 @@ function renderDashboard(main) {
     const bet    = S.bets[next.id];
     const scoreOrTime = next.status === 'FINISHED'
       ? `${getFinalScore(next,'home')} : ${getFinalScore(next,'away')}${next.home_score_extratime !== null ? ' n.V.' : ''}`
-      : formatRelativeDate(next.kickoff_time);
+      : formatRelativeDate(next.kickoff_time) + ' Uhr';
     const badge = next.status === 'FINISHED'
       ? `<span class="text-xs font-bold bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full">Beendet</span>`
-      : `<span class="text-xs font-bold bg-red-100 text-red-500 px-2.5 py-1 rounded-full pulse-badge">Bald</span>`;
+      : ``; // "Bald" Badge komplett entfernt
 
     let action = '';
     if (next.status !== 'FINISHED' && !bet) {
@@ -458,13 +458,23 @@ function renderDashboard(main) {
   // Warn-Kachel, falls ein anderes Spiel noch ungetippt ist
   let warningHtml = '';
   if (nextUntipped && (!next || nextUntipped.id !== next.id)) {
+    const diffMs = new Date(nextUntipped.kickoff_time) - now;
+    let countdownStr = '';
+    if (diffMs > 0) {
+      const h = Math.floor(diffMs / 3600000);
+      const m = Math.floor((diffMs % 3600000) / 60000);
+      countdownStr = `In: ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    } else {
+      countdownStr = `Jetzt`;
+    }
+
     warningHtml = `
-      <div class="bg-orange-50 border border-orange-200 p-4 rounded-3xl shadow-sm flex items-center justify-between gap-4">
+      <div class="bg-white border border-slate-100 p-4 rounded-3xl shadow-sm flex items-center justify-between gap-4">
         <div>
-          <h4 class="font-extrabold text-orange-800 text-sm">Fehlender Tipp!</h4>
-          <p class="text-xs text-orange-600 font-medium mt-0.5">${formatRelativeDate(nextUntipped.kickoff_time)}: ${nextUntipped.home_team?.name} - ${nextUntipped.away_team?.name}</p>
+          <h4 class="font-extrabold text-slate-800 text-sm">Nächstes offene Spiel</h4>
+          <p class="text-xs text-slate-500 font-medium mt-0.5">${countdownStr} &nbsp;·&nbsp; ${nextUntipped.home_team?.name} - ${nextUntipped.away_team?.name}</p>
         </div>
-        <button onclick="jumpToMatch('${nextUntipped.phase}', ${nextUntipped.id})" class="bg-orange-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shrink-0 active:scale-95 transition">Tippen</button>
+        <button onclick="jumpToMatch('${nextUntipped.phase}', ${nextUntipped.id})" class="bg-slate-900 text-white font-bold text-xs px-4 py-2.5 rounded-xl shrink-0 active:scale-95 transition">Tippen</button>
       </div>`;
   }
 
@@ -482,18 +492,21 @@ function renderDashboard(main) {
 
   main.innerHTML = `
     <div class="p-4 space-y-5 max-w-lg mx-auto fade-up">
-      <div style="background:linear-gradient(135deg,#1e40af 0%,#1d4ed8 50%,#2563eb 100%);" class="text-white p-5 rounded-3xl shadow-lg flex justify-between items-center">
+      <!-- Einheitliche weiße Kachel für Platzierung -->
+      <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex justify-between items-center">
         <div>
-          <p class="text-blue-200 text-xs font-bold uppercase tracking-wider mb-1">Deine Platzierung</p>
-          <div class="text-4xl font-extrabold tracking-tight">Platz ${rank} <span class="text-xl font-semibold text-blue-300">/ ${total}</span></div>
+          <p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Deine Platzierung</p>
+          <div class="text-4xl font-extrabold tracking-tight text-slate-900">Platz ${rank} <span class="text-xl font-semibold text-slate-300">/ ${total}</span></div>
         </div>
         <div class="text-right">
-          <p class="text-blue-200 text-xs font-bold uppercase tracking-wider mb-1">Punkte</p>
-          <p class="text-4xl font-extrabold tracking-tight">${pts}</p>
+          <p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Punkte</p>
+          <p class="text-4xl font-extrabold tracking-tight text-slate-900">${pts}</p>
         </div>
       </div>
+      
       ${nextHtml}
       ${warningHtml}
+      
       <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
         <h3 class="font-extrabold text-slate-800 tracking-tight mb-4">Gesamtwertung</h3>
         <div class="space-y-1">${lbRows || '<p class="text-center text-slate-400 text-sm py-4">Noch keine Spieler.</p>'}</div>
@@ -813,9 +826,13 @@ async function loadOverviewData() {
 
     const hn = (m.home_team?.name || 'HM').substring(0,3).toUpperCase();
     const an = (m.away_team?.name || 'GS').substring(0,3).toUpperCase();
+    
+    // Kleine Flaggen für die Übersicht
+    const hFlag = flag(m.home_team, 'w-5 h-3.5 rounded-[2px]');
+    const aFlag = flag(m.away_team, 'w-5 h-3.5 rounded-[2px]');
 
     return `<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-      <div class="bg-slate-800 text-white px-4 py-2.5 flex justify-between items-center"><div class="font-bold text-sm">${hn} – ${an}</div><div class="text-xs font-bold mono bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">${status}</div></div>
+      <div class="bg-slate-800 text-white px-4 py-2.5 flex justify-between items-center"><div class="font-bold text-sm flex items-center gap-2">${hFlag} <span>${hn} – ${an}</span> ${aFlag}</div><div class="text-xs font-bold mono bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">${status}</div></div>
       <div class="divide-y divide-slate-100">${rows}</div>
     </div>`;
   }).join('');
