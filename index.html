@@ -89,7 +89,7 @@
     .nav-item.active { color:var(--accent); }
 
     /* ═══════════════════════════════════
-       PHASE TABS
+       PHASE TABS & SCROLL BUTTONS
     ═══════════════════════════════════ */
     .phase-tab {
       white-space:nowrap; padding:8px 16px; border-radius:8px;
@@ -98,6 +98,17 @@
     }
     .phase-tab-on  { background:var(--navy); color:#fff; }
     .phase-tab-off { background:var(--surface); color:var(--text-2); border-color:var(--border); }
+
+    .tab-scroll-btn {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 50%;
+      width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--text-2); font-size: 16px; font-weight: bold;
+      flex-shrink: 0; transition: all 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .tab-scroll-btn:hover { background: var(--border-light); color: var(--text); }
+    @media (hover: none) and (pointer: coarse) {
+      .tab-scroll-btn { display: none; }
+    }
 
     /* ═══════════════════════════════════
        PILLS / BADGES
@@ -108,9 +119,10 @@
       font-size:10px; font-weight:700; letter-spacing:.03em;
     }
     .pill-live   { background:var(--red-bg);   color:var(--red);   }
-    .pill-open   { background:var(--green-bg);  color:var(--green); }
-    .pill-done   { background:#F1F0EC;          color:var(--text-2);}
-    .pill-gold   { background:#FEF3C7;          color:var(--accent-text); }
+    .pill-getippt{ background:var(--blue-bg);  color:var(--blue); }
+    .pill-offen  { background:#F1F0EC;         color:var(--text-2);}
+    .pill-done   { background:#F1F0EC;         color:var(--text-2);}
+    .pill-gold   { background:#FEF3C7;         color:var(--accent-text); }
     .live-dot    { width:6px; height:6px; border-radius:50%; background:var(--red); display:inline-block; }
 
     /* ═══════════════════════════════════
@@ -150,7 +162,7 @@
       text-overflow:ellipsis; white-space:nowrap;
     }
 
-    /* Score inputs — scoreboard style */
+    /* Score inputs */
     .score-area {
       display:flex; align-items:center; justify-content:center; gap:6px; flex:1;
     }
@@ -175,7 +187,6 @@
       color:var(--text-3); line-height:1; padding:0 2px;
     }
 
-    /* Result score display */
     .result-score {
       font-family:'Syne', sans-serif;
       font-size:36px; font-weight:800;
@@ -184,7 +195,6 @@
     }
     .result-score.live { color:var(--red); }
 
-    /* Scorer button */
     .scorer-btn {
       width:100%; padding:11px 14px;
       background:#F4F0E8;
@@ -197,7 +207,6 @@
     }
     .scorer-btn:active { background:var(--border-light); }
 
-    /* Bet result row */
     .bet-result {
       display:flex; justify-content:space-between; align-items:center;
       background:#F4F0E8; border:1px solid var(--border-light);
@@ -310,16 +319,13 @@
      AUTH
 ════════════════════════════════════════════ -->
 <div id="auth-screen" class="fixed inset-0 flex flex-col items-center justify-center p-5 z-50">
-  <!-- Brand headline -->
   <div class="text-center mb-8 fade-up" style="animation-delay:.05s">
     <div class="text-5xl mb-4 leading-none">🏆</div>
     <h1 class="syne text-3xl font-extrabold text-white tracking-tight">WM 2026</h1>
     <p style="color:rgba(255,255,255,.45); font-size:13px; margin-top:6px; font-weight:600;">made by Nils</p>
   </div>
 
-  <!-- Card -->
   <div class="auth-card w-full max-w-sm fade-up" style="animation-delay:.1s">
-    <!-- Tabs -->
     <div style="display:flex; background:#F4F0E8; border-radius:10px; padding:3px; gap:3px; margin-bottom:20px;">
       <button id="tab-login"    onclick="switchTab('login')"    style="flex:1; padding:9px; border-radius:8px; font-size:13px; font-weight:700; background:#fff; color:var(--navy); box-shadow:0 1px 4px rgba(0,0,0,.08); border:none; cursor:pointer; transition:all .15s;">Anmelden</button>
       <button id="tab-register" onclick="switchTab('register')" style="flex:1; padding:9px; border-radius:8px; font-size:13px; font-weight:700; background:transparent; color:var(--text-2); border:none; cursor:pointer; transition:all .15s;">Registrieren</button>
@@ -357,7 +363,6 @@
      APP SHELL
 ════════════════════════════════════════════ -->
 <div id="app-screen" class="hidden flex-col" style="height:100dvh;">
-  <!-- Header -->
   <header style="background:var(--navy); color:#fff; padding:12px 18px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; border-bottom:1px solid rgba(255,255,255,.06);">
     <h1 class="syne" style="font-size:18px; font-weight:800; letter-spacing:-.01em; display:flex; align-items:center; gap:8px;">
       <span style="color:var(--accent);">🏆</span> WM 2026
@@ -370,10 +375,8 @@
     </div>
   </header>
 
-  <!-- Main -->
   <main id="main" class="flex-1 overflow-y-auto no-scrollbar" style="padding-bottom:5.5rem;"></main>
 
-  <!-- Bottom Nav -->
   <nav style="position:fixed; bottom:0; left:0; right:0; background:var(--navy); border-top:1px solid rgba(255,255,255,.08); display:flex; height:calc(3.75rem + env(safe-area-inset-bottom)); padding-bottom:env(safe-area-inset-bottom); z-index:20;">
     <button class="nav-item" data-view="dashboard"  onclick="goTo('dashboard')">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
@@ -399,7 +402,6 @@
 <div id="modal-scorer" class="hidden fixed inset-0 z-50 flex flex-col justify-end" style="background:rgba(12,24,40,.75); backdrop-filter:blur(8px);">
   <div class="flex-1" onclick="closeScorer()"></div>
   <div style="background:var(--surface); border-radius:24px 24px 0 0; max-height:88vh; display:flex; flex-direction:column; width:100%; max-width:480px; margin:0 auto; box-shadow:0 -8px 40px rgba(0,0,0,.25);" class="fade-up">
-    <!-- Modal header -->
     <div style="padding:16px 18px 14px; border-bottom:1px solid var(--border-light); display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
       <h3 class="syne" style="font-size:17px; font-weight:800; letter-spacing:-.01em;">Torschütze wählen</h3>
       <button onclick="closeScorer()" style="width:32px; height:32px; background:#F4F0E8; border-radius:100px; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-2);">
@@ -439,6 +441,23 @@ const S = {
 // HELPERS
 // ──────────────────────────────────────────
 const $ = id => document.getElementById(id);
+
+window.scrollTabs = function(btn, dir) {
+  const container = btn.parentElement.querySelector('.phase-tabs-scroll');
+  container.scrollBy({ left: dir * 150, behavior: 'smooth' });
+}
+
+function renderPhaseTabsContainer(activePhase, setPhaseFnName) {
+  return `
+    <div style="position:sticky;top:0;z-index:30;background:var(--bg);padding:10px 16px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;gap:8px;">
+      <button onclick="scrollTabs(this, -1)" class="tab-scroll-btn">‹</button>
+      <div class="phase-tabs-scroll no-scrollbar" style="display:flex;overflow-x:auto;gap:8px;flex:1;scroll-behavior:smooth;">
+        ${phaseTabs(activePhase, setPhaseFnName)}
+      </div>
+      <button onclick="scrollTabs(this, 1)" class="tab-scroll-btn">›</button>
+    </div>
+  `;
+}
 
 function isFinished(status) {
   if (!status) return false;
@@ -491,7 +510,6 @@ function formatRelativeDate(ts) {
 
 function isLocked(m) { return new Date(m.kickoff_time) <= new Date(); }
 
-// FIX: phases() no longer injects 'Bonusfragen' — that's handled explicitly where needed
 function matchPhases() {
   return [...new Set(S.matches.map(m => m.phase).filter(Boolean))];
 }
@@ -537,7 +555,6 @@ function jumpToMatch(phase, matchId) {
   }, 120);
 }
 
-// FIX: traverse only h- inputs for tab flow (correct behavior — away inputs auto-advance to next home)
 function focusNextMatchInput(currentMatchId) {
   const inputs = Array.from(document.querySelectorAll('input[id^="h-"]'));
   const idx = inputs.findIndex(i => i.id===`h-${currentMatchId}`);
@@ -605,7 +622,6 @@ async function triggerSoftRefresh() {
 }
 
 async function fetchData(showLoadingState=true) {
-  // FIX: always clear the tabelle cache on refresh so data is fresh
   S.allBetsCache = null;
 
   if (showLoadingState) {
@@ -615,7 +631,7 @@ async function fetchData(showLoadingState=true) {
   try {
     const [matchRes,betRes,profRes,teamsRes,rankRes] = await Promise.all([
       db.from('matches').select('*, home_team:teams!home_team_id(id,name,flag_url), away_team:teams!away_team_id(id,name,flag_url), first_goalscorer:players!first_goalscorer_id(id,name)').order('kickoff_time',{ascending:true}),
-      db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name)').eq('user_id',S.user.id),
+      db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)').eq('user_id',S.user.id),
       db.from('profiles').select('id,display_name'),
       db.from('teams').select('*').order('name',{ascending:true}),
       db.from('user_rankings').select('*')
@@ -640,12 +656,11 @@ async function fetchData(showLoadingState=true) {
       return {
         id: p.id,
         display_name: p.display_name,
-        total_points: r&&r.total_points!==null&&r.total_points!==undefined ? Number(r.total_points) : 0,
+        total_points: r&&r.total_points!==null ? Number(r.total_points) : 0,
         total_bets: r ? Number(r.total_bets) : 0
       };
     }).sort((a,b)=>b.total_points-a.total_points);
 
-    // Live points injection — only for matches that are LOCKED but NOT finished yet
     const livePointsMap = {};
     const liveMatches = S.matches.filter(m=>isLocked(m)&&!isFinished(m.status));
     if (liveMatches.length>0) {
@@ -654,7 +669,6 @@ async function fetchData(showLoadingState=true) {
         .in('match_id', liveMatches.map(m=>m.id));
       (liveBets||[]).forEach(b => {
         const m = S.matches.find(x=>x.id===b.match_id);
-        // FIX: only add live pts if points_awarded is not yet set (no double-counting)
         if (m && (b.points_awarded===null || b.points_awarded===undefined)) {
           const pts = calcBetPoints(m,b);
           if (pts>0) livePointsMap[b.user_id] = (livePointsMap[b.user_id]||0) + pts;
@@ -719,7 +733,6 @@ function renderDashboard(main) {
     }
   }
 
-  // FIX: simplified untipped check — bet with scores = complete (scorer is optional)
   const nextUntipped = S.matches.find(m => {
     if (isLocked(m)) return false;
     const b = S.bets[m.id];
@@ -765,9 +778,10 @@ function renderDashboard(main) {
       if (!bet&&!isLocked(m)) {
         action=`<button onclick="jumpToMatch('${m.phase}',${m.id})" style="width:100%;margin-top:12px;background:var(--green);color:#fff;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;padding:11px;border-radius:10px;border:none;cursor:pointer;letter-spacing:.02em;">Jetzt tippen</button>`;
       } else if (bet) {
+        let displayScorer = bet.first_goalscorer_id ? `⚽ ${bet.goalscorer?.name}` : `🚫 Keiner`;
         action=`<div style="margin-top:12px;background:#F4F0E8;padding:10px 14px;border-radius:10px;border:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;">
           <div class="syne" style="font-size:20px;font-weight:800;letter-spacing:-.02em;">${bet.home_score??'–'}:${bet.away_score??'–'}</div>
-          <div style="font-size:11px;color:var(--text-2);font-weight:600;text-align:right;max-width:60%;">⚽ ${bet.goalscorer?.name||'Kein Torschütze'}</div>
+          <div style="font-size:11px;color:var(--text-2);font-weight:600;text-align:right;max-width:60%;">${displayScorer}</div>
         </div>`;
         if (!isLocked(m)) action+=`<button onclick="jumpToMatch('${m.phase}',${m.id})" style="width:100%;margin-top:8px;background:#F4F0E8;color:var(--text-2);font-size:12px;font-weight:700;padding:8px;border-radius:8px;border:none;cursor:pointer;">Tipp ändern</button>`;
       }
@@ -810,7 +824,6 @@ function renderDashboard(main) {
   main.innerHTML=`
     <div style="max-width:480px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px;" class="fade-up">
 
-      <!-- Hero stats -->
       <div class="card" style="padding:22px 20px;display:flex;justify-content:space-between;align-items:center;background:var(--navy);border-color:transparent;">
         <div class="hero-stat">
           <div class="num" style="color:#fff;">Platz ${rank}</div>
@@ -826,7 +839,6 @@ function renderDashboard(main) {
       ${warningHtml}
       ${nextHtml}
 
-      <!-- Leaderboard -->
       <div class="card" style="padding:18px 16px;">
         <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin-bottom:12px;">Rangliste</div>
         <div style="display:flex;flex-direction:column;gap:2px;">
@@ -842,15 +854,13 @@ function renderDashboard(main) {
 function renderBetting(main) {
   main.innerHTML=`
     <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;">
-      <div style="position:sticky;top:0;z-index:30;background:var(--bg);padding:14px 16px 12px;border-bottom:1px solid var(--border-light);display:flex;overflow-x:auto;gap:8px;" class="no-scrollbar">
-        ${phaseTabs(S.bettingPhase,'setBettingPhase')}
-      </div>
+      ${renderPhaseTabsContainer(S.bettingPhase, 'setBettingPhase')}
       <div id="betting-content" style="padding:16px;padding-bottom:32px;display:flex;flex-direction:column;gap:14px;" class="fade-up"></div>
     </div>`;
   renderBettingContent();
 }
 
-function setBettingPhase(p) { S.bettingPhase=p; renderBetting($('main')); }
+window.setBettingPhase = function(p) { S.bettingPhase=p; renderBetting($('main')); }
 
 function renderBettingContent() {
   const c=$('betting-content');
@@ -866,30 +876,45 @@ function betCard(m) {
     const pts=calcBetPoints(m,bet);
     const finalH=getFinalScore(m,'home')??0, finalA=getFinalScore(m,'away')??0;
     const extInfo=m.home_score_extratime!==null ? `<div style="font-size:10px;color:var(--text-3);font-weight:700;margin-top:4px;">n.V.</div>` : '';
-    const badge=isLive
-      ? `<span class="pill pill-live"><span class="live-dot"></span>Live</span>`
-      : `<span class="pill pill-done">Beendet</span>`;
+    
+    let headerBadge = '';
+    if (isLive) headerBadge = `<span class="pill pill-live"><span class="live-dot"></span>Live</span>`;
+    else headerBadge = `<span class="pill pill-done">Beendet</span>`;
 
     let tipLine='<span style="color:var(--text-3);">Kein Tipp</span>';
     let ptClass='color:var(--text-3);';
     if (bet) {
       ptClass = pts>=3 ? 'color:var(--green);' : pts>=1 ? 'color:var(--accent-text);' : 'color:var(--text-2);';
       let scorerHtml='';
-      if (m.first_goalscorer_id) {
-        scorerHtml = bet.first_goalscorer_id===m.first_goalscorer_id
-          ? `<span style="color:var(--green);font-weight:700;">⚽ ${bet.goalscorer?.name||'–'}</span>`
-          : `<span style="color:var(--red);">⚽ ${bet.goalscorer?.name||'–'}</span>`;
+      if (bet.first_goalscorer_id) {
+        const sName = bet.goalscorer?.name || '–';
+        if (m.first_goalscorer_id) {
+          scorerHtml = bet.first_goalscorer_id === m.first_goalscorer_id
+            ? `<span style="color:var(--green);font-weight:700;">⚽ ${sName}</span>`
+            : `<span style="color:var(--red);">⚽ ${sName}</span>`;
+        } else {
+          // Finished game with NO scorer, but user picked someone -> Red
+          if (isFinished(m.status) && !m.first_goalscorer_id) {
+            scorerHtml = `<span style="color:var(--red);">⚽ ${sName}</span>`;
+          } else {
+            scorerHtml = `⚽ ${sName}`;
+          }
+        }
       } else {
-        scorerHtml=`⚽ ${bet.goalscorer?.name||'Kein Torschütze'}`;
+        scorerHtml = `<span style="font-weight:600;color:var(--red);">🚫 Keiner</span>`;
+        // Finished game with NO scorer, and user picked Keiner -> Green
+        if (isFinished(m.status) && !m.first_goalscorer_id) {
+          scorerHtml = `<span style="font-weight:700;color:var(--green);">🚫 Keiner</span>`;
+        }
       }
-      tipLine=`<span class="mono" style="font-weight:700;">${bet.home_score}:${bet.away_score}</span> <span style="color:var(--text-3);">·</span> ${scorerHtml}`;
+      tipLine=`<span class="mono" style="font-weight:700;">${bet.home_score??'-'}:${bet.away_score??'-'}</span> <span style="color:var(--text-3);">·</span> ${scorerHtml}`;
     }
 
     return `
       <div id="match-card-${m.id}" class="mc ${isLive?'mc-live':''}" style="scroll-margin-top:140px;">
         <div class="mc-header">
           <span class="mono" style="color:var(--text-2);font-size:11px;">${fmtDate(m.kickoff_time)}</span>
-          ${badge}
+          ${headerBadge}
         </div>
         <div class="mc-body">
           <div class="mc-teams" style="margin-bottom:12px;">
@@ -920,16 +945,26 @@ function betCard(m) {
   // Open / bettable
   const curHome=bet?.home_score??'', curAway=bet?.away_score??'';
   const pending=S.pendingScorer[m.id];
-  const sName=pending?.name ?? bet?.goalscorer?.name ?? '';
-  const sHint=sName
-    ? `<span style="font-weight:700;color:var(--text);">${sName}</span>`
-    : `<span style="color:var(--text-3);">Torschütze auswählen …</span>`;
+  const isGetippt = bet && bet.home_score !== null && bet.away_score !== null;
+
+  let sHint = '';
+  if (pending !== undefined) {
+    if (pending.id) sHint = `⚽ <span style="font-weight:700;color:var(--text);">${pending.name}</span>`;
+    else sHint = `🚫 <span style="font-weight:700;color:var(--red);">Keiner</span>`;
+  } else if (bet) {
+    if (bet.first_goalscorer_id) sHint = `⚽ <span style="font-weight:700;color:var(--text);">${bet.goalscorer?.name || '–'}</span>`;
+    else sHint = `🚫 <span style="font-weight:700;color:var(--red);">Keiner</span>`;
+  } else {
+    sHint = `<span style="color:var(--text-3);">Torschütze auswählen …</span>`;
+  }
+
+  let headerBadge = isGetippt ? `<span class="pill pill-getippt">✓ Getippt</span>` : `<span class="pill pill-offen">Offen</span>`;
 
   return `
     <div id="match-card-${m.id}" class="mc" style="scroll-margin-top:140px;">
       <div class="mc-header">
         <span class="mono" style="color:var(--text-2);font-size:11px;">${formatRelativeDate(m.kickoff_time)}</span>
-        <span class="pill pill-open">✓ Offen</span>
+        ${headerBadge}
       </div>
       <div class="mc-body">
         <div class="mc-teams">
@@ -968,24 +1003,19 @@ async function triggerAutoSave(matchId, forceScorer=false) {
   const aVal=$(`a-${matchId}`)?.value;
   const pending=S.pendingScorer[matchId];
   
-  // Speichern wenn: beide Scores gefüllt ODER nur Scorer gesetzt (und forceScorer=true)
   if (hVal!==''&&aVal!=='') {
-    // Beide Scores gefüllt
     await performSave(matchId, parseInt(hVal), parseInt(aVal));
   } else if (forceScorer && pending) {
-    // Nur Scorer gesetzt (z.B. nach pickScorer)
     const currentH=hVal!==''?parseInt(hVal):null;
     const currentA=aVal!==''?parseInt(aVal):null;
     await performSave(matchId, currentH, currentA);
   }
-  // Sonst: nicht speichern (noch nicht alle Felder gefüllt)
 }
 
 async function performSave(matchId, h, a) {
   const pending=S.pendingScorer[matchId], existing=S.bets[matchId];
   const scorerId=pending!==undefined ? (pending.id??null) : (existing?.first_goalscorer_id??null);
   
-  // Mindestens Scorer ODER beide Scores erforderlich
   if (scorerId===null && (h===null || a===null)) return;
   
   if (existing&&existing.home_score===h&&existing.away_score===a&&existing.first_goalscorer_id===scorerId) return;
@@ -995,7 +1025,9 @@ async function performSave(matchId, h, a) {
     id:existing?.id||crypto.randomUUID(),
     user_id:S.user.id, match_id:matchId,
     home_score:h, away_score:a, first_goalscorer_id:scorerId,
-    goalscorer:pending!==undefined?{name:pending.name}:existing?.goalscorer
+    goalscorer: pending !== undefined 
+      ? (scorerId ? { name: pending.name, team_id: pending.team_id } : null) 
+      : existing?.goalscorer
   };
   S.bets[matchId]=newBet;
 
@@ -1012,6 +1044,9 @@ async function performSave(matchId, h, a) {
     }
     delete S.pendingScorer[matchId];
     if (btn) btn.style.opacity='1';
+    
+    // Auto-Save Refresh Cards visually
+    renderBettingContent();
     showToast('Tipp gespeichert');
   } catch(e) {
     if (backup) S.bets[matchId]=backup; else delete S.bets[matchId];
@@ -1094,14 +1129,22 @@ async function openScorer(matchId) {
     </div>`;
 }
 
-function pickScorer(matchId, playerId) {
-  const player=playerId!=null?S.playerCache[playerId]:null;
-  S.pendingScorer[matchId]={id:playerId, name:player?.name||'Kein Torschütze'};
+window.pickScorer = function(matchId, playerId) {
+  const player = playerId != null ? S.playerCache[playerId] : null;
+  S.pendingScorer[matchId] = {
+    id: playerId, 
+    name: player?.name || 'Keiner',
+    team_id: player?.team_id || null
+  };
   const btn=$(`sb-${matchId}`);
-  if (btn) btn.innerHTML=`<span style="font-weight:700;color:var(--text);">${S.pendingScorer[matchId].name}</span><span style="color:var(--text-3);font-size:18px;line-height:1;">›</span>`;
+  if (btn) {
+    if (playerId) btn.innerHTML=`<span style="font-weight:700;color:var(--text);">⚽ ${S.pendingScorer[matchId].name}</span><span style="color:var(--text-3);font-size:18px;line-height:1;">›</span>`;
+    else btn.innerHTML=`<span style="font-weight:700;color:var(--red);">🚫 Keiner</span><span style="color:var(--text-3);font-size:18px;line-height:1;">›</span>`;
+  }
   closeScorer();
-  triggerAutoSave(matchId, true); // Force save with scorer only
+  triggerAutoSave(matchId, true); 
 }
+
 function closeScorer() { $('modal-scorer').classList.add('hidden'); }
 
 // ──────────────────────────────────────────
@@ -1110,14 +1153,12 @@ function closeScorer() { $('modal-scorer').classList.add('hidden'); }
 function renderOverviewShell(main) {
   main.innerHTML=`
     <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;">
-      <div style="position:sticky;top:0;z-index:30;background:var(--bg);padding:14px 16px 12px;border-bottom:1px solid var(--border-light);display:flex;overflow-x:auto;gap:8px;" class="no-scrollbar">
-        ${phaseTabs(S.overviewPhase,'setOverviewPhase')}
-      </div>
+      ${renderPhaseTabsContainer(S.overviewPhase, 'setOverviewPhase')}
       <div id="ov-cards" style="padding:16px;padding-bottom:32px;display:flex;flex-direction:column;gap:14px;" class="fade-up"></div>
     </div>`;
 }
 
-async function setOverviewPhase(p) {
+window.setOverviewPhase = async function(p) {
   S.overviewPhase=p;
   document.querySelectorAll('[onclick^="setOverviewPhase"]').forEach(btn=>{
     const bp=btn.getAttribute('onclick').match(/'([^']+)'/)?.[1];
@@ -1141,7 +1182,6 @@ async function renderBonusOverview(cards) {
     const locked=new Date(q.deadline)<=new Date();
     const qBets=byQ[q.id]||[];
     let displayRows=S.leaderboard.map(player=>({player,bet:qBets.find(x=>x.user_id===player.id)}));
-    // FIX: null-safe sort
     displayRows.sort((a,b)=>{
       if (a.player.id===S.user.id) return -1;
       if (b.player.id===S.user.id) return 1;
@@ -1192,7 +1232,7 @@ async function loadOverviewData() {
   const phaseMatches=S.matches.filter(m=>m.phase===S.overviewPhase);
   if (!phaseMatches.length) { cards.innerHTML='<p style="text-align:center;color:var(--text-3);padding:40px 0;font-size:13px;">Keine Spiele in dieser Phase.</p>'; return; }
 
-  const {data:allBets,error}=await db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name)').in('match_id',phaseMatches.map(m=>m.id));
+  const {data:allBets,error}=await db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)').in('match_id',phaseMatches.map(m=>m.id));
   if (error) { cards.innerHTML=`<p style="color:var(--red);font-size:13px;padding:16px;">${error.message}</p>`; return; }
 
   const byMatch={};
@@ -1210,7 +1250,7 @@ async function loadOverviewData() {
 
     let actualScorer='';
     if (locked&&m.first_goalscorer) actualScorer=`<span style="font-size:10px;color:#6EE7B7;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">⚽ ${m.first_goalscorer.name}</span>`;
-    else if (locked&&isFinished(m.status)&&!m.first_goalscorer_id) actualScorer=`<span style="font-size:10px;color:rgba(255,255,255,.4);">⚽ Keiner</span>`;
+    else if (locked&&isFinished(m.status)&&!m.first_goalscorer_id) actualScorer=`<span style="font-size:10px;color:rgba(255,255,255,.4);">🚫 Keiner</span>`;
 
     const matchBets=byMatch[m.id]||[];
     matchBets.forEach(b=>b._pts=calcBetPoints(m,b));
@@ -1219,7 +1259,7 @@ async function loadOverviewData() {
       const b=matchBets.find(x=>x.user_id===player.id);
       return {player, bet:b, pts:b?b._pts:0};
     });
-    // FIX: null-safe sort
+
     if (locked) {
       displayRows.sort((a,b)=>b.pts-a.pts);
     } else {
@@ -1233,38 +1273,53 @@ async function loadOverviewData() {
     }
 
     const rows=displayRows.map(({player,bet,pts})=>{
-      const isMe=player.id===S.user.id;
+      const isMe = player.id === S.user.id;
       let bh='-', ba='-', scorerHtml='', ptHtml='';
       
-      if (bet) {
-        // Bet existiert - differenzieren was eingegeben wurde
-        const hasHome=bet.home_score!==null&&bet.home_score!==undefined;
-        const hasAway=bet.away_score!==null&&bet.away_score!==undefined;
-        const hasScorer=bet.first_goalscorer_id!==null&&bet.first_goalscorer_id!==undefined;
-        
-        if (hasHome&&hasAway) {
-          // Beide Scores eingegeben
-          bh=bet.home_score; ba=bet.away_score;
-        } else {
-          // Nur einer oder keiner - zeige -:-
-          bh='-'; ba='-';
+      const hasBet = !!bet;
+      const hasHome = hasBet && bet.home_score !== null && bet.away_score !== null;
+      const hasScorer = hasBet && bet.first_goalscorer_id !== null && bet.first_goalscorer_id !== undefined;
+
+      if (locked || isMe) {
+        if (hasHome) {
+          bh = bet.home_score;
+          ba = bet.away_score;
         }
-        
-        ptHtml=locked?`<span style="font-weight:700;color:${isLive?'var(--blue)':'var(--text-2)'};">${pts}</span>`:'';
-        
-        // Scorer nur anzeigen wenn eingegeben
-        if (hasScorer) {
-          if (m.first_goalscorer_id&&locked) {
-            scorerHtml=bet.first_goalscorer_id===m.first_goalscorer_id
-              ? `<span style="color:var(--green);font-weight:700;">⚽ ${bet.goalscorer?.name||'–'}</span>`
-              : `<span style="color:var(--red);">⚽ ${bet.goalscorer?.name||'–'}</span>`;
-          } else { scorerHtml=`<span style="color:var(--text-2);">⚽ ${bet.goalscorer?.name||'–'}</span>`; }
-        } else { scorerHtml='<span style="color:var(--text-3);">–</span>'; }
+        if (hasBet) {
+          if (hasScorer) {
+            const t = S.teams.find(x => x.id === bet.goalscorer?.team_id);
+            const tAcr = t ? t.name.substring(0,3).toUpperCase() : '';
+            const sName = tAcr ? `${bet.goalscorer.name} (${tAcr})` : (bet.goalscorer?.name || '–');
+
+            if (m.first_goalscorer_id && locked) {
+              scorerHtml = bet.first_goalscorer_id === m.first_goalscorer_id
+                ? `<span style="color:var(--green);font-weight:700;">⚽ ${sName}</span>`
+                : `<span style="color:var(--red);">⚽ ${sName}</span>`;
+            } else {
+              scorerHtml = `<span style="color:var(--text-2);">⚽ ${sName}</span>`;
+            }
+          } else {
+            scorerHtml = `<span style="color:var(--red);font-weight:600;">🚫 Keiner</span>`;
+            if (locked && isFinished(m.status) && !m.first_goalscorer_id) {
+               scorerHtml = `<span style="color:var(--green);font-weight:700;">🚫 Keiner</span>`;
+            }
+          }
+        } else {
+          scorerHtml = '<span style="color:var(--text-3);">–</span>';
+        }
+        ptHtml = locked ? `<span style="font-weight:700;color:${isLive?'var(--blue)':'var(--text-2)'};">${pts}</span>` : '';
       } else {
-        // Kein Bet - nicht abgegeben
-        scorerHtml='<span style="color:var(--text-3);">–</span>';
-        if (locked) ptHtml='<span style="color:var(--text-3);">0</span>';
+        // Nicht begonnen und nicht ich
+        if (hasHome) {
+          bh = '?'; ba = '?';
+        }
+        if (hasBet) {
+          scorerHtml = `<span style="color:var(--text-2);font-weight:600;">???</span>`;
+        } else {
+          scorerHtml = `<span style="color:var(--text-3);">---</span>`;
+        }
       }
+
       return `<div class="ov-row ${isMe?'me':''}">
         <span style="width:28%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isMe?700:600};color:${isMe?'var(--blue)':'var(--text)'};">${player.display_name||'?'}</span>
         <span class="mono" style="width:16%;text-align:center;font-weight:800;font-size:12px;">${bh}:${ba}</span>
@@ -1295,7 +1350,6 @@ async function loadOverviewData() {
 // TABELLE
 // ──────────────────────────────────────────
 function renderTabelleShell(main) {
-  // FIX: use matchPhases() (without Bonusfragen) for the phase dropdown
   const phaseOpts = matchPhases().map(p=>`<option value="phase_${p}">${p}</option>`).join('');
 
   main.innerHTML=`
@@ -1418,7 +1472,7 @@ async function renderBonusInsideBetting(container) {
       ? (ptsAw!==null&&ptsAw!==undefined
           ? `<span class="pill pill-gold">${ptsAw} Pkt</span>`
           : `<span class="pill pill-done">Abgelaufen</span>`)
-      : `<span class="pill pill-open">+${q.points} Pkt</span>`;
+      : `<span class="pill" style="background:#F1F0EC;color:var(--text-2);">+${q.points} Pkt</span>`;
 
     return `<div class="card" style="padding:18px 16px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px;">
@@ -1436,7 +1490,6 @@ async function renderBonusInsideBetting(container) {
 
 async function saveBonus(qId) {
   const val=$(`q-${qId}`).value.trim();
-  // FIX: use showToast instead of alert
   if (!val) { showToast('Bitte etwas eintragen!','error'); return; }
   const btn=$(`btn-q-${qId}`);
   btn.disabled=true; btn.innerHTML=`<div class="spinner" style="width:18px;height:18px;"></div>`;
@@ -1453,7 +1506,6 @@ async function saveBonus(qId) {
     btn.textContent='✓ Gespeichert'; btn.style.background='var(--green)';
     setTimeout(()=>{btn.textContent='Speichern';btn.style.background='';btn.disabled=false;},2200);
   } catch(e) {
-    // FIX: use showToast instead of alert
     showToast(e.message,'error');
     btn.textContent='Speichern'; btn.disabled=false;
   }
@@ -1473,7 +1525,6 @@ function renderProfile(main) {
     <div style="max-width:480px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px;" class="fade-up">
       <div class="syne" style="font-size:24px;font-weight:800;letter-spacing:-.02em;">Mein Profil</div>
 
-      <!-- Profile card -->
       <div class="card" style="padding:20px 18px;">
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
           <div style="width:60px;height:60px;border-radius:16px;background:linear-gradient(135deg,var(--navy),var(--navy-2));display:flex;align-items:center;justify-content:center;flex-shrink:0;">
@@ -1485,7 +1536,6 @@ function renderProfile(main) {
           </div>
         </div>
 
-        <!-- Stats -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
           <div style="background:#F4F0E8;border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border-light);">
             <div class="syne" style="font-size:36px;font-weight:800;letter-spacing:-.03em;color:var(--navy);">${pts}</div>
