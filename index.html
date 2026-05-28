@@ -963,16 +963,31 @@ function betCard(m) {
     </div>`;
 }
 
-async function triggerAutoSave(matchId) {
+async function triggerAutoSave(matchId, forceScorer=false) {
   const hVal=$(`h-${matchId}`)?.value;
   const aVal=$(`a-${matchId}`)?.value;
-  if (hVal===''||aVal===''||hVal===undefined||aVal===undefined) return;
-  await performSave(matchId, parseInt(hVal), parseInt(aVal));
+  const pending=S.pendingScorer[matchId];
+  
+  // Speichern wenn: beide Scores gefüllt ODER nur Scorer gesetzt (und forceScorer=true)
+  if (hVal!==''&&aVal!=='') {
+    // Beide Scores gefüllt
+    await performSave(matchId, parseInt(hVal), parseInt(aVal));
+  } else if (forceScorer && pending) {
+    // Nur Scorer gesetzt (z.B. nach pickScorer)
+    const currentH=hVal!==''?parseInt(hVal):null;
+    const currentA=aVal!==''?parseInt(aVal):null;
+    await performSave(matchId, currentH, currentA);
+  }
+  // Sonst: nicht speichern (noch nicht alle Felder gefüllt)
 }
 
 async function performSave(matchId, h, a) {
   const pending=S.pendingScorer[matchId], existing=S.bets[matchId];
   const scorerId=pending!==undefined ? (pending.id??null) : (existing?.first_goalscorer_id??null);
+  
+  // Mindestens Scorer ODER beide Scores erforderlich
+  if (scorerId===null && (h===null || a===null)) return;
+  
   if (existing&&existing.home_score===h&&existing.away_score===a&&existing.first_goalscorer_id===scorerId) return;
 
   const backup=existing?{...existing}:null;
@@ -1085,7 +1100,7 @@ function pickScorer(matchId, playerId) {
   const btn=$(`sb-${matchId}`);
   if (btn) btn.innerHTML=`<span style="font-weight:700;color:var(--text);">${S.pendingScorer[matchId].name}</span><span style="color:var(--text-3);font-size:18px;line-height:1;">›</span>`;
   closeScorer();
-  triggerAutoSave(matchId);
+  triggerAutoSave(matchId, true); // Force save with scorer only
 }
 function closeScorer() { $('modal-scorer').classList.add('hidden'); }
 
@@ -1274,9 +1289,9 @@ function renderTabelleShell(main) {
         <div style="position:relative;">
           <select id="table-filter" onchange="loadTabelleData(this.value)"
             style="width:100%;background:var(--surface);border:1.5px solid var(--border);color:var(--text);font-weight:700;font-size:13px;border-radius:10px;padding:11px 40px 11px 14px;outline:none;appearance:none;cursor:pointer;transition:border-color .15s;">
-            <option value="total">Gesamtwertung (inkl. Live-Punkte)</option>
-            <option value="exact">Exakte Treffer (richtige Ergebnisse)</option>
-            <option value="trend">Nur richtige Tendenz</option>
+            <option value="total">Gesamtwertung</option>
+            <option value="exact">Anzahl Exakte Treffer</option>
+            <option value="trend">Anzahl Richtige Tendenz</option>
             <optgroup label="Stand nach Spielphase">${phaseOpts}</optgroup>
           </select>
           <div style="pointer-events:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--text-2);">
