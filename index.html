@@ -1246,20 +1246,21 @@ async function loadOverviewData() {
           if (hasHome&&hasAway) {
             // Beide Scores eingegeben
             bh=bet.home_score; ba=bet.away_score;
-          } else if (hasScorer&&!hasHome&&!hasAway) {
-            // Nur Torschütze eingefüllt
-            bh='?'; ba='?';
           } else {
-            // Nur einer oder nichts
+            // Alles andere (nur scorer oder gar nichts)
             bh='-'; ba='-';
           }
           
           ptHtml=locked?`<span style="font-weight:700;color:${isLive?'var(--blue)':'var(--text-2)'};">${pts}</span>`:'';
-          if (m.first_goalscorer_id&&locked) {
-            scorerHtml=bet.first_goalscorer_id===m.first_goalscorer_id
-              ? `<span style="color:var(--green);font-weight:700;">⚽ ${bet.goalscorer?.name||'–'}</span>`
-              : `<span style="color:var(--red);">⚽ ${bet.goalscorer?.name||'–'}</span>`;
-          } else { scorerHtml=`<span style="color:var(--text-2);">⚽ ${bet.goalscorer?.name||'–'}</span>`; }
+          
+          // Scorer nur anzeigen wenn eingegeben
+          if (hasScorer) {
+            if (m.first_goalscorer_id&&locked) {
+              scorerHtml=bet.first_goalscorer_id===m.first_goalscorer_id
+                ? `<span style="color:var(--green);font-weight:700;">⚽ ${bet.goalscorer?.name||'–'}</span>`
+                : `<span style="color:var(--red);">⚽ ${bet.goalscorer?.name||'–'}</span>`;
+            } else { scorerHtml=`<span style="color:var(--text-2);">⚽ ${bet.goalscorer?.name||'–'}</span>`; }
+          } else { scorerHtml='<span style="color:var(--text-3);">–</span>'; }
         }
       } else {
         scorerHtml='<span style="color:var(--text-3);">–</span>';
