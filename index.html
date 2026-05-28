@@ -3,94 +3,350 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="theme-color" content="#0C1828" />
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>WM 2026 Tipprunde</title>
-  
   <link rel="manifest" href="manifest.json">
-  
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@500&display=swap" rel="stylesheet" />
-  
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@500&display=swap" rel="stylesheet" />
+
   <style>
+    /* ═══════════════════════════════════
+       DESIGN TOKENS
+    ═══════════════════════════════════ */
+    :root {
+      --bg:           #E9E4D9;
+      --surface:      #FFFFFF;
+      --navy:         #0C1828;
+      --navy-2:       #172337;
+      --accent:       #F0BC2C;
+      --accent-text:  #7A5A0E;
+      --red:          #D9372A;
+      --red-bg:       #FEE9E7;
+      --green:        #1A9950;
+      --green-bg:     #D1FAE5;
+      --blue:         #2563EB;
+      --blue-bg:      #DBEAFE;
+      --text:         #0C1828;
+      --text-2:       #6C7480;
+      --text-3:       #9CA3AF;
+      --border:       #D3CCBA;
+      --border-light: #E5DFD2;
+    }
+
+    /* ═══════════════════════════════════
+       BASE
+    ═══════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; }
     * { font-family: 'DM Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
-    .mono { font-family: 'DM Mono', monospace; }
+    .syne { font-family: 'Syne', sans-serif; }
+    .mono { font-family: 'DM Mono', monospace; font-variant-numeric: tabular-nums; }
+
+    body { background: var(--bg); color: var(--text); }
 
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-    @keyframes pulse-soft { 0%,100% { opacity:1; } 50% { opacity:.6; } }
+    /* ═══════════════════════════════════
+       ANIMATIONS
+    ═══════════════════════════════════ */
+    @keyframes spin     { to { transform: rotate(360deg); } }
+    @keyframes fadeUp   { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
+    @keyframes blink    { 0%,100% { opacity:1; } 50% { opacity:.35; } }
+    @keyframes popIn    { from { transform:scale(.92); opacity:0; } to { transform:scale(1); opacity:1; } }
 
-    .spinner {
-      display: inline-block; border-radius: 50%;
-      border: 2.5px solid rgba(0,0,0,0.08);
-      border-top-color: #3b82f6;
-      animation: spin 0.7s linear infinite;
+    .spinner { display:inline-block; border-radius:50%; border:2.5px solid rgba(255,255,255,.2); border-top-color:currentColor; animation:spin .7s linear infinite; }
+    .fade-up { animation:fadeUp .22s ease both; }
+    .fade-in { animation:fadeIn .2s ease both; }
+    .live-pulse { animation:blink 1.6s ease-in-out infinite; }
+
+    /* ═══════════════════════════════════
+       CARDS & SURFACES
+    ═══════════════════════════════════ */
+    .card {
+      background: var(--surface);
+      border-radius: 16px;
+      border: 1px solid var(--border-light);
+      box-shadow: 0 1px 4px rgba(12,24,40,.06), 0 4px 16px rgba(12,24,40,.04);
     }
-    .spinner-white { border-color: rgba(255,255,255,0.25); border-top-color: white; }
-    .fade-up { animation: fadeUp .2s ease both; }
-    .pulse-badge { animation: pulse-soft 2s ease-in-out infinite; }
 
-    /* Nav */
-    .nav-item { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; flex:1; height:100%; color:#94a3b8; font-size:10px; font-weight:600; letter-spacing:0.01em; transition:color .15s; }
-    .nav-item.active { color:#2563eb; }
-    .nav-item svg { width:20px; height:20px; }
+    /* ═══════════════════════════════════
+       BOTTOM NAV
+    ═══════════════════════════════════ */
+    .nav-item {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:4px; flex:1; height:100%;
+      color:rgba(255,255,255,.35);
+      font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+      transition:color .15s;
+    }
+    .nav-item svg { width:20px; height:20px; stroke:currentColor; }
+    .nav-item.active { color:var(--accent); }
+
+    /* ═══════════════════════════════════
+       PHASE TABS
+    ═══════════════════════════════════ */
+    .phase-tab {
+      white-space:nowrap; padding:8px 16px; border-radius:8px;
+      font-size:12px; font-weight:700; letter-spacing:.02em;
+      border:1.5px solid transparent; transition:all .15s; cursor:pointer;
+    }
+    .phase-tab-on  { background:var(--navy); color:#fff; }
+    .phase-tab-off { background:var(--surface); color:var(--text-2); border-color:var(--border); }
+
+    /* ═══════════════════════════════════
+       PILLS / BADGES
+    ═══════════════════════════════════ */
+    .pill {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:3px 9px; border-radius:100px;
+      font-size:10px; font-weight:700; letter-spacing:.03em;
+    }
+    .pill-live   { background:var(--red-bg);   color:var(--red);   }
+    .pill-open   { background:var(--green-bg);  color:var(--green); }
+    .pill-done   { background:#F1F0EC;          color:var(--text-2);}
+    .pill-gold   { background:#FEF3C7;          color:var(--accent-text); }
+    .live-dot    { width:6px; height:6px; border-radius:50%; background:var(--red); display:inline-block; }
+
+    /* ═══════════════════════════════════
+       MATCH CARDS
+    ═══════════════════════════════════ */
+    .mc {
+      background:var(--surface);
+      border-radius:16px;
+      border:1px solid var(--border-light);
+      box-shadow:0 1px 4px rgba(12,24,40,.06), 0 4px 14px rgba(12,24,40,.04);
+      overflow:hidden;
+    }
+    .mc.mc-live { border-color:var(--red); box-shadow:0 0 0 1px var(--red), 0 4px 16px rgba(217,55,42,.12); }
+
+    .mc-header {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:9px 16px 8px;
+      background:#F8F6F2;
+      border-bottom:1px solid var(--border-light);
+      font-size:11px;
+    }
+    .mc-live .mc-header { background:#FEF2F0; border-bottom-color:rgba(217,55,42,.15); }
+
+    .mc-body { padding:18px 16px 16px; }
+
+    .mc-teams {
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom:14px;
+    }
+    .mc-team {
+      display:flex; flex-direction:column; align-items:center;
+      text-align:center; gap:6px; width:80px;
+    }
+    .mc-team-name {
+      font-size:11px; font-weight:700; color:var(--text);
+      line-height:1.2; max-width:80px; overflow:hidden;
+      text-overflow:ellipsis; white-space:nowrap;
+    }
+
+    /* Score inputs — scoreboard style */
+    .score-area {
+      display:flex; align-items:center; justify-content:center; gap:6px; flex:1;
+    }
+    .score-input {
+      width:58px; height:70px;
+      background:var(--navy);
+      color:#fff;
+      border:2px solid transparent;
+      border-radius:12px;
+      text-align:center;
+      font-family:'Syne', sans-serif;
+      font-size:30px; font-weight:800;
+      outline:none;
+      transition:border-color .15s, background .15s;
+      caret-color:var(--accent);
+    }
+    .score-input::placeholder { color:rgba(255,255,255,.25); }
+    .score-input:focus { border-color:var(--accent); background:var(--navy-2); }
+    .score-sep {
+      font-family:'Syne', sans-serif;
+      font-size:26px; font-weight:800;
+      color:var(--text-3); line-height:1; padding:0 2px;
+    }
+
+    /* Result score display */
+    .result-score {
+      font-family:'Syne', sans-serif;
+      font-size:36px; font-weight:800;
+      letter-spacing:-0.03em; line-height:1;
+      text-align:center;
+    }
+    .result-score.live { color:var(--red); }
+
+    /* Scorer button */
+    .scorer-btn {
+      width:100%; padding:11px 14px;
+      background:#F4F0E8;
+      border:1.5px solid var(--border);
+      border-radius:10px;
+      display:flex; justify-content:space-between; align-items:center;
+      font-size:13px; font-weight:600;
+      transition:background .15s, border-color .15s;
+      cursor:pointer;
+    }
+    .scorer-btn:active { background:var(--border-light); }
+
+    /* Bet result row */
+    .bet-result {
+      display:flex; justify-content:space-between; align-items:center;
+      background:#F4F0E8; border:1px solid var(--border-light);
+      border-radius:10px; padding:10px 14px; margin-top:12px;
+    }
+    .bet-result-label {
+      font-size:9px; font-weight:700; text-transform:uppercase;
+      letter-spacing:.07em; color:var(--text-3); margin-bottom:3px;
+    }
+    .bet-pts {
+      font-family:'Syne', sans-serif;
+      font-size:20px; font-weight:800;
+      white-space:nowrap; padding-left:12px;
+    }
+
+    /* ═══════════════════════════════════
+       OVERVIEW TABLE ROWS
+    ═══════════════════════════════════ */
+    .ov-row {
+      display:flex; align-items:center;
+      padding:9px 12px; font-size:11.5px;
+      border-bottom:1px solid #F5F2EC;
+      transition:background .1s;
+    }
+    .ov-row:last-child { border-bottom:none; }
+    .ov-row.me { background:rgba(37,99,235,.04); }
+
+    /* ═══════════════════════════════════
+       LEADERBOARD ROWS
+    ═══════════════════════════════════ */
+    .lb-row {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:10px 12px; border-radius:10px;
+      transition:background .1s;
+    }
+    .lb-row:hover { background:#F7F4EE; }
+    .lb-row.me { background:rgba(37,99,235,.07); }
+
+    /* ═══════════════════════════════════
+       AUTH SCREEN
+    ═══════════════════════════════════ */
+    #auth-screen {
+      background:var(--navy);
+      background-image:
+        radial-gradient(ellipse 100% 60% at 50% 0%, #1C3558 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 80%, rgba(240,188,44,.08) 0%, transparent 60%);
+    }
+    .auth-card {
+      background:var(--surface);
+      border-radius:24px;
+      padding:28px 24px 28px;
+      box-shadow:0 32px 80px rgba(0,0,0,.4);
+    }
+    .auth-input {
+      width:100%; padding:12px 14px;
+      background:#F4F0E8;
+      border:1.5px solid var(--border);
+      border-radius:10px;
+      font-size:14px; font-weight:500;
+      outline:none;
+      transition:border-color .15s, background .15s;
+    }
+    .auth-input:focus { border-color:var(--navy); background:#fff; }
+
+    /* ═══════════════════════════════════
+       MISC
+    ═══════════════════════════════════ */
+    .section-label {
+      font-size:10px; font-weight:700; text-transform:uppercase;
+      letter-spacing:.09em; color:var(--text-2); margin-bottom:6px;
+    }
+
+    .hero-stat { text-align:center; }
+    .hero-stat .num {
+      font-family:'Syne', sans-serif;
+      font-size:44px; font-weight:800;
+      letter-spacing:-0.03em; line-height:1;
+    }
+    .hero-stat .lbl {
+      font-size:10px; font-weight:700; text-transform:uppercase;
+      letter-spacing:.08em; color:var(--text-2); margin-top:6px;
+    }
+
+    /* ═══════════════════════════════════
+       SKELETON
+    ═══════════════════════════════════ */
+    @keyframes shimmer {
+      from { background-position: -600px 0; }
+      to   { background-position:  600px 0; }
+    }
+    .skel {
+      background: linear-gradient(90deg, #E5DFCF 0%, #F0EBE0 50%, #E5DFCF 100%);
+      background-size: 600px 100%;
+      animation: shimmer 1.4s ease-in-out infinite;
+      border-radius:8px;
+    }
 
     input[type=text]::-webkit-inner-spin-button,
-    input[type=text]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-    
-    #auth-screen { background: radial-gradient(ellipse 80% 60% at 50% -10%, #1e3a5f 0%, #0f172a 60%); }
+    input[type=text]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-900" style="height:100dvh; overflow:hidden;">
+<body style="height:100dvh; overflow:hidden;">
 
 <!-- ═══════════════════════════════════════════
-     TOAST CONTAINER
+     TOAST
 ════════════════════════════════════════════ -->
 <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none w-11/12 max-w-sm"></div>
 
 <!-- ═══════════════════════════════════════════
-     AUTH SCREEN
+     AUTH
 ════════════════════════════════════════════ -->
-<div id="auth-screen" class="fixed inset-0 flex items-center justify-center p-5 z-50">
-  <div class="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl fade-up">
-    <div class="text-center mb-7">
-      <div class="text-5xl mb-3 leading-none">🏆</div>
-      <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">WM 2026 Tipprunde</h1>
+<div id="auth-screen" class="fixed inset-0 flex flex-col items-center justify-end p-5 pb-8 z-50">
+  <!-- Brand headline -->
+  <div class="text-center mb-8 fade-up" style="animation-delay:.05s">
+    <div class="text-5xl mb-4 leading-none">🏆</div>
+    <h1 class="syne text-3xl font-extrabold text-white tracking-tight">WM 2026</h1>
+    <p style="color:rgba(255,255,255,.45); font-size:13px; margin-top:6px; font-weight:600;">Deine Tipprunde</p>
+  </div>
+
+  <!-- Card -->
+  <div class="auth-card w-full max-w-sm fade-up" style="animation-delay:.1s">
+    <!-- Tabs -->
+    <div style="display:flex; background:#F4F0E8; border-radius:10px; padding:3px; gap:3px; margin-bottom:20px;">
+      <button id="tab-login"    onclick="switchTab('login')"    style="flex:1; padding:9px; border-radius:8px; font-size:13px; font-weight:700; background:#fff; color:var(--navy); box-shadow:0 1px 4px rgba(0,0,0,.08); border:none; cursor:pointer; transition:all .15s;">Anmelden</button>
+      <button id="tab-register" onclick="switchTab('register')" style="flex:1; padding:9px; border-radius:8px; font-size:13px; font-weight:700; background:transparent; color:var(--text-2); border:none; cursor:pointer; transition:all .15s;">Registrieren</button>
     </div>
 
-    <div class="flex bg-slate-100 rounded-2xl p-1 mb-6 gap-1">
-      <button id="tab-login" onclick="switchTab('login')" class="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all bg-white shadow-sm text-slate-900">Anmelden</button>
-      <button id="tab-register" onclick="switchTab('register')" class="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all text-slate-400">Registrieren</button>
-    </div>
+    <div id="auth-error"   style="display:none; color:#B91C1C; font-size:13px; padding:11px 13px; border-radius:9px; margin-bottom:14px; background:#FEF2F2; border:1px solid #FCA5A5;"></div>
+    <div id="auth-success" style="display:none; color:#166534; font-size:13px; padding:11px 13px; border-radius:9px; margin-bottom:14px; background:#F0FDF4; border:1px solid #86EFAC;"></div>
 
-    <div id="auth-error"   class="hidden text-red-700   text-sm p-3 rounded-xl mb-4 bg-red-50   border border-red-200"></div>
-    <div id="auth-success" class="hidden text-green-700 text-sm p-3 rounded-xl mb-4 bg-green-50 border border-green-200"></div>
-
-    <div class="space-y-3">
-      <div id="name-field" class="hidden">
-        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Anzeigename</label>
-        <input id="inp-name" type="text" placeholder="Dein Name im Spiel" onkeydown="if(event.key==='Enter')handleAuth()" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 transition bg-slate-50" />
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div id="name-field" style="display:none;">
+        <div class="section-label" style="margin-bottom:6px;">Anzeigename</div>
+        <input id="inp-name" type="text" placeholder="Dein Name im Spiel" onkeydown="if(event.key==='Enter')handleAuth()" class="auth-input" />
       </div>
       <div>
-        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">E-Mail</label>
-        <input id="inp-email" type="email" placeholder="email@beispiel.de" onkeydown="if(event.key==='Enter')handleAuth()" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 transition bg-slate-50" />
+        <div class="section-label" style="margin-bottom:6px;">E-Mail</div>
+        <input id="inp-email" type="email" placeholder="email@beispiel.de" onkeydown="if(event.key==='Enter')handleAuth()" class="auth-input" />
       </div>
       <div>
-        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Passwort</label>
-        <div class="relative">
-          <input id="inp-password" type="password" placeholder="Mindestens 6 Zeichen" onkeydown="if(event.key==='Enter')handleAuth()" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 transition bg-slate-50 pr-10" />
-          <button type="button" onclick="togglePw()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        <div class="section-label" style="margin-bottom:6px;">Passwort</div>
+        <div style="position:relative;">
+          <input id="inp-password" type="password" placeholder="Mindestens 6 Zeichen" onkeydown="if(event.key==='Enter')handleAuth()" class="auth-input" style="padding-right:44px;" />
+          <button type="button" onclick="togglePw()" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--text-3); background:none; border:none; cursor:pointer; padding:4px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
         </div>
       </div>
-      <button id="auth-btn" onclick="handleAuth()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 mt-1">
+      <button id="auth-btn" onclick="handleAuth()" style="width:100%; background:var(--navy); color:#fff; font-family:'Syne',sans-serif; font-size:15px; font-weight:700; padding:14px; border-radius:11px; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:background .15s; margin-top:4px; letter-spacing:.01em;">
         Anmelden
       </button>
     </div>
@@ -102,37 +358,37 @@
 ════════════════════════════════════════════ -->
 <div id="app-screen" class="hidden flex-col" style="height:100dvh;">
   <!-- Header -->
-  <header class="bg-slate-900 text-white px-4 py-3 flex justify-between items-center shrink-0 border-b border-slate-800">
-    <h1 class="text-lg font-extrabold flex items-center gap-2 tracking-tight">
-      <span class="text-yellow-400 text-xl">🏆</span> WM 2026
+  <header style="background:var(--navy); color:#fff; padding:12px 18px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; border-bottom:1px solid rgba(255,255,255,.06);">
+    <h1 class="syne" style="font-size:18px; font-weight:800; letter-spacing:-.01em; display:flex; align-items:center; gap:8px;">
+      <span style="color:var(--accent);">🏆</span> WM 2026
     </h1>
-    <div class="flex items-center gap-3">
-      <span id="header-user" class="text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 font-semibold text-slate-300"></span>
-      <button onclick="triggerSoftRefresh()" id="btn-refresh" class="text-slate-400 hover:text-white transition duration-300 active:rotate-180 p-1">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span id="header-user" style="font-size:12px; background:rgba(255,255,255,.07); padding:5px 12px; border-radius:100px; border:1px solid rgba(255,255,255,.1); font-weight:600; color:rgba(255,255,255,.7);"></span>
+      <button onclick="triggerSoftRefresh()" id="btn-refresh" style="color:rgba(255,255,255,.4); background:none; border:none; cursor:pointer; padding:6px; border-radius:8px; transition:color .15s; display:flex; align-items:center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
       </button>
     </div>
   </header>
 
-  <!-- Main scroll area -->
-  <main id="main" class="flex-1 overflow-y-auto" style="padding-bottom:5.5rem;"></main>
+  <!-- Main -->
+  <main id="main" class="flex-1 overflow-y-auto no-scrollbar" style="padding-bottom:5.5rem;"></main>
 
   <!-- Bottom Nav -->
-  <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 flex z-20" style="height:calc(3.75rem + env(safe-area-inset-bottom)); padding-bottom:env(safe-area-inset-bottom);">
+  <nav style="position:fixed; bottom:0; left:0; right:0; background:var(--navy); border-top:1px solid rgba(255,255,255,.08); display:flex; height:calc(3.75rem + env(safe-area-inset-bottom)); padding-bottom:env(safe-area-inset-bottom); z-index:20;">
     <button class="nav-item" data-view="dashboard"  onclick="goTo('dashboard')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
     </button>
-    <button class="nav-item" data-view="tippen"     onclick="goTo('tippen')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Tippen
+    <button class="nav-item" data-view="tippen" onclick="goTo('tippen')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Tippen
     </button>
     <button class="nav-item" data-view="uebersicht" onclick="goTo('uebersicht')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Übersicht
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Übersicht
     </button>
-    <button class="nav-item" data-view="tabelle"    onclick="goTo('tabelle')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>Tabelle
+    <button class="nav-item" data-view="tabelle" onclick="goTo('tabelle')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>Tabelle
     </button>
-    <button class="nav-item" data-view="profil"     onclick="goTo('profil')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>Profil
+    <button class="nav-item" data-view="profil" onclick="goTo('profil')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>Profil
     </button>
   </nav>
 </div>
@@ -140,30 +396,23 @@
 <!-- ═══════════════════════════════════════════
      GOALSCORER MODAL
 ════════════════════════════════════════════ -->
-<div id="modal-scorer" class="hidden fixed inset-0 z-50 flex flex-col justify-end" style="background:rgba(15,23,42,0.7); backdrop-filter:blur(6px);">
+<div id="modal-scorer" class="hidden fixed inset-0 z-50 flex flex-col justify-end" style="background:rgba(12,24,40,.75); backdrop-filter:blur(8px);">
   <div class="flex-1" onclick="closeScorer()"></div>
-  <div class="bg-slate-50 rounded-t-3xl max-h-[85vh] flex flex-col w-full max-w-lg mx-auto shadow-2xl fade-up">
-    <div class="px-5 py-4 border-b border-slate-200 flex justify-between items-center sticky top-0 bg-white rounded-t-3xl z-10">
-      <h3 class="font-extrabold text-lg tracking-tight">Torschütze wählen</h3>
-      <button onclick="closeScorer()" class="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center active:bg-slate-200 transition">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+  <div style="background:var(--surface); border-radius:24px 24px 0 0; max-height:88vh; display:flex; flex-direction:column; width:100%; max-width:480px; margin:0 auto; box-shadow:0 -8px 40px rgba(0,0,0,.25);" class="fade-up">
+    <!-- Modal header -->
+    <div style="padding:16px 18px 14px; border-bottom:1px solid var(--border-light); display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+      <h3 class="syne" style="font-size:17px; font-weight:800; letter-spacing:-.01em;">Torschütze wählen</h3>
+      <button onclick="closeScorer()" style="width:32px; height:32px; background:#F4F0E8; border-radius:100px; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-2);">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </div>
-    <div id="scorer-list" class="overflow-y-auto p-4" style="padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));">
-      <!-- Wird dynamisch gefüllt -->
-    </div>
+    <div id="scorer-list" class="overflow-y-auto no-scrollbar" style="padding:14px 16px; padding-bottom:calc(20px + env(safe-area-inset-bottom));"></div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════
-     JAVASCRIPT
-════════════════════════════════════════════ -->
 <script>
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js')
-      .catch(err => console.error('Service Worker Registrierung fehlgeschlagen:', err));
-  });
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
 
 // ──────────────────────────────────────────
@@ -171,7 +420,6 @@ if ('serviceWorker' in navigator) {
 // ──────────────────────────────────────────
 const SUPABASE_URL      = 'https://kuzxrwzydddykliunhvg.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1enhyd3p5ZGRkeWtsaXVuaHZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NDE0OTMsImV4cCI6MjA5NTQxNzQ5M30.dnIGUpCh2DvPbVi8r-iCdHXKaIIBz_6lbSGTR_ys57U';
-
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -179,218 +427,170 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // STATE
 // ──────────────────────────────────────────
 const S = {
-  user:            null,
-  profile:         null,
-  matches:         [],
-  bets:            {},
-  leaderboard:     [],
-  liveLeaderboard: [],
-  teams:           [],
-  view:            'dashboard',
-  bettingPhase:    null,
-  overviewPhase:   null,
-  pendingScorer:   {},
-  playerCache:     {},
-  authMode:        'login',
-  allBetsCache:    null 
+  user: null, profile: null,
+  matches: [], bets: {}, leaderboard: [], liveLeaderboard: [],
+  teams: [], view: 'dashboard',
+  bettingPhase: null, overviewPhase: null,
+  pendingScorer: {}, playerCache: {},
+  authMode: 'login', allBetsCache: null
 };
 
 // ──────────────────────────────────────────
 // HELPERS
 // ──────────────────────────────────────────
-const $  = id  => document.getElementById(id);
+const $ = id => document.getElementById(id);
 
 function isFinished(status) {
   if (!status) return false;
-  return ['FINISHED', 'FT', 'AET', 'PEN'].includes(status.toUpperCase());
+  return ['FINISHED','FT','AET','PEN'].includes(status.toUpperCase());
 }
 
 function showToast(msg, type = 'success') {
-  const container = $('toast-container');
-  const toast = document.createElement('div');
-  const bgClass = type === 'success' ? 'bg-emerald-500' : 'bg-red-500';
-  toast.className = `${bgClass} text-white px-4 py-3 rounded-2xl shadow-xl text-sm font-bold fade-up transition-opacity duration-300 flex items-center justify-center`;
-  toast.innerHTML = type === 'success' ? `✓ &nbsp;${msg}` : `⚠ &nbsp;${msg}`;
-  container.appendChild(toast);
-  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2500);
+  const c = $('toast-container');
+  const t = document.createElement('div');
+  const bg = type === 'success' ? 'var(--green)' : 'var(--red)';
+  t.style.cssText = `background:${bg}; color:#fff; padding:11px 16px; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.2); font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; animation:fadeUp .2s ease both; transition:opacity .25s;`;
+  t.innerHTML = type === 'success' ? `✓ &nbsp;${msg}` : `⚠ &nbsp;${msg}`;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; setTimeout(() => t.remove(), 280); }, 2400);
 }
 
-function skeletonCard() {
-  return `<div class="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 animate-pulse space-y-4">
-    <div class="h-4 bg-slate-200 rounded w-1/3"></div>
-    <div class="flex justify-between items-center"><div class="w-12 h-8 bg-slate-200 rounded"></div><div class="w-20 h-10 bg-slate-200 rounded"></div><div class="w-12 h-8 bg-slate-200 rounded"></div></div>
-    <div class="h-12 bg-slate-200 rounded w-full"></div>
-  </div>`;
-}
-
-function scorerSkeleton() {
-  const col = `<div class="space-y-2"><div class="h-12 bg-slate-200 rounded-xl"></div><div class="h-12 bg-slate-200 rounded-xl"></div><div class="h-12 bg-slate-200 rounded-xl"></div></div>`;
-  return `<div class="animate-pulse w-full">
-    <div class="h-12 bg-slate-200 rounded-2xl mb-4 w-full"></div>
-    <div class="grid grid-cols-2 gap-3">
-      ${col}${col}
-    </div>
-  </div>`;
-}
-
-function loading(el) { 
-  el.innerHTML = `<div class="max-w-lg mx-auto p-4 space-y-4 fade-up">${skeletonCard()}${skeletonCard()}${skeletonCard()}</div>`; 
+function skeletonCards(n = 3) {
+  return Array.from({length:n}).map(() => `
+    <div class="mc" style="animation:fadeIn .2s ease both;">
+      <div class="mc-header"><div class="skel" style="width:90px;height:12px;"></div><div class="skel" style="width:50px;height:18px;border-radius:100px;"></div></div>
+      <div class="mc-body">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:72px;"><div class="skel" style="width:40px;height:28px;border-radius:4px;"></div><div class="skel" style="width:60px;height:10px;"></div></div>
+          <div style="display:flex;gap:6px;"><div class="skel" style="width:58px;height:70px;border-radius:12px;"></div><div style="width:18px;"></div><div class="skel" style="width:58px;height:70px;border-radius:12px;"></div></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:72px;"><div class="skel" style="width:40px;height:28px;border-radius:4px;"></div><div class="skel" style="width:60px;height:10px;"></div></div>
+        </div>
+        <div class="skel" style="width:100%;height:44px;border-radius:10px;"></div>
+      </div>
+    </div>`).join('');
 }
 
 function flag(team, imgCls = 'w-8 h-6') {
-  if (!team?.flag_url) return `<span class="text-2xl leading-none">🏳️</span>`;
-  if (team.flag_url.startsWith('http') || team.flag_url.startsWith('/')) {
-    return `<img src="${team.flag_url}" class="${imgCls} object-cover rounded-sm shadow-sm" alt="${team.name}" />`;
-  }
-  return `<span class="text-3xl leading-none">${team.flag_url}</span>`;
+  if (!team?.flag_url) return `<span style="font-size:22px;line-height:1;">🏳️</span>`;
+  if (team.flag_url.startsWith('http') || team.flag_url.startsWith('/'))
+    return `<img src="${team.flag_url}" class="${imgCls}" style="object-fit:cover;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,.15);" alt="${team.name}" />`;
+  return `<span style="font-size:26px;line-height:1;">${team.flag_url}</span>`;
 }
 
-function fmtTime(ts) { return new Date(ts).toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' }); }
-
-function fmtDate(ts) { 
-  const d = new Date(ts);
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  return `${day}.${month}`;
-}
+function fmtTime(ts) { return new Date(ts).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}); }
+function fmtDate(ts) { const d=new Date(ts); return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}`; }
 
 function formatRelativeDate(ts) {
-  const d = new Date(ts);
-  const today = new Date();
-  const tmrw = new Date(); tmrw.setDate(today.getDate() + 1);
-  
+  const d = new Date(ts), today = new Date(), tmrw = new Date();
+  tmrw.setDate(today.getDate()+1);
   const time = fmtTime(ts);
-  if (d.toDateString() === today.toDateString()) return 'Heute ' + time;
-  if (d.toDateString() === tmrw.toDateString()) return 'Morgen ' + time;
-  
-  return `${fmtDate(ts)} ${time}`;
+  if (d.toDateString()===today.toDateString()) return `Heute, ${time}`;
+  if (d.toDateString()===tmrw.toDateString()) return `Morgen, ${time}`;
+  return `${fmtDate(ts)}, ${time}`;
 }
 
 function isLocked(m) { return new Date(m.kickoff_time) <= new Date(); }
-function phases()    { 
-  const p = [...new Set(S.matches.map(m => m.phase).filter(Boolean))];
-  p.push('Bonusfragen'); 
+
+// FIX: phases() no longer injects 'Bonusfragen' — that's handled explicitly where needed
+function matchPhases() {
+  return [...new Set(S.matches.map(m => m.phase).filter(Boolean))];
+}
+function allPhases() {
+  const p = matchPhases();
+  p.push('Bonusfragen');
   return p;
 }
 
 function phaseTabs(activePhase, onclickFn) {
-  return phases().map(p => `
-    <button onclick="${onclickFn}('${p}')"
-      class="whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all
-             ${p === activePhase ? 'bg-slate-900 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}">
-      ${p}
-    </button>`).join('');
+  return allPhases().map(p => `
+    <button onclick="${onclickFn}('${p}')" class="phase-tab ${p===activePhase?'phase-tab-on':'phase-tab-off'}">${p}</button>
+  `).join('');
 }
 
 function getFinalScore(m, type) {
-  if (type === 'home') return m.home_score_extratime !== null ? m.home_score_extratime : m.home_score;
-  if (type === 'away') return m.away_score_extratime !== null ? m.away_score_extratime : m.away_score;
+  if (type==='home') return m.home_score_extratime!==null ? m.home_score_extratime : m.home_score;
+  if (type==='away') return m.away_score_extratime!==null ? m.away_score_extratime : m.away_score;
   return null;
 }
 
-// Zentrale Logik für Live-Punkte & reguläre Punkte
 function calcBetPoints(m, b) {
   if (!m || !b) return 0;
-  
-  const locked = isLocked(m);
-  if (!locked) return 0; // Spiel läuft noch nicht
-  
-  // Wenn das Spiel vom Backend abgerechnet wurde, hat das Backend das letzte Wort
-  if (isFinished(m.status) && b.points_awarded !== null && b.points_awarded !== undefined) {
-     return b.points_awarded;
-  }
-
-  const mh = getFinalScore(m, 'home');
-  const ma = getFinalScore(m, 'away');
-  if (mh === null || ma === null) return 0; // Kein Zwischenstand vorhanden
-
-  const bh = b.home_score;
-  const ba = b.away_score;
-  let pts = 0;
-
-  if (mh === bh && ma === ba) pts += 3;
-  else if (mh - ma === bh - ba) pts += 2;
-  else if ((mh > ma && bh > ba) || (mh < ma && bh < ba)) pts += 1;
-
-  if (m.first_goalscorer_id && b.first_goalscorer_id === m.first_goalscorer_id) {
-    pts += 1;
-  }
-  
+  if (!isLocked(m)) return 0;
+  if (isFinished(m.status) && b.points_awarded!==null && b.points_awarded!==undefined) return b.points_awarded;
+  const mh = getFinalScore(m,'home'), ma = getFinalScore(m,'away');
+  if (mh===null || ma===null) return 0;
+  const bh=b.home_score, ba=b.away_score;
+  let pts=0;
+  if (mh===bh && ma===ba) pts+=3;
+  else if (mh-ma===bh-ba) pts+=2;
+  else if ((mh>ma&&bh>ba)||(mh<ma&&bh<ba)) pts+=1;
+  if (m.first_goalscorer_id && b.first_goalscorer_id===m.first_goalscorer_id) pts+=1;
   return pts;
 }
 
 function jumpToMatch(phase, matchId) {
   goTo('tippen');
-  if (S.bettingPhase !== phase) setBettingPhase(phase);
+  if (S.bettingPhase!==phase) setBettingPhase(phase);
   setTimeout(() => {
     const el = $(`match-card-${matchId}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 100);
+    if (el) el.scrollIntoView({behavior:'smooth',block:'start'});
+  }, 120);
 }
 
+// FIX: traverse only h- inputs for tab flow (correct behavior — away inputs auto-advance to next home)
 function focusNextMatchInput(currentMatchId) {
   const inputs = Array.from(document.querySelectorAll('input[id^="h-"]'));
-  const currentIndex = inputs.findIndex(inp => inp.id === `h-${currentMatchId}`);
-  if (currentIndex >= 0 && currentIndex < inputs.length - 1) {
-    const nextInput = inputs[currentIndex + 1];
-    if (!nextInput.disabled) {
-      setTimeout(() => {
-        nextInput.focus();
-        nextInput.closest('[id^="match-card-"]').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 50);
+  const idx = inputs.findIndex(i => i.id===`h-${currentMatchId}`);
+  if (idx>=0 && idx<inputs.length-1) {
+    const next = inputs[idx+1];
+    if (!next.disabled) {
+      setTimeout(() => { next.focus(); next.closest('[id^="match-card-"]')?.scrollIntoView({behavior:'smooth',block:'center'}); }, 60);
     }
   }
 }
 
-function togglePw() {
-  const inp = $('inp-password');
-  inp.type = inp.type === 'password' ? 'text' : 'password';
-}
+function togglePw() { const i=$('inp-password'); i.type=i.type==='password'?'text':'password'; }
 
 // ──────────────────────────────────────────
 // AUTH
 // ──────────────────────────────────────────
 function switchTab(mode) {
   S.authMode = mode;
-  $('tab-login').className    = `flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${mode==='login'    ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`;
-  $('tab-register').className = `flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${mode==='register' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`;
-  $('name-field').classList.toggle('hidden', mode !== 'register');
-  $('auth-btn').textContent = mode === 'login' ? 'Anmelden' : 'Registrieren';
-  $('auth-error').classList.add('hidden');
-  $('auth-success').classList.add('hidden');
+  const onStyle  = 'background:#fff; color:var(--navy); box-shadow:0 1px 4px rgba(0,0,0,.08);';
+  const offStyle = 'background:transparent; color:var(--text-2);';
+  $('tab-login').style.cssText    += mode==='login'    ? onStyle : offStyle;
+  $('tab-register').style.cssText += mode==='register' ? onStyle : offStyle;
+  $('name-field').style.display = mode==='register' ? 'block' : 'none';
+  $('auth-btn').textContent = mode==='login' ? 'Anmelden' : 'Registrieren';
+  $('auth-error').style.display=$('auth-success').style.display='none';
 }
 
 async function handleAuth() {
-  const email = $('inp-email').value.trim();
-  const pw    = $('inp-password').value;
-  const name  = $('inp-name').value.trim();
-  const btn   = $('auth-btn');
-  const errEl = $('auth-error');
-  const okEl  = $('auth-success');
-
-  errEl.classList.add('hidden');
-  okEl.classList.add('hidden');
-  btn.disabled = true;
-  btn.innerHTML = `<div class="spinner spinner-white w-5 h-5"></div>`;
-  
+  const email=  $('inp-email').value.trim();
+  const pw=     $('inp-password').value;
+  const name=   $('inp-name').value.trim();
+  const btn=    $('auth-btn');
+  const errEl=  $('auth-error');
+  const okEl=   $('auth-success');
+  errEl.style.display=okEl.style.display='none';
+  btn.disabled=true;
+  btn.innerHTML=`<div class="spinner" style="width:20px;height:20px;"></div>`;
   try {
-    if (S.authMode === 'login') {
-      const { error } = await db.auth.signInWithPassword({ email, password: pw });
+    if (S.authMode==='login') {
+      const {error}=await db.auth.signInWithPassword({email,password:pw});
       if (error) throw error;
     } else {
       if (!name) throw new Error('Bitte gib einen Anzeigenamen ein.');
-      const { error } = await db.auth.signUp({ email, password: pw, options: { data: { display_name: name } } });
+      const {error}=await db.auth.signUp({email,password:pw,options:{data:{display_name:name}}});
       if (error) throw error;
-      okEl.textContent = '✓ Konto erstellt! (Bitte E-Mail bestätigen, falls in Supabase aktiviert)';
-      okEl.classList.remove('hidden');
+      okEl.textContent='✓ Konto erstellt! Bitte E-Mail bestätigen.';
+      okEl.style.display='block';
     }
   } catch(e) {
-    errEl.textContent = e.message;
-    errEl.classList.remove('hidden');
+    errEl.textContent=e.message; errEl.style.display='block';
   } finally {
-    if (S.authMode === 'login') btn.textContent = 'Anmelden';
-    else btn.textContent = 'Registrieren';
-    btn.disabled = false;
+    btn.textContent=S.authMode==='login'?'Anmelden':'Registrieren';
+    btn.disabled=false;
   }
 }
 
@@ -398,77 +598,83 @@ async function handleAuth() {
 // DATA FETCHING
 // ──────────────────────────────────────────
 async function triggerSoftRefresh() {
-  const btn = $('btn-refresh');
-  if (btn) btn.classList.add('animate-spin');
+  const btn=$('btn-refresh');
+  if (btn) { btn.style.transition='transform .5s'; btn.style.transform='rotate(360deg)'; }
   await fetchData(false);
-  if (btn) btn.classList.remove('animate-spin');
+  setTimeout(() => { if (btn) btn.style.transform=''; }, 500);
 }
 
-async function fetchData(showLoadingState = true) {
-  if (showLoadingState) loading($('main'));
+async function fetchData(showLoadingState=true) {
+  // FIX: always clear the tabelle cache on refresh so data is fresh
+  S.allBetsCache = null;
+
+  if (showLoadingState) {
+    $('main').innerHTML = `<div style="max-width:480px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px;" class="fade-in">${skeletonCards(3)}</div>`;
+  }
 
   try {
-    const [matchRes, betRes, profRes, teamsRes, rankRes] = await Promise.all([
-      db.from('matches').select('*, home_team:teams!home_team_id(id,name,flag_url), away_team:teams!away_team_id(id,name,flag_url), first_goalscorer:players!first_goalscorer_id(id,name)').order('kickoff_time', { ascending: true }),
-      db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name)').eq('user_id', S.user.id),
+    const [matchRes,betRes,profRes,teamsRes,rankRes] = await Promise.all([
+      db.from('matches').select('*, home_team:teams!home_team_id(id,name,flag_url), away_team:teams!away_team_id(id,name,flag_url), first_goalscorer:players!first_goalscorer_id(id,name)').order('kickoff_time',{ascending:true}),
+      db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name)').eq('user_id',S.user.id),
       db.from('profiles').select('id,display_name'),
-      db.from('teams').select('*').order('name', { ascending: true }),
+      db.from('teams').select('*').order('name',{ascending:true}),
       db.from('user_rankings').select('*')
     ]);
 
     if (matchRes.error) throw matchRes.error;
-    if (betRes.error) throw betRes.error;
-    if (profRes.error) throw profRes.error;
+    if (betRes.error)   throw betRes.error;
+    if (profRes.error)  throw profRes.error;
     if (teamsRes.error) throw teamsRes.error;
-    if (rankRes.error) throw rankRes.error;
+    if (rankRes.error)  throw rankRes.error;
 
-    S.matches     = matchRes.data || [];
-    S.teams       = teamsRes.data || [];
-    S.bets = {};
-    (betRes.data || []).forEach(b => { S.bets[b.match_id] = b; });
+    S.matches = matchRes.data || [];
+    S.teams   = teamsRes.data || [];
+    S.bets    = {};
+    (betRes.data||[]).forEach(b => S.bets[b.match_id]=b);
 
-    // Leaderboard aus Profiles und User_Rankings mergen
     const profiles = profRes.data || [];
     const rankings = rankRes.data || [];
-    
+
     S.leaderboard = profiles.map(p => {
-      const r = rankings.find(x => x.user_id === p.id);
+      const r = rankings.find(x=>x.user_id===p.id);
       return {
         id: p.id,
         display_name: p.display_name,
-        total_points: r && r.total_points !== null ? Number(r.total_points) : 0,
+        total_points: r&&r.total_points!==null ? Number(r.total_points) : 0,
         total_bets: r ? Number(r.total_bets) : 0
       };
-    }).sort((a, b) => b.total_points - a.total_points);
+    }).sort((a,b)=>b.total_points-a.total_points);
 
-    // Live-Punkte Injektion
-    const liveMatches = S.matches.filter(m => isLocked(m) && !isFinished(m.status));
-    const livePointsMap = {}; 
-
-    if (liveMatches.length > 0) {
-      const liveMatchIds = liveMatches.map(m => m.id);
-      const { data: liveBets } = await db.from('bets').select('user_id, match_id, home_score, away_score, first_goalscorer_id').in('match_id', liveMatchIds);
-      
-      (liveBets || []).forEach(b => {
-        const m = S.matches.find(x => x.id === b.match_id);
-        const pts = calcBetPoints(m, b);
-        if (pts > 0) livePointsMap[b.user_id] = (livePointsMap[b.user_id] || 0) + pts;
+    // Live points injection — only for matches that are LOCKED but NOT finished yet
+    const livePointsMap = {};
+    const liveMatches = S.matches.filter(m=>isLocked(m)&&!isFinished(m.status));
+    if (liveMatches.length>0) {
+      const {data:liveBets} = await db.from('bets')
+        .select('user_id,match_id,home_score,away_score,first_goalscorer_id,points_awarded')
+        .in('match_id', liveMatches.map(m=>m.id));
+      (liveBets||[]).forEach(b => {
+        const m = S.matches.find(x=>x.id===b.match_id);
+        // FIX: only add live pts if points_awarded is not yet set (no double-counting)
+        if (m && (b.points_awarded===null || b.points_awarded===undefined)) {
+          const pts = calcBetPoints(m,b);
+          if (pts>0) livePointsMap[b.user_id] = (livePointsMap[b.user_id]||0) + pts;
+        }
       });
     }
 
     S.liveLeaderboard = S.leaderboard.map(p => ({
-        ...p,
-        total_points: (p.total_points || 0) + (livePointsMap[p.id] || 0)
-    })).sort((a, b) => b.total_points - a.total_points);
+      ...p,
+      total_points: (p.total_points||0) + (livePointsMap[p.id]||0)
+    })).sort((a,b)=>b.total_points-a.total_points);
 
-    const ph = phases();
+    const ph = allPhases();
     if (!S.bettingPhase  || !ph.includes(S.bettingPhase))  S.bettingPhase  = ph[0];
     if (!S.overviewPhase || !ph.includes(S.overviewPhase)) S.overviewPhase = ph[0];
 
     renderView();
-  } catch (err) {
-    if (showLoadingState) $('main').innerHTML = `<div class="p-5 text-center"><p class="text-red-500 font-bold mb-2">Fehler beim Laden</p><p class="text-sm text-slate-500">${err.message}</p></div>`;
-    else showToast('Fehler beim Aktualisieren', 'error');
+  } catch(err) {
+    if (showLoadingState) $('main').innerHTML = `<div style="padding:32px 20px; text-align:center;"><p style="color:var(--red);font-weight:700;margin-bottom:6px;">Fehler beim Laden</p><p style="font-size:13px;color:var(--text-2);">${err.message}</p></div>`;
+    else showToast('Fehler beim Aktualisieren','error');
   }
 }
 
@@ -476,19 +682,19 @@ async function fetchData(showLoadingState = true) {
 // NAVIGATION
 // ──────────────────────────────────────────
 function goTo(view) {
-  S.view = view;
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.view === view));
+  S.view=view;
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active', el.dataset.view===view));
   renderView();
 }
 
 function renderView() {
-  const main = $('main');
-  switch (S.view) {
-    case 'dashboard':  renderDashboard(main); break;
-    case 'tippen':     renderBetting(main); break;
+  const main=$('main');
+  switch(S.view) {
+    case 'dashboard':  renderDashboard(main);  break;
+    case 'tippen':     renderBetting(main);     break;
     case 'uebersicht': renderOverviewShell(main); loadOverviewData(); break;
     case 'tabelle':    renderTabelleShell(main); loadTabelleData('total'); break;
-    case 'profil':     renderProfile(main); break;
+    case 'profil':     renderProfile(main);    break;
   }
 }
 
@@ -496,138 +702,136 @@ function renderView() {
 // DASHBOARD
 // ──────────────────────────────────────────
 function renderDashboard(main) {
-  const me    = S.liveLeaderboard.find(p => p.id === S.user.id);
-  const rank  = (S.liveLeaderboard.findIndex(p => p.id === S.user.id) + 1) || '–';
+  const me    = S.liveLeaderboard.find(p=>p.id===S.user.id);
+  const rank  = (S.liveLeaderboard.findIndex(p=>p.id===S.user.id)+1) || '–';
   const pts   = me?.total_points ?? 0;
   const total = S.liveLeaderboard.length;
-  const now  = new Date();
-  
-  let activeMatches = S.matches.filter(m => isLocked(m) && !isFinished(m.status));
-  const hasLiveMatches = activeMatches.length > 0;
+  const now   = new Date();
 
-  if (!hasLiveMatches) {
-    const upcoming = S.matches.filter(m => !isLocked(m));
-    if (upcoming.length > 0) {
+  let activeMatches = S.matches.filter(m=>isLocked(m)&&!isFinished(m.status));
+  const hasLive     = activeMatches.length>0;
+
+  if (!hasLive) {
+    const upcoming = S.matches.filter(m=>!isLocked(m));
+    if (upcoming.length>0) {
       const nextTime = upcoming[0].kickoff_time;
-      activeMatches = upcoming.filter(m => m.kickoff_time === nextTime);
+      activeMatches  = upcoming.filter(m=>m.kickoff_time===nextTime);
     }
   }
 
-  // Find the first untipped match where score OR scorer is missing
+  // FIX: simplified untipped check — bet with scores = complete (scorer is optional)
   const nextUntipped = S.matches.find(m => {
     if (isLocked(m)) return false;
     const b = S.bets[m.id];
     if (!b) return true;
-    if (b.home_score === null || b.home_score === undefined || b.home_score === '') return true;
-    if (b.away_score === null || b.away_score === undefined || b.away_score === '') return true;
-    // Wenn first_goalscorer_id null ist und der Name nicht "Kein Torschütze" lautet, fehlt der Torschütze
-    if (b.first_goalscorer_id === null && (!b.goalscorer || b.goalscorer.name !== 'Kein Torschütze')) return true;
+    if (b.home_score===null||b.home_score===undefined) return true;
+    if (b.away_score===null||b.away_score===undefined) return true;
     return false;
   });
 
   let warningHtml = '';
-  if (nextUntipped && !activeMatches.find(m => m.id === nextUntipped.id)) {
-    const diffMs = new Date(nextUntipped.kickoff_time) - now;
+  if (nextUntipped && !activeMatches.find(m=>m.id===nextUntipped.id)) {
+    const diffMs = new Date(nextUntipped.kickoff_time)-now;
     let countdownStr = '';
-    if (diffMs > 0) {
-      const d = Math.floor(diffMs / 86400000);
-      const h = Math.floor((diffMs % 86400000) / 3600000);
-      const m = Math.floor((diffMs % 3600000) / 60000);
-      if (d > 0) countdownStr = `In: ${String(d).padStart(2, '0')}:${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      else countdownStr = `In: ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-    } else {
-      countdownStr = `Jetzt`;
-    }
+    if (diffMs>0) {
+      const d=Math.floor(diffMs/86400000), h=Math.floor((diffMs%86400000)/3600000), mn=Math.floor((diffMs%3600000)/60000);
+      countdownStr = d>0 ? `In ${d}T ${String(h).padStart(2,'0')}:${String(mn).padStart(2,'0')}` : `In ${String(h).padStart(2,'0')}:${String(mn).padStart(2,'0')}`;
+    } else countdownStr='Jetzt';
 
     warningHtml = `
-      <div class="bg-white border border-slate-100 p-4 rounded-3xl shadow-sm flex items-center justify-between gap-4">
+      <div class="card" style="padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; border-left:3px solid var(--accent);">
         <div>
-          <h4 class="font-extrabold text-slate-800 text-sm">Nächster offener Tipp</h4>
-          <p class="text-xs text-slate-500 font-medium mt-0.5">${countdownStr} &nbsp;·&nbsp; ${nextUntipped.home_team?.name} - ${nextUntipped.away_team?.name}</p>
+          <div style="font-weight:700; font-size:13px; margin-bottom:3px;">Nächster offener Tipp</div>
+          <div style="font-size:11px; color:var(--text-2); font-weight:500;">${countdownStr} &nbsp;·&nbsp; ${nextUntipped.home_team?.name} – ${nextUntipped.away_team?.name}</div>
         </div>
-        <button onclick="jumpToMatch('${nextUntipped.phase}', ${nextUntipped.id})" class="bg-slate-900 text-white font-bold text-xs px-4 py-2.5 rounded-xl shrink-0 active:scale-95 transition">Tippen</button>
+        <button onclick="jumpToMatch('${nextUntipped.phase}', ${nextUntipped.id})" style="background:var(--navy); color:#fff; font-family:'Syne',sans-serif; font-size:12px; font-weight:700; padding:9px 16px; border-radius:9px; border:none; cursor:pointer; white-space:nowrap; flex-shrink:0;">Tippen</button>
       </div>`;
   }
 
   let nextHtml = '';
-  if (activeMatches.length > 0) {
-    const isLiveGroup = hasLiveMatches;
-    const cardTitle = activeMatches.length > 1 ? 'Nächste Spiele' : 'Nächstes Spiel';
-    
+  if (activeMatches.length>0) {
     const matchRows = activeMatches.map(m => {
-      const bet = S.bets[m.id];
-      const isCurrentlyLive = isLocked(m) && !isFinished(m.status);
-      
-      const scorerHtml = m.first_goalscorer ? `<div class="text-[9px] text-slate-500 mt-1 font-bold">⚽ ${m.first_goalscorer.name}</div>` : '';
-      const displayScore = isCurrentlyLive 
-        ? `<div class="text-red-500 font-extrabold">${m.home_score ?? 0}:${m.away_score ?? 0}</div><div class="text-[9px] text-red-500 uppercase animate-pulse leading-none mt-1">Live</div>${scorerHtml}`
-        : formatRelativeDate(m.kickoff_time);
+      const bet=S.bets[m.id], isCurrentlyLive=isLocked(m)&&!isFinished(m.status);
+      const scorerHtml=m.first_goalscorer ? `<div style="font-size:10px;color:var(--text-2);margin-top:4px;font-weight:700;">⚽ ${m.first_goalscorer.name}</div>` : '';
 
-      let action = '';
-      if (!bet && !isLocked(m)) {
-        action = `<button onclick="jumpToMatch('${m.phase}', ${m.id})" class="w-full mt-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-sm active:scale-95 transition">Jetzt tippen</button>`;
-      } else if (bet) {
-        action = `<div class="mt-3 bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-100 flex justify-between items-center">
-          <div class="font-extrabold text-lg tracking-tight">${bet.home_score ?? ''}:${bet.away_score ?? ''}</div>
-          <div class="text-slate-500 text-xs text-right leading-tight font-medium w-3/4 truncate">⚽ ${bet.goalscorer?.name || 'Kein Torschütze'}</div>
-        </div>`;
-        if (!isLocked(m)) {
-            action += `<button onclick="jumpToMatch('${m.phase}', ${m.id})" class="mt-2 w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2 rounded-xl text-xs transition">Tipp ändern</button>`;
-        }
+      let centerHtml = '';
+      if (isCurrentlyLive) {
+        centerHtml=`<div class="result-score live">${m.home_score??0}:${m.away_score??0}</div><div style="font-size:9px;color:var(--red);font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-top:3px;" class="live-pulse">Live</div>${scorerHtml}`;
+      } else {
+        centerHtml=`<div class="mono" style="font-size:13px;font-weight:600;color:var(--text-2);">${formatRelativeDate(m.kickoff_time)}</div>`;
       }
 
-      return `
-        <div class="${activeMatches.length > 1 ? 'border-b border-slate-100 pb-4 mb-4 last:border-0 last:pb-0 last:mb-0' : ''}">
-          <div class="flex justify-between items-center mb-2">
-            <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.home_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.home_team?.name || 'Heim'}</div></div>
-            <div class="text-center font-bold text-sm bg-slate-100 px-2.5 py-1.5 rounded-xl mono flex flex-col items-center justify-center whitespace-nowrap">${displayScore}</div>
-            <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.away_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.away_team?.name || 'Gast'}</div></div>
-          </div>
-          ${action}
+      let action='';
+      if (!bet&&!isLocked(m)) {
+        action=`<button onclick="jumpToMatch('${m.phase}',${m.id})" style="width:100%;margin-top:12px;background:var(--green);color:#fff;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;padding:11px;border-radius:10px;border:none;cursor:pointer;letter-spacing:.02em;">Jetzt tippen</button>`;
+      } else if (bet) {
+        action=`<div style="margin-top:12px;background:#F4F0E8;padding:10px 14px;border-radius:10px;border:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;">
+          <div class="syne" style="font-size:20px;font-weight:800;letter-spacing:-.02em;">${bet.home_score??'–'}:${bet.away_score??'–'}</div>
+          <div style="font-size:11px;color:var(--text-2);font-weight:600;text-align:right;max-width:60%;">⚽ ${bet.goalscorer?.name||'Kein Torschütze'}</div>
+        </div>`;
+        if (!isLocked(m)) action+=`<button onclick="jumpToMatch('${m.phase}',${m.id})" style="width:100%;margin-top:8px;background:#F4F0E8;color:var(--text-2);font-size:12px;font-weight:700;padding:8px;border-radius:8px;border:none;cursor:pointer;">Tipp ändern</button>`;
+      }
+
+      const sep = activeMatches.length>1 ? `<div style="border-bottom:1px solid var(--border-light);margin-bottom:14px;padding-bottom:14px;"></div>` : '';
+
+      return `<div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div style="width:80px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;">${flag(m.home_team)}<div style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px;">${m.home_team?.name||'Heim'}</div></div>
+          <div style="text-align:center;flex:1;">${centerHtml}</div>
+          <div style="width:80px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;">${flag(m.away_team)}<div style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px;">${m.away_team?.name||'Gast'}</div></div>
         </div>
-      `;
+        ${action}
+        ${sep}
+      </div>`;
     }).join('');
 
-    nextHtml = `
-      <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="font-extrabold text-slate-800 tracking-tight">${isLiveGroup ? '<span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>Live Matches</span>' : cardTitle}</h3>
-        </div>
-        ${matchRows}
-      </div>`;
+    const title = hasLive
+      ? `<div style="display:flex;align-items:center;gap:8px;"><div class="live-dot"></div><span>Live</span></div>`
+      : (activeMatches.length>1 ? 'Nächste Spiele' : 'Nächstes Spiel');
+
+    nextHtml=`<div class="card" style="padding:18px 16px;">
+      <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin-bottom:16px;">${title}</div>
+      ${matchRows}
+    </div>`;
   }
 
-  const lbRows = S.liveLeaderboard.map((p, i) => {
-    const isMe   = p.id === S.user.id;
-    const medal  = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `<span class="font-bold text-slate-400 text-sm">${i+1}.</span>`;
-    return `<div class="flex justify-between items-center px-3 py-2.5 rounded-xl ${isMe ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-slate-50'} transition">
-      <div class="flex items-center gap-3">
-        <div class="w-6 text-center text-base leading-none">${medal}</div>
-        <div class="font-semibold text-sm ${isMe ? 'text-blue-700' : 'text-slate-700'}">${p.display_name || '?'}</div>
+  const lbRows = S.liveLeaderboard.map((p,i) => {
+    const isMe=p.id===S.user.id;
+    const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span style="font-weight:800;font-size:13px;color:var(--text-3);">${i+1}</span>`;
+    return `<div class="lb-row ${isMe?'me':''}">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:22px;text-align:center;font-size:15px;line-height:1;">${medal}</div>
+        <div style="font-weight:${isMe?700:600};font-size:14px;color:${isMe?'var(--blue)':'var(--text)'};">${p.display_name||'?'}</div>
       </div>
-      <div class="font-extrabold text-sm mono">${p.total_points ?? 0} <span class="text-xs font-normal text-slate-400">Pkt</span></div>
+      <div class="syne mono" style="font-size:16px;font-weight:800;color:${isMe?'var(--blue)':'var(--text)'};">${p.total_points??0} <span style="font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:var(--text-3);">Pkt</span></div>
     </div>`;
   }).join('');
 
-  main.innerHTML = `
-    <div class="p-4 space-y-5 max-w-lg mx-auto fade-up">
-      <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex justify-between items-center">
-        <div>
-          <p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Deine Platzierung</p>
-          <div class="text-4xl font-extrabold tracking-tight text-slate-900">Platz ${rank} <span class="text-xl font-semibold text-slate-300">/ ${total}</span></div>
+  main.innerHTML=`
+    <div style="max-width:480px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px;" class="fade-up">
+
+      <!-- Hero stats -->
+      <div class="card" style="padding:22px 20px;display:flex;justify-content:space-between;align-items:center;background:var(--navy);border-color:transparent;">
+        <div class="hero-stat">
+          <div class="num" style="color:#fff;">Platz ${rank}</div>
+          <div class="lbl" style="color:rgba(255,255,255,.4);">von ${total}</div>
         </div>
-        <div class="text-right">
-          <p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Punkte</p>
-          <p class="text-4xl font-extrabold tracking-tight text-slate-900">${pts}</p>
+        <div style="width:1px;height:48px;background:rgba(255,255,255,.12);"></div>
+        <div class="hero-stat">
+          <div class="num" style="color:var(--accent);">${pts}</div>
+          <div class="lbl" style="color:rgba(255,255,255,.4);">Punkte</div>
         </div>
       </div>
-      
+
       ${warningHtml}
       ${nextHtml}
-      
-      <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
-        <h3 class="font-extrabold text-slate-800 tracking-tight mb-4">Gesamtwertung</h3>
-        <div class="space-y-1">${lbRows || '<p class="text-center text-slate-400 text-sm py-4">Noch keine Spieler.</p>'}</div>
+
+      <!-- Leaderboard -->
+      <div class="card" style="padding:18px 16px;">
+        <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin-bottom:12px;">Rangliste</div>
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          ${lbRows||'<p style="text-align:center;color:var(--text-3);font-size:13px;padding:16px 0;">Noch keine Spieler.</p>'}
+        </div>
       </div>
     </div>`;
 }
@@ -636,114 +840,123 @@ function renderDashboard(main) {
 // BETTING VIEW
 // ──────────────────────────────────────────
 function renderBetting(main) {
-  main.innerHTML = `
-    <div class="max-w-lg mx-auto flex flex-col min-h-full">
-      <div class="flex overflow-x-auto p-4 gap-2 no-scrollbar bg-slate-50 shadow-sm sticky top-0 z-30 border-b border-slate-200 shrink-0">
-        ${phaseTabs(S.bettingPhase, 'setBettingPhase')}
+  main.innerHTML=`
+    <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;">
+      <div style="position:sticky;top:0;z-index:30;background:var(--bg);padding:14px 16px 12px;border-bottom:1px solid var(--border-light);display:flex;overflow-x:auto;gap:8px;" class="no-scrollbar">
+        ${phaseTabs(S.bettingPhase,'setBettingPhase')}
       </div>
-      <div id="betting-content" class="p-4 pb-8 space-y-4 fade-up flex-1"></div>
+      <div id="betting-content" style="padding:16px;padding-bottom:32px;display:flex;flex-direction:column;gap:14px;" class="fade-up"></div>
     </div>`;
   renderBettingContent();
 }
 
-function setBettingPhase(p) { 
-  S.bettingPhase = p; 
-  renderBetting($('main')); 
-}
+function setBettingPhase(p) { S.bettingPhase=p; renderBetting($('main')); }
 
 function renderBettingContent() {
-  const container = $('betting-content');
-  if (S.bettingPhase === 'Bonusfragen') {
-    renderBonusInsideBetting(container);
-    return;
-  }
-
-  const cards = S.matches.filter(m => m.phase === S.bettingPhase).map(betCard).join('');
-  container.innerHTML = cards || '<p class="text-center text-slate-400 mt-12 font-medium">Keine Spiele in dieser Phase.</p>';
+  const c=$('betting-content');
+  if (S.bettingPhase==='Bonusfragen') { renderBonusInsideBetting(c); return; }
+  const cards=S.matches.filter(m=>m.phase===S.bettingPhase).map(betCard).join('');
+  c.innerHTML=cards||'<p style="text-align:center;color:var(--text-3);padding:40px 0;font-size:13px;font-weight:500;">Keine Spiele in dieser Phase.</p>';
 }
 
 function betCard(m) {
-  const bet    = S.bets[m.id];
-  const locked = isLocked(m);
-  const isLive = locked && !isFinished(m.status);
-  const showResults = locked;
+  const bet=S.bets[m.id], locked=isLocked(m), isLive=locked&&!isFinished(m.status);
 
-  if (showResults) {
-    const pts = calcBetPoints(m, bet);
-    const scorerNameHtml = bet
-      ? (m.first_goalscorer_id
-          ? (bet.first_goalscorer_id === m.first_goalscorer_id
-              ? `<span class="text-emerald-600 font-bold">${bet.goalscorer?.name || 'Kein Torschütze'}</span>`
-              : `<span class="text-red-500 font-bold">${bet.goalscorer?.name || 'Kein Torschütze'}</span>`)
-          : `<span class="font-bold text-slate-800">${bet.goalscorer?.name || 'Kein Torschütze'}</span>`)
-      : 'Kein Tipp abgegeben';
-    const tipLine = bet ? `${bet.home_score}:${bet.away_score} &nbsp;·&nbsp; ${scorerNameHtml}` : 'Kein Tipp abgegeben';
-    const ptClass = pts >= 3 ? 'text-emerald-600 font-extrabold' : pts >= 1 ? 'text-yellow-700 font-extrabold' : 'text-slate-500 font-semibold';
-    const finalH  = getFinalScore(m, 'home') ?? 0;
-    const finalA  = getFinalScore(m, 'away') ?? 0;
-    const extInfo = m.home_score_extratime !== null ? '<span class="text-xs font-bold text-slate-400 mt-1 block">n.V.</span>' : '';
-    
-    const badge = isLive 
-      ? `<span class="text-xs font-bold bg-red-100 text-red-500 px-2.5 py-1 rounded-full animate-pulse">Spiel läuft</span>`
-      : `<span class="text-xs font-bold text-slate-400">Beendet</span>`;
+  if (locked) {
+    const pts=calcBetPoints(m,bet);
+    const finalH=getFinalScore(m,'home')??0, finalA=getFinalScore(m,'away')??0;
+    const extInfo=m.home_score_extratime!==null ? `<div style="font-size:10px;color:var(--text-3);font-weight:700;margin-top:4px;">n.V.</div>` : '';
+    const badge=isLive
+      ? `<span class="pill pill-live"><span class="live-dot"></span>Live</span>`
+      : `<span class="pill pill-done">Beendet</span>`;
+
+    let tipLine='<span style="color:var(--text-3);">Kein Tipp</span>';
+    let ptClass='color:var(--text-3);';
+    if (bet) {
+      ptClass = pts>=3 ? 'color:var(--green);' : pts>=1 ? 'color:var(--accent-text);' : 'color:var(--text-2);';
+      let scorerHtml='';
+      if (m.first_goalscorer_id) {
+        scorerHtml = bet.first_goalscorer_id===m.first_goalscorer_id
+          ? `<span style="color:var(--green);font-weight:700;">⚽ ${bet.goalscorer?.name||'–'}</span>`
+          : `<span style="color:var(--red);">⚽ ${bet.goalscorer?.name||'–'}</span>`;
+      } else {
+        scorerHtml=`⚽ ${bet.goalscorer?.name||'Kein Torschütze'}`;
+      }
+      tipLine=`<span class="mono" style="font-weight:700;">${bet.home_score}:${bet.away_score}</span> <span style="color:var(--text-3);">·</span> ${scorerHtml}`;
+    }
 
     return `
-      <div id="match-card-${m.id}" class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden" style="scroll-margin-top: 140px;">
-        <div class="bg-slate-50 px-4 py-2.5 flex justify-between items-center border-b border-slate-100">
-          <span class="text-xs font-bold text-slate-400 mono">${fmtDate(m.kickoff_time)}</span>${badge}
+      <div id="match-card-${m.id}" class="mc ${isLive?'mc-live':''}" style="scroll-margin-top:140px;">
+        <div class="mc-header">
+          <span class="mono" style="color:var(--text-2);font-size:11px;">${fmtDate(m.kickoff_time)}</span>
+          ${badge}
         </div>
-        <div class="p-5 relative">
-          <div class="flex justify-between items-center mb-6 mt-2">
-            <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.home_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.home_team?.name||''}</div></div>
-            <div class="w-1/3 text-center">
-              <div class="text-4xl font-extrabold ${isLive ? 'text-red-500' : 'text-slate-900'} mono tracking-wider">${finalH}:${finalA}</div>
+        <div class="mc-body">
+          <div class="mc-teams" style="margin-bottom:12px;">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;width:80px;text-align:center;">
+              ${flag(m.home_team,'w-8 h-6')}
+              <span style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:78px;">${m.home_team?.name||''}</span>
+            </div>
+            <div style="flex:1;text-align:center;">
+              <div class="result-score ${isLive?'live':''}" style="font-size:38px;">${finalH}:${finalA}</div>
               ${extInfo}
             </div>
-            <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.away_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.away_team?.name||''}</div></div>
-          </div>
-          <div class="bg-slate-50 px-4 py-3 rounded-xl border border-slate-100">
-            <div class="text-xs text-slate-400 font-bold uppercase tracking-wide mb-2">Dein Tipp</div>
-            <div class="flex items-center justify-between gap-3">
-              <div class="text-slate-700 font-bold truncate">${tipLine}</div>
-              <div class="${ptClass} text-sm ml-3">+${pts} Pkt.</div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;width:80px;text-align:center;">
+              ${flag(m.away_team,'w-8 h-6')}
+              <span style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:78px;">${m.away_team?.name||''}</span>
             </div>
+          </div>
+          <div class="bet-result">
+            <div>
+              <div class="bet-result-label">Dein Tipp</div>
+              <div style="font-size:13px;font-weight:600;">${tipLine}</div>
+            </div>
+            <div class="bet-pts syne" style="${ptClass}">+${pts}</div>
           </div>
         </div>
       </div>`;
   }
 
-  const curHome = bet?.home_score ?? '';
-  const curAway = bet?.away_score ?? '';
-  const pending = S.pendingScorer[m.id];
-  const sName   = pending?.name ?? bet?.goalscorer?.name ?? '';
-  const sHint   = sName ? `<span class="font-bold text-slate-800">${sName}</span>` : `<span class="text-slate-400">Torschütze auswählen …</span>`;
+  // Open / bettable
+  const curHome=bet?.home_score??'', curAway=bet?.away_score??'';
+  const pending=S.pendingScorer[m.id];
+  const sName=pending?.name ?? bet?.goalscorer?.name ?? '';
+  const sHint=sName
+    ? `<span style="font-weight:700;color:var(--text);">${sName}</span>`
+    : `<span style="color:var(--text-3);">Torschütze auswählen …</span>`;
 
   return `
-    <div id="match-card-${m.id}" class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden" style="scroll-margin-top: 140px;">
-      <div class="bg-slate-50 px-4 py-2.5 flex justify-between items-center border-b border-slate-100">
-        <span class="text-xs font-bold text-slate-400 mono">${formatRelativeDate(m.kickoff_time)}</span>
-        <span class="text-emerald-600 text-xs font-bold flex items-center gap-1">✓ Offen</span>
+    <div id="match-card-${m.id}" class="mc" style="scroll-margin-top:140px;">
+      <div class="mc-header">
+        <span class="mono" style="color:var(--text-2);font-size:11px;">${formatRelativeDate(m.kickoff_time)}</span>
+        <span class="pill pill-open">✓ Offen</span>
       </div>
-      <div class="p-5">
-        <div class="flex justify-between items-center mb-5">
-          <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.home_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.home_team?.name||'Heim'}</div></div>
-          <div class="flex gap-2 items-center px-3">
-            <input id="h-${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" value="${curHome}" 
-              oninput="this.value=this.value.replace(/[^0-9]/g,''); if(this.value.length===1) document.getElementById('a-${m.id}').focus();"
-              onblur="triggerAutoSave(${m.id})"
-              class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 transition mono" />
-            <span class="font-bold text-slate-300 text-xl flex items-center">:</span>
-            <input id="a-${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" value="${curAway}" 
-              oninput="this.value=this.value.replace(/[^0-9]/g,''); if(this.value.length===1) { triggerAutoSave(${m.id}); focusNextMatchInput(${m.id}); }"
-              onblur="triggerAutoSave(${m.id})"
-              class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 transition mono" />
+      <div class="mc-body">
+        <div class="mc-teams">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:5px;width:80px;text-align:center;">
+            ${flag(m.home_team,'w-9 h-6')}
+            <span style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:78px;">${m.home_team?.name||'Heim'}</span>
           </div>
-          <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.away_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.away_team?.name||'Gast'}</div></div>
+          <div class="score-area">
+            <input id="h-${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" value="${curHome}" placeholder="–"
+              class="score-input"
+              oninput="this.value=this.value.replace(/[^0-9]/g,'');if(this.value.length===1) document.getElementById('a-${m.id}').focus();"
+              onblur="triggerAutoSave(${m.id})" />
+            <span class="score-sep">:</span>
+            <input id="a-${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" value="${curAway}" placeholder="–"
+              class="score-input"
+              oninput="this.value=this.value.replace(/[^0-9]/g,'');if(this.value.length===1){triggerAutoSave(${m.id});focusNextMatchInput(${m.id});}"
+              onblur="triggerAutoSave(${m.id})" />
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:5px;width:80px;text-align:center;">
+            ${flag(m.away_team,'w-9 h-6')}
+            <span style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:78px;">${m.away_team?.name||'Gast'}</span>
+          </div>
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Erster Torschütze</label>
-          <button id="sb-${m.id}" onclick="openScorer(${m.id})" class="w-full px-4 py-3 text-left bg-slate-50 border-2 border-slate-200 rounded-2xl text-sm flex justify-between items-center active:bg-slate-100 transition">
-            ${sHint}<span class="text-slate-400 text-lg leading-none">›</span>
+          <div class="section-label">Erster Torschütze</div>
+          <button id="sb-${m.id}" onclick="openScorer(${m.id})" class="scorer-btn">
+            ${sHint}<span style="color:var(--text-3);font-size:18px;line-height:1;">›</span>
           </button>
         </div>
       </div>
@@ -751,52 +964,44 @@ function betCard(m) {
 }
 
 async function triggerAutoSave(matchId) {
-  const hVal = $(`h-${matchId}`)?.value;
-  const aVal = $(`a-${matchId}`)?.value;
-  if (hVal === '' || aVal === '' || hVal === undefined || aVal === undefined) return;
+  const hVal=$(`h-${matchId}`)?.value;
+  const aVal=$(`a-${matchId}`)?.value;
+  if (hVal===''||aVal===''||hVal===undefined||aVal===undefined) return;
   await performSave(matchId, parseInt(hVal), parseInt(aVal));
 }
 
 async function performSave(matchId, h, a) {
-  const pending  = S.pendingScorer[matchId];
-  const existing = S.bets[matchId];
-  const scorerId = pending !== undefined ? (pending.id ?? null) : (existing?.first_goalscorer_id ?? null);
-  
-  if (existing && existing.home_score === h && existing.away_score === a && existing.first_goalscorer_id === scorerId) return;
+  const pending=S.pendingScorer[matchId], existing=S.bets[matchId];
+  const scorerId=pending!==undefined ? (pending.id??null) : (existing?.first_goalscorer_id??null);
+  if (existing&&existing.home_score===h&&existing.away_score===a&&existing.first_goalscorer_id===scorerId) return;
 
-  const backup = existing ? { ...existing } : null;
-  const newBet = {
-    id: existing?.id || crypto.randomUUID(),
-    user_id: S.user.id,
-    match_id: matchId,
-    home_score: h,
-    away_score: a,
-    first_goalscorer_id: scorerId,
-    goalscorer: pending !== undefined ? { name: pending.name } : existing?.goalscorer
+  const backup=existing?{...existing}:null;
+  const newBet={
+    id:existing?.id||crypto.randomUUID(),
+    user_id:S.user.id, match_id:matchId,
+    home_score:h, away_score:a, first_goalscorer_id:scorerId,
+    goalscorer:pending!==undefined?{name:pending.name}:existing?.goalscorer
   };
-  S.bets[matchId] = newBet;
-  
-  const btn = $(`sb-${matchId}`);
-  if (btn) btn.classList.add('opacity-50');
+  S.bets[matchId]=newBet;
+
+  const btn=$(`sb-${matchId}`);
+  if (btn) btn.style.opacity='.5';
 
   try {
     if (backup) {
-      const { error } = await db.from('bets').update({ home_score: h, away_score: a, first_goalscorer_id: scorerId, updated_at: new Date().toISOString() }).eq('id', backup.id);
+      const {error}=await db.from('bets').update({home_score:h,away_score:a,first_goalscorer_id:scorerId,updated_at:new Date().toISOString()}).eq('id',backup.id);
       if (error) throw error;
     } else {
-      const { error } = await db.from('bets').insert({ id: newBet.id, user_id: S.user.id, match_id: matchId, home_score: h, away_score: a, first_goalscorer_id: scorerId });
+      const {error}=await db.from('bets').insert({id:newBet.id,user_id:S.user.id,match_id:matchId,home_score:h,away_score:a,first_goalscorer_id:scorerId});
       if (error) throw error;
     }
-    
     delete S.pendingScorer[matchId];
-    if (btn) btn.classList.remove('opacity-50');
+    if (btn) btn.style.opacity='1';
     showToast('Tipp gespeichert');
-  } catch (e) {
-    if (backup) S.bets[matchId] = backup;
-    else delete S.bets[matchId];
-    
-    renderBettingContent(); 
-    showToast('Fehler beim Speichern', 'error');
+  } catch(e) {
+    if (backup) S.bets[matchId]=backup; else delete S.bets[matchId];
+    renderBettingContent();
+    showToast('Fehler beim Speichern','error');
   }
 }
 
@@ -805,93 +1010,80 @@ async function performSave(matchId, h, a) {
 // ──────────────────────────────────────────
 async function openScorer(matchId) {
   $('modal-scorer').classList.remove('hidden');
-  const list = $('scorer-list');
-  list.innerHTML = scorerSkeleton();
+  const list=$('scorer-list');
+  list.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><div style="display:flex;flex-direction:column;gap:8px;">${Array(4).fill('<div class="skel" style="height:56px;border-radius:10px;"></div>').join('')}</div><div style="display:flex;flex-direction:column;gap:8px;">${Array(4).fill('<div class="skel" style="height:56px;border-radius:10px;"></div>').join('')}</div></div>`;
 
-  const m = S.matches.find(x => x.id === matchId);
+  const m=S.matches.find(x=>x.id===matchId);
   if (!m) return;
 
-  const { data: lineups } = await db.from('match_lineups').select('player_id').eq('match_id', matchId);
-  const lineupPlayerIds = new Set((lineups || []).map(l => l.player_id));
+  const {data:lineups}=await db.from('match_lineups').select('player_id').eq('match_id',matchId);
+  const lineupIds=new Set((lineups||[]).map(l=>l.player_id));
 
-  const { data: players, error } = await db.from('players')
-    .select('id,name,position,tournament_goals,team_id')
-    .in('team_id', [m.home_team_id, m.away_team_id]);
+  const {data:players,error}=await db.from('players').select('id,name,position,tournament_goals,team_id').in('team_id',[m.home_team_id,m.away_team_id]);
+  if (error) { list.innerHTML=`<p style="color:var(--red);font-size:13px;text-align:center;">${error.message}</p>`; return; }
 
-  if (error) { list.innerHTML = `<p class="text-red-500 text-sm text-center">${error.message}</p>`; return; }
-
-  const posMap = { 'Goalkeeper': 'TW', 'Defender': 'ABW', 'Midfielder': 'MF', 'Attacker': 'ST' };
-  const posWeight = { 'Attacker': 1, 'Midfielder': 2, 'Defender': 3, 'Goalkeeper': 4 };
-
-  (players || []).sort((a, b) => {
-    const aStart = lineupPlayerIds.has(a.id);
-    const bStart = lineupPlayerIds.has(b.id);
-    if (aStart !== bStart) return aStart ? -1 : 1;
-
-    const aGoals = a.tournament_goals || 0;
-    const bGoals = b.tournament_goals || 0;
-    if (aGoals !== bGoals) return bGoals - aGoals;
-
-    const wA = posWeight[a.position] || 99; 
-    const wB = posWeight[b.position] || 99;
-    if (wA !== wB) return wA - wB;
-
+  const posMap={Goalkeeper:'TW',Defender:'ABW',Midfielder:'MF',Attacker:'ST'};
+  const posWeight={Attacker:1,Midfielder:2,Defender:3,Goalkeeper:4};
+  (players||[]).forEach(p=>{S.playerCache[p.id]=p;});
+  (players||[]).sort((a,b)=>{
+    const as=lineupIds.has(a.id), bs=lineupIds.has(b.id);
+    if (as!==bs) return as?-1:1;
+    if ((b.tournament_goals||0)!==(a.tournament_goals||0)) return (b.tournament_goals||0)-(a.tournament_goals||0);
+    const wa=posWeight[a.position]||99, wb=posWeight[b.position]||99;
+    if (wa!==wb) return wa-wb;
     return a.name.localeCompare(b.name);
   });
 
-  const homePlayers = (players || []).filter(p => p.team_id === m.home_team_id);
-  const awayPlayers = (players || []).filter(p => p.team_id === m.away_team_id);
+  const homePlayers=(players||[]).filter(p=>p.team_id===m.home_team_id);
+  const awayPlayers=(players||[]).filter(p=>p.team_id===m.away_team_id);
 
-  (players || []).forEach(p => { S.playerCache[p.id] = p; });
-
-  const renderPlayer = (p) => {
-    const isStarter = lineupPlayerIds.has(p.id);
-    const posText = posMap[p.position] || p.position || '?';
-    const goalsBadge = (p.tournament_goals > 0) ? `<span class="ml-auto text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-extrabold shadow-sm">${p.tournament_goals} ⚽</span>` : '';
-    const starterDot = isStarter ? `<span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full shadow-sm"></span>` : '';
-
+  const renderP=p=>{
+    const starter=lineupIds.has(p.id);
+    const pos=posMap[p.position]||p.position||'?';
+    const goals=p.tournament_goals>0 ? `<span style="font-size:9px;font-weight:700;background:var(--blue-bg);color:var(--blue);padding:2px 6px;border-radius:4px;margin-left:auto;">${p.tournament_goals}⚽</span>` : '';
+    const dot=starter ? `<div style="position:absolute;top:-3px;right:-3px;width:10px;height:10px;background:var(--green);border-radius:50%;border:2px solid #fff;"></div>` : '';
     return `
-      <button onclick="pickScorer(${matchId}, ${p.id})" class="relative w-full text-left px-2.5 py-2 rounded-xl border transition flex flex-col gap-0.5 ${isStarter ? 'bg-white border-blue-200 shadow-sm' : 'bg-slate-50/50 border-slate-100 hover:bg-slate-50'}">
-        ${starterDot}
-        <span class="font-${isStarter?'bold':'medium'} text-slate-${isStarter?'900':'600'} text-[11px] truncate w-full">${p.name}</span>
-        <div class="flex items-center w-full mt-0.5 h-4">
-          <span class="text-[9px] font-extrabold text-slate-400 tracking-wider">${posText}</span>
-          ${goalsBadge}
+      <button onclick="pickScorer(${matchId},${p.id})" style="position:relative;width:100%;text-align:left;padding:9px 10px;border-radius:10px;border:1.5px solid ${starter?'var(--border)':'var(--border-light)'};background:${starter?'#fff':'#FAFAF7'};cursor:pointer;display:flex;flex-direction:column;gap:4px;transition:background .12s;min-width:0;">
+        ${dot}
+        <span style="font-size:11px;font-weight:${starter?700:600};color:${starter?'var(--text)':'var(--text-2)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">${p.name}</span>
+        <div style="display:flex;align-items:center;gap:4px;width:100%;">
+          <span style="font-size:9px;font-weight:700;color:var(--text-3);">${pos}</span>
+          ${goals}
         </div>
       </button>`;
   };
 
-  list.innerHTML = `
-    <button onclick="pickScorer(${matchId}, null)" class="w-full text-center px-4 py-3 rounded-2xl border-2 border-dashed border-slate-200 hover:border-slate-300 font-bold text-slate-500 active:bg-slate-50 transition text-sm mb-4 bg-white">
+  list.innerHTML=`
+    <button onclick="pickScorer(${matchId},null)" style="width:100%;padding:12px;border-radius:10px;border:1.5px dashed var(--border);background:transparent;cursor:pointer;font-size:13px;font-weight:700;color:var(--text-2);margin-bottom:14px;transition:background .12s;">
       🚫 &nbsp;Kein Torschütze (0:0)
     </button>
-    <div class="grid grid-cols-2 gap-3 items-start">
-      <div class="space-y-2">
-        <div class="flex items-center justify-center gap-2 pb-2 mb-2 border-b-2 border-slate-200">
-          ${flag(m.home_team, 'w-5 h-4')}
-          <span class="font-extrabold text-[11px] uppercase tracking-wide truncate text-slate-800">${m.home_team?.name || 'Heim'}</span>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;">
+      <div>
+        <div style="display:flex;align-items:center;gap:6px;padding-bottom:10px;margin-bottom:10px;border-bottom:2px solid var(--border-light);">
+          ${flag(m.home_team,'w-5 h-3')}
+          <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.home_team?.name||'Heim'}</span>
         </div>
-        <div class="space-y-2">
-          ${homePlayers.length ? homePlayers.map(renderPlayer).join('') : '<p class="text-[10px] text-slate-400 text-center py-2">Keine Spieler</p>'}
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${homePlayers.length ? homePlayers.map(renderP).join('') : '<p style="font-size:11px;color:var(--text-3);text-align:center;padding:8px 0;">Keine Spieler</p>'}
         </div>
       </div>
-      <div class="space-y-2">
-        <div class="flex items-center justify-center gap-2 pb-2 mb-2 border-b-2 border-slate-200">
-          ${flag(m.away_team, 'w-5 h-4')}
-          <span class="font-extrabold text-[11px] uppercase tracking-wide truncate text-slate-800">${m.away_team?.name || 'Gast'}</span>
+      <div>
+        <div style="display:flex;align-items:center;gap:6px;padding-bottom:10px;margin-bottom:10px;border-bottom:2px solid var(--border-light);">
+          ${flag(m.away_team,'w-5 h-3')}
+          <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.away_team?.name||'Gast'}</span>
         </div>
-        <div class="space-y-2">
-          ${awayPlayers.length ? awayPlayers.map(renderPlayer).join('') : '<p class="text-[10px] text-slate-400 text-center py-2">Keine Spieler</p>'}
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${awayPlayers.length ? awayPlayers.map(renderP).join('') : '<p style="font-size:11px;color:var(--text-3);text-align:center;padding:8px 0;">Keine Spieler</p>'}
         </div>
       </div>
     </div>`;
 }
 
 function pickScorer(matchId, playerId) {
-  const player = playerId != null ? S.playerCache[playerId] : null;
-  S.pendingScorer[matchId] = { id: playerId, name: player?.name || 'Kein Torschütze' };
-  const btn = $(`sb-${matchId}`);
-  if (btn) btn.innerHTML = `<span class="font-bold text-slate-800">${S.pendingScorer[matchId].name}</span><span class="text-slate-400 text-lg leading-none">›</span>`;
+  const player=playerId!=null?S.playerCache[playerId]:null;
+  S.pendingScorer[matchId]={id:playerId, name:player?.name||'Kein Torschütze'};
+  const btn=$(`sb-${matchId}`);
+  if (btn) btn.innerHTML=`<span style="font-weight:700;color:var(--text);">${S.pendingScorer[matchId].name}</span><span style="color:var(--text-3);font-size:18px;line-height:1;">›</span>`;
   closeScorer();
   triggerAutoSave(matchId);
 }
@@ -901,430 +1093,339 @@ function closeScorer() { $('modal-scorer').classList.add('hidden'); }
 // OVERVIEW
 // ──────────────────────────────────────────
 function renderOverviewShell(main) {
-  main.innerHTML = `
-    <div class="max-w-lg mx-auto flex flex-col min-h-full">
-      <div class="flex overflow-x-auto p-4 gap-2 no-scrollbar bg-slate-50 shadow-sm sticky top-0 z-30 border-b border-slate-200 shrink-0">
-        ${phaseTabs(S.overviewPhase, 'setOverviewPhase')}
+  main.innerHTML=`
+    <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;">
+      <div style="position:sticky;top:0;z-index:30;background:var(--bg);padding:14px 16px 12px;border-bottom:1px solid var(--border-light);display:flex;overflow-x:auto;gap:8px;" class="no-scrollbar">
+        ${phaseTabs(S.overviewPhase,'setOverviewPhase')}
       </div>
-      <div id="ov-cards" class="p-4 pb-8 space-y-4 fade-up flex-1"></div>
+      <div id="ov-cards" style="padding:16px;padding-bottom:32px;display:flex;flex-direction:column;gap:14px;" class="fade-up"></div>
     </div>`;
 }
 
 async function setOverviewPhase(p) {
-  S.overviewPhase = p;
-  document.querySelectorAll('[onclick^="setOverviewPhase"]').forEach(btn => {
-    const bp = btn.getAttribute('onclick').match(/'([^']+)'/)?.[1];
-    btn.className = `whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all ${bp === p ? 'bg-slate-900 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`;
+  S.overviewPhase=p;
+  document.querySelectorAll('[onclick^="setOverviewPhase"]').forEach(btn=>{
+    const bp=btn.getAttribute('onclick').match(/'([^']+)'/)?.[1];
+    btn.className=`phase-tab ${bp===p?'phase-tab-on':'phase-tab-off'}`;
   });
   await loadOverviewData();
 }
 
 async function renderBonusOverview(cards) {
-  const [qRes, bRes] = await Promise.all([
-    db.from('extra_questions').select('*').order('deadline', { ascending: true }),
+  const [qRes,bRes]=await Promise.all([
+    db.from('extra_questions').select('*').order('deadline',{ascending:true}),
     db.from('extra_bets').select('*')
   ]);
+  if (qRes.error) { cards.innerHTML=`<p style="color:var(--red);padding:16px;">${qRes.error.message}</p>`; return; }
+  const questions=qRes.data||[];
+  if (!questions.length) { cards.innerHTML='<p style="text-align:center;color:var(--text-3);padding:40px 0;font-size:13px;">Keine Bonusfragen verfügbar.</p>'; return; }
+  const byQ={};
+  (bRes.data||[]).forEach(b=>{(byQ[b.question_id]??=[]).push(b);});
 
-  if (qRes.error) { cards.innerHTML = `<p class="p-4 text-red-500">${qRes.error.message}</p>`; return; }
-  
-  const questions = qRes.data || [];
-  if (!questions.length) { cards.innerHTML = '<p class="text-center text-slate-400 mt-12 font-medium">Keine Bonusfragen verfügbar.</p>'; return; }
-
-  const byQ = {};
-  (bRes.data || []).forEach(b => { (byQ[b.question_id] ??= []).push(b); });
-
-  cards.innerHTML = questions.map(q => {
-    const locked = new Date(q.deadline) <= new Date();
-    const qBets = byQ[q.id] || [];
-    
-    let displayRows = S.leaderboard.map(player => {
-      return { player, bet: qBets.find(x => x.user_id === player.id) };
+  cards.innerHTML=questions.map(q=>{
+    const locked=new Date(q.deadline)<=new Date();
+    const qBets=byQ[q.id]||[];
+    let displayRows=S.leaderboard.map(player=>({player,bet:qBets.find(x=>x.user_id===player.id)}));
+    // FIX: null-safe sort
+    displayRows.sort((a,b)=>{
+      if (a.player.id===S.user.id) return -1;
+      if (b.player.id===S.user.id) return 1;
+      if (locked) return (b.bet?.points_awarded||0)-(a.bet?.points_awarded||0);
+      const ah=!!a.bet, bh=!!b.bet;
+      if (ah&&!bh) return -1; if (!ah&&bh) return 1;
+      return (a.player.display_name||'').localeCompare(b.player.display_name||'');
     });
 
-    displayRows.sort((a, b) => {
-      if (a.player.id === S.user.id) return -1;
-      if (b.player.id === S.user.id) return 1;
-      
-      if (locked) {
-        const ptA = a.bet?.points_awarded || 0;
-        const ptB = b.bet?.points_awarded || 0;
-        if (ptA !== ptB) return ptB - ptA;
-      } else {
-        const aHasBet = !!a.bet;
-        const bHasBet = !!b.bet;
-        if (aHasBet && !bHasBet) return -1;
-        if (!aHasBet && bHasBet) return 1;
-      }
-      return a.player.display_name.localeCompare(b.player.display_name);
-    });
-
-    const rows = displayRows.map(({ player, bet }) => {
-      const isMe = player.id === S.user.id;
-      const show = locked || isMe;
-      
-      let ans = '-';
-      let ptHtml = '';
-
+    const rows=displayRows.map(({player,bet})=>{
+      const isMe=player.id===S.user.id, show=locked||isMe;
+      let ans='-', ptHtml='';
       if (bet) {
-        if (!show) {
-          ans = '<span class="text-slate-400 font-medium">Verdeckt</span>';
-        } else {
-          ans = bet.bet_value || '-';
-          if (q.answer_type === 'teams') {
-            const t = S.teams.find(x => x.name === bet.bet_value);
-            if (t && t.flag_url && !t.flag_url.startsWith('http') && !t.flag_url.startsWith('/')) {
-              ans = `${t.flag_url} ${bet.bet_value}`;
-            }
-          }
-          ptHtml = locked ? `<span class="font-bold ${(bet.points_awarded || 0) > 0 ? 'text-blue-500' : 'text-slate-500'}">${bet.points_awarded ?? 0}</span>` : '';
+        if (!show) ans='<span style="color:var(--text-3);">verdeckt</span>';
+        else {
+          ans=bet.bet_value||'-';
+          if (q.answer_type==='teams') { const t=S.teams.find(x=>x.name===bet.bet_value); if (t?.flag_url&&!t.flag_url.startsWith('http')&&!t.flag_url.startsWith('/')) ans=`${t.flag_url} ${bet.bet_value}`; }
+          ptHtml=locked?`<span style="font-weight:700;color:${(bet.points_awarded||0)>0?'var(--blue)':'var(--text-2)'};">${bet.points_awarded??0}</span>`:'';
         }
-      } else {
-        ans = '<span class="text-slate-300">-</span>';
-        if (locked) ptHtml = '<span class="text-slate-300">0</span>';
-      }
-
-      return `<div class="flex items-center px-3 py-2 text-[11px] sm:text-xs border-b border-slate-50 last:border-0 ${isMe ? 'bg-blue-50/60' : 'hover:bg-slate-50'}">
-        <span class="w-[35%] truncate font-${isMe?'bold text-blue-700':'semibold text-slate-700'} pr-1">${player.display_name||'?'}</span>
-        <span class="w-[50%] truncate pl-1 text-slate-800 font-medium">${ans}</span>
-        <span class="w-[15%] text-right">${ptHtml}</span>
+      } else { ans='<span style="color:var(--text-3);">–</span>'; if (locked) ptHtml='<span style="color:var(--text-3);">0</span>'; }
+      return `<div class="ov-row ${isMe?'me':''}">
+        <span style="width:35%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isMe?700:600};color:${isMe?'var(--blue)':'var(--text)'};">${player.display_name||'?'}</span>
+        <span style="width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;">${ans}</span>
+        <span style="width:15%;text-align:right;">${ptHtml}</span>
       </div>`;
     }).join('');
 
-    let headerRight = '';
-    if (locked) {
-       headerRight = q.correct_answer 
-         ? `<span class="text-[10px] text-emerald-400 font-bold truncate">Lösung: ${q.correct_answer}</span>` 
-         : `<span class="text-[10px] text-slate-400 font-medium">Ausstehend</span>`;
-    } else {
-       headerRight = `<div class="text-[10px] font-bold mono bg-slate-900 px-2 py-1 rounded-md border border-slate-700 whitespace-nowrap shrink-0">Frist: ${fmtDate(q.deadline)}</div>`;
-    }
+    let headerRight=locked
+      ? (q.correct_answer?`<span style="font-size:10px;color:#6EE7B7;font-weight:700;">✓ ${q.correct_answer}</span>`:`<span style="font-size:10px;color:rgba(255,255,255,.4);">Ausstehend</span>`)
+      : `<span class="mono" style="font-size:10px;font-weight:700;background:rgba(255,255,255,.1);padding:3px 8px;border-radius:6px;white-space:nowrap;">Frist: ${fmtDate(q.deadline)}</span>`;
 
-    return `<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-      <div class="bg-slate-800 text-white px-3 py-2 flex justify-between items-center gap-2">
-        <div class="font-bold text-[11px] sm:text-xs truncate">${q.question_text}</div>
-        <div class="flex items-center justify-end shrink-0">${headerRight}</div>
+    return `<div class="card" style="overflow:hidden;">
+      <div style="background:var(--navy);color:#fff;padding:11px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span style="font-weight:700;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${q.question_text}</span>
+        ${headerRight}
       </div>
-      <div class="flex flex-col">${rows}</div>
+      <div>${rows}</div>
     </div>`;
   }).join('');
 }
 
 async function loadOverviewData() {
-  const cards = $('ov-cards');
+  const cards=$('ov-cards');
   if (!cards) return;
-  loading(cards);
+  cards.innerHTML=`<div class="card" style="height:200px;display:flex;align-items:center;justify-content:center;"><div class="spinner" style="width:24px;height:24px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
+  if (S.overviewPhase==='Bonusfragen') { renderBonusOverview(cards); return; }
 
-  if (S.overviewPhase === 'Bonusfragen') {
-    return renderBonusOverview(cards);
-  }
+  const phaseMatches=S.matches.filter(m=>m.phase===S.overviewPhase);
+  if (!phaseMatches.length) { cards.innerHTML='<p style="text-align:center;color:var(--text-3);padding:40px 0;font-size:13px;">Keine Spiele in dieser Phase.</p>'; return; }
 
-  const phaseMatches = S.matches.filter(m => m.phase === S.overviewPhase);
-  if (!phaseMatches.length) { cards.innerHTML = '<p class="text-center text-slate-400 mt-12 font-medium">Keine Spiele in dieser Phase.</p>'; return; }
+  const {data:allBets,error}=await db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name)').in('match_id',phaseMatches.map(m=>m.id));
+  if (error) { cards.innerHTML=`<p style="color:var(--red);font-size:13px;padding:16px;">${error.message}</p>`; return; }
 
-  const { data: allBets, error } = await db.from('bets').select(`*, goalscorer:players!first_goalscorer_id(id,name)`).in('match_id', phaseMatches.map(m => m.id));
-  if (error) { cards.innerHTML = `<p class="text-red-500 text-sm p-4 text-center">${error.message}</p>`; return; }
+  const byMatch={};
+  (allBets||[]).forEach(b=>{(byMatch[b.match_id]??=[]).push(b);});
 
-  const byMatch = {};
-  (allBets || []).forEach(b => { (byMatch[b.match_id] ??= []).push(b); });
+  cards.innerHTML=phaseMatches.map(m=>{
+    const locked=isLocked(m), isLive=locked&&!isFinished(m.status);
+    const fnH=getFinalScore(m,'home'), fnA=getFinalScore(m,'away');
+    const ext=m.home_score_extratime!==null?' n.V.':'';
 
-  cards.innerHTML = phaseMatches.map(m => {
-    const locked = isLocked(m);
-    const isLive = locked && !isFinished(m.status);
-    const fnH = getFinalScore(m, 'home'), fnA = getFinalScore(m, 'away');
-    const ext = m.home_score_extratime !== null ? ' n.V.' : '';
-    
-    // Anpassung: Datum/Uhrzeit oder "Heute"/"Morgen" anzeigen
-    let statusHtml = '';
-    if (isFinished(m.status)) {
-      statusHtml = `<span class="mono">${fnH}:${fnA}${ext}</span>`;
-    } else if (isLive) {
-      statusHtml = `<span class="text-red-400 animate-pulse font-extrabold">LIVE ${fnH??0}:${fnA??0}</span>`;
-    } else {
-      statusHtml = formatRelativeDate(m.kickoff_time); // Rendert "Heute 15:00" oder "12.06. 15:00"
-    }
+    let statusHtml='';
+    if (isFinished(m.status)) statusHtml=`<span class="mono">${fnH}:${fnA}${ext}</span>`;
+    else if (isLive) statusHtml=`<span style="color:#FCA5A5;font-weight:800;" class="live-pulse">LIVE ${fnH??0}:${fnA??0}</span>`;
+    else statusHtml=formatRelativeDate(m.kickoff_time);
 
-    // Anpassung: Echten ersten Torschützen in den Header holen
-    let actualScorerHeader = '';
-    if (locked && m.first_goalscorer) {
-       actualScorerHeader = `<span class="text-[10px] text-emerald-400 font-bold truncate">⚽ ${m.first_goalscorer.name}</span>`;
-    } else if (locked && isFinished(m.status) && !m.first_goalscorer_id) {
-       actualScorerHeader = `<span class="text-[10px] text-slate-400 font-medium">⚽ Keiner</span>`;
-    }
+    let actualScorer='';
+    if (locked&&m.first_goalscorer) actualScorer=`<span style="font-size:10px;color:#6EE7B7;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">⚽ ${m.first_goalscorer.name}</span>`;
+    else if (locked&&isFinished(m.status)&&!m.first_goalscorer_id) actualScorer=`<span style="font-size:10px;color:rgba(255,255,255,.4);">⚽ Keiner</span>`;
 
-    const matchBets = byMatch[m.id] || [];
-    matchBets.forEach(b => b._pts = calcBetPoints(m, b));
+    const matchBets=byMatch[m.id]||[];
+    matchBets.forEach(b=>b._pts=calcBetPoints(m,b));
 
-    let displayRows = S.leaderboard.map(player => {
-      const b = matchBets.find(x => x.user_id === player.id);
-      return { player, bet: b, pts: b ? b._pts : 0 };
+    let displayRows=S.leaderboard.map(player=>{
+      const b=matchBets.find(x=>x.user_id===player.id);
+      return {player, bet:b, pts:b?b._pts:0};
     });
-
-    // Anpassung: Erweiterte Sortierungslogik
+    // FIX: null-safe sort
     if (locked) {
-      displayRows.sort((a, b) => b.pts - a.pts); // Nach Punkten sortieren wenn gesperrt
+      displayRows.sort((a,b)=>b.pts-a.pts);
     } else {
-      // Wenn das Spiel noch nicht gestartet ist
-      displayRows.sort((a, b) => {
-        if (a.player.id === S.user.id) return -1; // Ich stehe immer ganz oben
-        if (b.player.id === S.user.id) return 1;
-        
-        const aHasBet = !!a.bet;
-        const bHasBet = !!b.bet;
-        
-        if (aHasBet && !bHasBet) return -1; // Leute die getippt haben vor denen, die nicht getippt haben
-        if (!aHasBet && bHasBet) return 1;
-        
-        return a.player.display_name.localeCompare(b.player.display_name); // Alphabetisch für den Rest
+      displayRows.sort((a,b)=>{
+        if (a.player.id===S.user.id) return -1;
+        if (b.player.id===S.user.id) return 1;
+        const ah=!!a.bet, bh=!!b.bet;
+        if (ah&&!bh) return -1; if (!ah&&bh) return 1;
+        return (a.player.display_name||'').localeCompare(b.player.display_name||'');
       });
     }
 
-    const rows = displayRows.map(({ player, bet, pts }) => {
-      const isMe = player.id === S.user.id;
-      const show = locked || isMe;
-      
-      let bh = '-';
-      let ba = '-';
-      let scorerHtml = '';
-      let ptHtml = '';
-
-      // Anpassung: Für die einzeilige Tabelle die Texte kürzen ("Verdeckt" statt "Tipp verdeckt", "Keiner" etc.)
+    const rows=displayRows.map(({player,bet,pts})=>{
+      const isMe=player.id===S.user.id, show=locked||isMe;
+      let bh='-', ba='-', scorerHtml='', ptHtml='';
       if (bet) {
-        if (!show) {
-          bh = '?'; ba = '?';
-          scorerHtml = '<span class="text-slate-400 font-medium">???</span>';
-        } else {
-          bh = bet.home_score ?? '?';
-          ba = bet.away_score ?? '?';
-          ptHtml = locked ? `<span class="font-bold ${isLive ? 'text-blue-500' : 'text-slate-500'}">${pts}</span>` : '';
-          
-          if (m.first_goalscorer_id && locked) {
-            scorerHtml = bet.first_goalscorer_id === m.first_goalscorer_id
-              ? `<span class="text-emerald-600 font-bold">⚽ ${bet.goalscorer?.name || 'Keiner'}</span>`
-              : `<span class="text-red-500">⚽ ${bet.goalscorer?.name || 'Keiner'}</span>`;
-          } else {
-            scorerHtml = `<span class="text-slate-600">⚽ ${bet.goalscorer?.name || 'Keiner'}</span>`;
-          }
+        if (!show) { bh='?'; ba='?'; scorerHtml='<span style="color:var(--text-3);">???</span>'; }
+        else {
+          bh=bet.home_score??'?'; ba=bet.away_score??'?';
+          ptHtml=locked?`<span style="font-weight:700;color:${isLive?'var(--blue)':'var(--text-2)'};">${pts}</span>`:'';
+          if (m.first_goalscorer_id&&locked) {
+            scorerHtml=bet.first_goalscorer_id===m.first_goalscorer_id
+              ? `<span style="color:var(--green);font-weight:700;">⚽ ${bet.goalscorer?.name||'–'}</span>`
+              : `<span style="color:var(--red);">⚽ ${bet.goalscorer?.name||'–'}</span>`;
+          } else { scorerHtml=`<span style="color:var(--text-2);">⚽ ${bet.goalscorer?.name||'–'}</span>`; }
         }
       } else {
-        bh = '-'; ba = '-';
-        scorerHtml = '<span class="text-slate-300">-</span>';
-        if (locked) ptHtml = '<span class="text-slate-300">0</span>';
+        scorerHtml='<span style="color:var(--text-3);">–</span>';
+        if (locked) ptHtml='<span style="color:var(--text-3);">0</span>';
       }
-
-      // Anpassung: Kompaktes, einzeiliges Flex-Layout mit Prozentualen Breiten
-      return `<div class="flex items-center px-3 py-2 text-[11px] sm:text-xs border-b border-slate-50 last:border-0 ${isMe ? 'bg-blue-50/60' : 'hover:bg-slate-50'}">
-        <span class="w-[30%] truncate font-${isMe?'bold text-blue-700':'semibold text-slate-700'} pr-1">${player.display_name||'?'}</span>
-        <span class="w-[15%] text-center font-extrabold mono text-slate-900">${bh}:${ba}</span>
-        <span class="w-[45%] truncate pl-1">${scorerHtml}</span>
-        <span class="w-[10%] text-right">${ptHtml}</span>
+      return `<div class="ov-row ${isMe?'me':''}">
+        <span style="width:28%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isMe?700:600};color:${isMe?'var(--blue)':'var(--text)'};">${player.display_name||'?'}</span>
+        <span class="mono" style="width:16%;text-align:center;font-weight:800;font-size:12px;">${bh}:${ba}</span>
+        <span style="width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;">${scorerHtml}</span>
+        <span style="width:12%;text-align:right;font-size:12px;">${ptHtml}</span>
       </div>`;
     }).join('');
 
-    const hn = (m.home_team?.name || 'HM').substring(0,3).toUpperCase();
-    const an = (m.away_team?.name || 'GS').substring(0,3).toUpperCase();
-    const hFlag = flag(m.home_team, 'w-4 h-3 rounded-[2px] shadow-sm');
-    const aFlag = flag(m.away_team, 'w-4 h-3 rounded-[2px] shadow-sm');
+    const hn=(m.home_team?.name||'HM').substring(0,3).toUpperCase();
+    const an=(m.away_team?.name||'GS').substring(0,3).toUpperCase();
 
-    return `<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-      <div class="bg-slate-800 text-white px-3 py-2 flex justify-between items-center gap-2">
-        <div class="font-bold text-[11px] sm:text-xs flex items-center gap-1.5 shrink-0">${hFlag} <span>${hn}-${an}</span> ${aFlag}</div>
-        <div class="flex items-center gap-2 overflow-hidden justify-end">
-          ${actualScorerHeader}
-          <div class="text-[10px] font-bold mono bg-slate-900 px-2 py-1 rounded-md border border-slate-700 whitespace-nowrap shrink-0">${statusHtml}</div>
+    return `<div class="card" style="overflow:hidden;">
+      <div style="background:var(--navy);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div style="font-weight:800;font-size:12px;display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          ${flag(m.home_team,'w-4 h-3')}<span>${hn}–${an}</span>${flag(m.away_team,'w-4 h-3')}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;overflow:hidden;justify-content:flex-end;">
+          ${actualScorer}
+          <span class="mono" style="font-size:10px;font-weight:700;background:rgba(255,255,255,.1);padding:3px 8px;border-radius:6px;white-space:nowrap;flex-shrink:0;">${statusHtml}</span>
         </div>
       </div>
-      <div class="flex flex-col">${rows}</div>
+      <div>${rows}</div>
     </div>`;
   }).join('');
 }
 
 // ──────────────────────────────────────────
-// TABELLE (Lazy Loaded Analytics)
+// TABELLE
 // ──────────────────────────────────────────
 function renderTabelleShell(main) {
-  const filterOptions = [
-    `<option value="total">Gesamtwertung (inkl. Live-Punkte)</option>`,
-    `<option value="exact">Exakte Treffer (Richtige Ergebnisse)</option>`,
-    `<option value="trend">Richtige Tendenz (inkl. Tordifferenz)</option>`,
-    `<optgroup label="Stand nach Spieltag">`,
-    ...phases().filter(p => p !== 'Bonusfragen').map(p => `<option value="phase_${p}">${p}</option>`),
-    `</optgroup>`
-  ].join('');
+  // FIX: use matchPhases() (without Bonusfragen) for the phase dropdown
+  const phaseOpts = matchPhases().map(p=>`<option value="phase_${p}">${p}</option>`).join('');
 
-  main.innerHTML = `
-    <div class="max-w-lg mx-auto fade-up flex flex-col min-h-full">
-      <div class="sticky top-0 z-30 bg-slate-50 pt-4 pb-4 px-4 border-b border-slate-200 shadow-sm">
-        <div class="relative">
-          <select id="table-filter" onchange="loadTabelleData(this.value)" class="w-full bg-white border-2 border-slate-200 text-slate-700 font-bold text-sm rounded-xl px-4 py-3 outline-none focus:border-blue-400 transition shadow-sm appearance-none">
-            ${filterOptions}
+  main.innerHTML=`
+    <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;" class="fade-up">
+      <div style="position:sticky;top:0;z-index:30;background:var(--bg);padding:14px 16px 12px;border-bottom:1px solid var(--border-light);">
+        <div style="position:relative;">
+          <select id="table-filter" onchange="loadTabelleData(this.value)"
+            style="width:100%;background:var(--surface);border:1.5px solid var(--border);color:var(--text);font-weight:700;font-size:13px;border-radius:10px;padding:11px 40px 11px 14px;outline:none;appearance:none;cursor:pointer;transition:border-color .15s;">
+            <option value="total">Gesamtwertung (inkl. Live-Punkte)</option>
+            <option value="exact">Exakte Treffer (richtige Ergebnisse)</option>
+            <option value="trend">Nur richtige Tendenz</option>
+            <optgroup label="Stand nach Spielphase">${phaseOpts}</optgroup>
           </select>
-          <div class="pointer-events-none absolute inset-y-0 right-4 flex items-center">
-            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          <div style="pointer-events:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--text-2);">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
           </div>
         </div>
       </div>
-      <div id="table-content" class="bg-white rounded-3xl shadow-sm border border-slate-100 p-5 m-4"></div>
+      <div style="padding:16px;">
+        <div id="table-content" class="card" style="padding:16px;overflow:hidden;"></div>
+      </div>
     </div>`;
 }
 
 async function loadTabelleData(filterType) {
-  const container = $('table-content');
-  if (!container) return;
-  container.innerHTML = `<div class="flex justify-center py-12"><div class="spinner w-6 h-6"></div></div>`;
+  const c=$('table-content');
+  if (!c) return;
+  c.innerHTML=`<div style="display:flex;justify-content:center;padding:40px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
 
-  if (!S.allBetsCache && filterType !== 'total') {
-    // Hole alle abgerechneten ODER laufenden Spiele (kickoff <= now)
-    const { data, error } = await db.from('bets')
-      .select('user_id, home_score, away_score, first_goalscorer_id, points_awarded, match:matches!inner(id, phase, home_score, away_score, home_score_extratime, away_score_extratime, status, kickoff_time, first_goalscorer_id)')
+  if (!S.allBetsCache && filterType!=='total') {
+    const {data,error}=await db.from('bets')
+      .select('user_id,home_score,away_score,first_goalscorer_id,points_awarded,match:matches!inner(id,phase,home_score,away_score,home_score_extratime,away_score_extratime,status,kickoff_time,first_goalscorer_id)')
       .lte('match.kickoff_time', new Date().toISOString());
-      
-    if (error) { container.innerHTML = `<p class="text-red-500 text-sm">${error.message}</p>`; return; }
-    S.allBetsCache = data || [];
+    if (error) { c.innerHTML=`<p style="color:var(--red);font-size:13px;">${error.message}</p>`; return; }
+    S.allBetsCache=data||[];
   }
 
-  let ranked = [];
-
-  if (filterType === 'total') {
-    ranked = S.liveLeaderboard.map(p => ({ id: p.id, display_name: p.display_name, value: p.total_points ?? 0 }));
+  let ranked=[];
+  if (filterType==='total') {
+    ranked=S.liveLeaderboard.map(p=>({id:p.id,display_name:p.display_name,value:p.total_points??0}));
   } else {
-    const scores = {};
-    S.leaderboard.forEach(p => scores[p.id] = { name: p.display_name, val: 0 });
-
-    S.allBetsCache.forEach(b => {
+    const scores={};
+    S.leaderboard.forEach(p=>scores[p.id]={name:p.display_name,val:0});
+    S.allBetsCache.forEach(b=>{
       if (!scores[b.user_id]) return;
-      const m = b.match;
-      const finalH = m.home_score_extratime !== null ? m.home_score_extratime : m.home_score;
-      const finalA = m.away_score_extratime !== null ? m.away_score_extratime : m.away_score;
-      
-      const pts = calcBetPoints(m, b);
-
-      if (filterType === 'exact') {
-        if (finalH !== null && b.home_score === finalH && b.away_score === finalA) scores[b.user_id].val++;
-      } 
-      else if (filterType === 'trend') {
-        const isExact = b.home_score === finalH && b.away_score === finalA;
-        if (!isExact && finalH !== null) {
-          const betDiff = b.home_score - b.away_score;
-          const matchDiff = finalH - finalA;
-          if ((betDiff > 0 && matchDiff > 0) || (betDiff < 0 && matchDiff < 0) || (betDiff === 0 && matchDiff === 0)) {
-            scores[b.user_id].val++;
+      const m=b.match;
+      const finalH=m.home_score_extratime!==null?m.home_score_extratime:m.home_score;
+      const finalA=m.away_score_extratime!==null?m.away_score_extratime:m.away_score;
+      const pts=calcBetPoints(m,b);
+      if (filterType==='exact') {
+        if (finalH!==null&&b.home_score===finalH&&b.away_score===finalA) scores[b.user_id].val++;
+      } else if (filterType==='trend') {
+        if (b.home_score!==finalH||b.away_score!==finalA) {
+          if (finalH!==null) {
+            const bd=b.home_score-b.away_score, md=finalH-finalA;
+            if ((bd>0&&md>0)||(bd<0&&md<0)||(bd===0&&md===0)) scores[b.user_id].val++;
           }
         }
-      } 
-      else if (filterType.startsWith('phase_')) {
-        const targetPhase = filterType.replace('phase_', '');
-        if (m.phase === targetPhase) scores[b.user_id].val += pts;
+      } else if (filterType.startsWith('phase_')) {
+        if (m.phase===filterType.replace('phase_','')) scores[b.user_id].val+=pts;
       }
     });
-
-    ranked = Object.keys(scores).map(id => ({ id, display_name: scores[id].name, value: scores[id].val }));
-    ranked.sort((a, b) => b.value - a.value);
+    ranked=Object.keys(scores).map(id=>({id,display_name:scores[id].name,value:scores[id].val}));
+    ranked.sort((a,b)=>b.value-a.value);
   }
 
-  const unit = filterType === 'total' || filterType.startsWith('phase_') ? 'Pkt' : 'x';
+  const unit=filterType==='total'||filterType.startsWith('phase_')?'Pkt':'×';
 
-  container.innerHTML = `<div class="space-y-1">` + ranked.map((p, i) => {
-    const isMe = p.id === S.user.id;
-    const rankNum = i + 1;
-    const medal = rankNum === 1 ? '🥇' : rankNum === 2 ? '🥈' : rankNum === 3 ? '🥉' : `<span class="font-bold text-slate-400 text-sm">${rankNum}.</span>`;
-    
-    return `<div class="flex justify-between items-center px-3 py-2.5 rounded-xl ${isMe ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-slate-50'} transition">
-      <div class="flex items-center gap-3">
-        <div class="w-6 text-center text-base leading-none">${medal}</div>
-        <div class="font-semibold text-sm ${isMe ? 'text-blue-700' : 'text-slate-700'}">${p.display_name || '?'}</div>
+  c.innerHTML=`<div style="display:flex;flex-direction:column;gap:2px;">`+ranked.map((p,i)=>{
+    const isMe=p.id===S.user.id, rn=i+1;
+    const medal=rn===1?'🥇':rn===2?'🥈':rn===3?'🥉':`<span style="font-weight:800;font-size:13px;color:var(--text-3);">${rn}</span>`;
+    return `<div class="lb-row ${isMe?'me':''}">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:22px;text-align:center;font-size:16px;line-height:1;">${medal}</div>
+        <div style="font-weight:${isMe?700:600};font-size:14px;color:${isMe?'var(--blue)':'var(--text)'};">${p.display_name||'?'}</div>
       </div>
-      <div class="font-extrabold text-sm mono">${p.value} <span class="text-xs font-normal text-slate-400">${unit}</span></div>
+      <div class="syne" style="font-size:16px;font-weight:800;color:${isMe?'var(--blue)':'var(--text)'};">${p.value} <span style="font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:var(--text-3);">${unit}</span></div>
     </div>`;
-  }).join('') + (ranked.length === 0 ? '<p class="text-center text-sm text-slate-400 py-4">Keine Daten verfügbar.</p>' : '') + `</div>`;
+  }).join('')+(ranked.length===0?'<p style="text-align:center;font-size:13px;color:var(--text-3);padding:16px 0;">Keine Daten.</p>':'')+`</div>`;
 }
 
 // ──────────────────────────────────────────
-// BONUS (Integriert ins Tippen)
+// BONUS (inside Tippen)
 // ──────────────────────────────────────────
 async function renderBonusInsideBetting(container) {
-  container.innerHTML = `<div class="flex justify-center py-12"><div class="spinner w-6 h-6"></div></div>`;
-  
-  const [qRes, bRes] = await Promise.all([
-    db.from('extra_questions').select('*').order('deadline', { ascending: true }),
-    db.from('extra_bets').select('*').eq('user_id', S.user.id)
+  container.innerHTML=`<div style="display:flex;justify-content:center;padding:40px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
+  const [qRes,bRes]=await Promise.all([
+    db.from('extra_questions').select('*').order('deadline',{ascending:true}),
+    db.from('extra_bets').select('*').eq('user_id',S.user.id)
   ]);
-
-  if (qRes.error) { container.innerHTML = `<p class="p-4 text-red-500">${qRes.error.message}</p>`; return; }
-  const questions = qRes.data || [];
-  
+  if (qRes.error) { container.innerHTML=`<p style="color:var(--red);padding:16px;">${qRes.error.message}</p>`; return; }
+  const questions=qRes.data||[];
   if (!questions.length) {
-    container.innerHTML = `<p class="text-slate-400 bg-white p-5 rounded-2xl border border-slate-100 text-center shadow-sm">Derzeit keine Bonusfragen verfügbar.</p>`;
+    container.innerHTML=`<div class="card" style="padding:32px 20px;text-align:center;"><p style="color:var(--text-3);font-size:13px;">Derzeit keine Bonusfragen.</p></div>`;
     return;
   }
+  const betsMap={};
+  (bRes.data||[]).forEach(b=>betsMap[b.question_id]=b);
 
-  const betsMap = {};
-  (bRes.data || []).forEach(b => betsMap[b.question_id] = b);
+  container.innerHTML=questions.map(q=>{
+    const locked=new Date(q.deadline)<=new Date();
+    const myBet=betsMap[q.id]?.bet_value||'';
+    const ptsAw=betsMap[q.id]?.points_awarded;
 
-  const html = questions.map(q => {
-    const locked = new Date(q.deadline) <= new Date();
-    const myBet  = betsMap[q.id]?.bet_value || '';
-    const ptsAw  = betsMap[q.id]?.points_awarded;
-    
-    let inputHtml = '';
-    
-    if (q.answer_type === 'teams') {
-      const opts = S.teams.map(t => {
-        // Native Dropdowns unterstützen keine Bilder. Wenn Flagge ein Emoji ist, zeigen, sonst weglassen.
-        const flagPrefix = (!t.flag_url || t.flag_url.startsWith('http') || t.flag_url.startsWith('/')) ? '' : t.flag_url + ' ';
-        const sel = myBet === t.name ? 'selected' : '';
-        return `<option value="${t.name}" ${sel}>${flagPrefix}${t.name}</option>`;
+    let inputHtml='';
+    if (q.answer_type==='teams') {
+      const opts=S.teams.map(t=>{
+        const flag=(!t.flag_url||t.flag_url.startsWith('http')||t.flag_url.startsWith('/'))?'':t.flag_url+' ';
+        return `<option value="${t.name}"${myBet===t.name?' selected':''}>${flag}${t.name}</option>`;
       }).join('');
-      
-      inputHtml = `<select id="q-${q.id}" ${locked ? 'disabled' : ''} class="w-full px-4 py-3 border-2 border-slate-200 rounded-2xl bg-white outline-none focus:border-blue-400 transition text-sm font-semibold disabled:bg-slate-50 disabled:opacity-60 shadow-sm">
-        <option value="" disabled ${!myBet ? 'selected' : ''}>Bitte wählen...</option>
-        ${opts}
+      inputHtml=`<select id="q-${q.id}" ${locked?'disabled':''} style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;background:var(--surface);font-size:14px;font-weight:600;outline:none;appearance:none;${locked?'opacity:.6;background:#F4F0E8;':''}cursor:${locked?'default':'pointer'};">
+        <option value="" disabled${!myBet?' selected':''}>Bitte wählen …</option>${opts}
       </select>`;
     } else {
-      inputHtml = `<input id="q-${q.id}" type="text" value="${myBet}" placeholder="Deine Antwort..." ${locked ? 'disabled' : ''} class="w-full px-4 py-3 border-2 border-slate-200 rounded-2xl bg-white outline-none focus:border-blue-400 transition text-sm font-semibold disabled:bg-slate-50 disabled:opacity-60 shadow-sm" />`;
+      inputHtml=`<input id="q-${q.id}" type="text" value="${myBet}" placeholder="Deine Antwort …" ${locked?'disabled':''}
+        style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;background:${locked?'#F4F0E8':'var(--surface)'};font-size:14px;font-weight:600;outline:none;${locked?'opacity:.6;':''}" />`;
     }
-    
-    const badge = locked 
-      ? (ptsAw !== null && ptsAw !== undefined ? `<span class="bg-slate-100 text-slate-500 text-xs font-extrabold px-3 py-1.5 rounded-full ml-3 shrink-0">${ptsAw} Pkt erreicht</span>` : `<span class="bg-red-50 text-red-500 text-xs font-extrabold px-3 py-1.5 rounded-full ml-3 shrink-0">Abgelaufen</span>`)
-      : `<span class="bg-yellow-100 text-yellow-700 text-xs font-extrabold px-3 py-1.5 rounded-full shrink-0 ml-3">+${q.points} Pkt</span>`;
 
-    return `
-      <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 space-y-4">
-        <div class="flex justify-between items-start">
-          <div>
-            <h3 class="font-extrabold text-lg tracking-tight">${q.question_text}</h3>
-            <p class="text-xs text-slate-400 mt-1">Frist: ${fmtDate(q.deadline)} ${fmtTime(q.deadline)}</p>
-          </div>
-          ${badge}
+    const badge=locked
+      ? (ptsAw!==null&&ptsAw!==undefined
+          ? `<span class="pill pill-gold">${ptsAw} Pkt</span>`
+          : `<span class="pill pill-done">Abgelaufen</span>`)
+      : `<span class="pill pill-open">+${q.points} Pkt</span>`;
+
+    return `<div class="card" style="padding:18px 16px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px;">
+        <div style="flex:1;">
+          <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;">${q.question_text}</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:4px;font-weight:500;">Frist: ${fmtDate(q.deadline)}, ${fmtTime(q.deadline)}</div>
         </div>
-        ${inputHtml}
-        ${!locked ? `<button id="btn-q-${q.id}" onclick="saveBonus(${q.id})" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-2xl active:scale-95 transition shadow-sm">Speichern</button>` : ''}
-      </div>`;
+        ${badge}
+      </div>
+      ${inputHtml}
+      ${!locked?`<button id="btn-q-${q.id}" onclick="saveBonus(${q.id})" style="width:100%;background:var(--navy);color:#fff;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;padding:13px;border-radius:10px;border:none;cursor:pointer;margin-top:12px;letter-spacing:.02em;">Speichern</button>`:''}
+    </div>`;
   }).join('');
-
-  container.innerHTML = html;
 }
 
 async function saveBonus(qId) {
-  const val = $(`q-${qId}`).value.trim();
-  if (!val) return alert('Bitte etwas eintragen!');
-  
-  const btn = $(`btn-q-${qId}`);
-  btn.disabled = true; btn.innerHTML = `<div class="spinner spinner-white w-5 h-5"></div>`;
-  
+  const val=$(`q-${qId}`).value.trim();
+  // FIX: use showToast instead of alert
+  if (!val) { showToast('Bitte etwas eintragen!','error'); return; }
+  const btn=$(`btn-q-${qId}`);
+  btn.disabled=true; btn.innerHTML=`<div class="spinner" style="width:18px;height:18px;"></div>`;
   try {
-    const { data: existing } = await db.from('extra_bets').select('id').eq('user_id', S.user.id).eq('question_id', qId).maybeSingle();
-    
+    const {data:existing}=await db.from('extra_bets').select('id').eq('user_id',S.user.id).eq('question_id',qId).maybeSingle();
     if (existing) {
-      const { error } = await db.from('extra_bets').update({ bet_value: val }).eq('id', existing.id);
+      const {error}=await db.from('extra_bets').update({bet_value:val}).eq('id',existing.id);
       if (error) throw error;
     } else {
-      const { error } = await db.from('extra_bets').insert({ user_id: S.user.id, question_id: qId, bet_value: val });
+      const {error}=await db.from('extra_bets').insert({user_id:S.user.id,question_id:qId,bet_value:val});
       if (error) throw error;
     }
-    btn.textContent = '✓ Gespeichert'; btn.style.background = '#10b981';
-    setTimeout(() => { btn.textContent = 'Speichern'; btn.style.background = ''; btn.disabled=false; }, 2000);
-  } catch (e) {
-    alert(e.message); btn.textContent = 'Speichern'; btn.disabled=false;
+    showToast('Bonustipp gespeichert');
+    btn.textContent='✓ Gespeichert'; btn.style.background='var(--green)';
+    setTimeout(()=>{btn.textContent='Speichern';btn.style.background='';btn.disabled=false;},2200);
+  } catch(e) {
+    // FIX: use showToast instead of alert
+    showToast(e.message,'error');
+    btn.textContent='Speichern'; btn.disabled=false;
   }
 }
 
@@ -1332,70 +1433,80 @@ async function saveBonus(qId) {
 // PROFILE
 // ──────────────────────────────────────────
 function renderProfile(main) {
-  const p = S.profile;
-  const initial = (p?.display_name || '?').charAt(0).toUpperCase();
-  const rank  = (S.liveLeaderboard.findIndex(x => x.id === S.user.id) + 1) || '–';
-  const pts   = S.liveLeaderboard.find(x => x.id === S.user.id)?.total_points ?? 0;
+  const p=S.profile;
+  const initial=(p?.display_name||'?').charAt(0).toUpperCase();
+  const rank=(S.liveLeaderboard.findIndex(x=>x.id===S.user.id)+1)||'–';
+  const pts=S.liveLeaderboard.find(x=>x.id===S.user.id)?.total_points??0;
+  const total=S.liveLeaderboard.length;
 
-  main.innerHTML = `
-    <div class="p-4 max-w-lg mx-auto space-y-4 fade-up">
-      <h2 class="text-2xl font-extrabold tracking-tight">Profil</h2>
-      <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 space-y-4">
-        <div class="flex items-center gap-4">
-          <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-extrabold text-white shrink-0" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8)">${initial}</div>
-          <div><h3 class="font-extrabold text-xl tracking-tight">${p?.display_name || 'Spieler'}</h3><p class="text-sm text-slate-400">${S.user?.email || ''}</p></div>
+  main.innerHTML=`
+    <div style="max-width:480px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px;" class="fade-up">
+      <div class="syne" style="font-size:24px;font-weight:800;letter-spacing:-.02em;">Mein Profil</div>
+
+      <!-- Profile card -->
+      <div class="card" style="padding:20px 18px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+          <div style="width:60px;height:60px;border-radius:16px;background:linear-gradient(135deg,var(--navy),var(--navy-2));display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <span class="syne" style="font-size:24px;font-weight:800;color:var(--accent);">${initial}</span>
+          </div>
+          <div>
+            <div class="syne" style="font-size:19px;font-weight:800;letter-spacing:-.01em;">${p?.display_name||'Spieler'}</div>
+            <div style="font-size:12px;color:var(--text-2);margin-top:2px;">${S.user?.email||''}</div>
+          </div>
         </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div class="bg-slate-50 rounded-2xl p-4 text-center border border-slate-100"><div class="text-3xl font-extrabold tracking-tight mono text-blue-600">${pts}</div><div class="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wide">Punkte</div></div>
-          <div class="bg-slate-50 rounded-2xl p-4 text-center border border-slate-100"><div class="text-3xl font-extrabold tracking-tight mono text-blue-600">${rank}</div><div class="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wide">Platz</div></div>
+
+        <!-- Stats -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
+          <div style="background:#F4F0E8;border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border-light);">
+            <div class="syne" style="font-size:36px;font-weight:800;letter-spacing:-.03em;color:var(--navy);">${pts}</div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);margin-top:6px;">Punkte</div>
+          </div>
+          <div style="background:#F4F0E8;border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border-light);">
+            <div class="syne" style="font-size:36px;font-weight:800;letter-spacing:-.03em;color:var(--navy);">${rank}<span style="font-size:16px;color:var(--text-3);">/${total}</span></div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);margin-top:6px;">Platz</div>
+          </div>
         </div>
-        <button onclick="db.auth.signOut()" class="w-full py-3.5 px-4 text-center text-red-500 font-bold text-sm border-2 border-red-100 rounded-2xl bg-red-50 active:bg-red-100 transition">Abmelden</button>
+
+        <button onclick="db.auth.signOut()" style="width:100%;padding:13px;border-radius:10px;border:1.5px solid #FCA5A5;background:#FEF2F2;color:var(--red);font-size:14px;font-weight:700;cursor:pointer;transition:background .15s;">
+          Abmelden
+        </button>
       </div>
     </div>`;
 }
 
 // ──────────────────────────────────────────
-// BOOT — auth state listener
+// BOOT
 // ──────────────────────────────────────────
 async function handleSession(session) {
-  S.user = session.user;
-
-  let prof = null;
-  for (let i = 0; i < 4; i++) {
-    const { data } = await db.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-    if (data) { prof = data; break; }
-    await new Promise(r => setTimeout(r, 400));
+  S.user=session.user;
+  let prof=null;
+  for (let i=0;i<4;i++) {
+    const {data}=await db.from('profiles').select('*').eq('id',session.user.id).maybeSingle();
+    if (data) { prof=data; break; }
+    await new Promise(r=>setTimeout(r,400));
   }
-  S.profile = prof;
-
+  S.profile=prof;
   $('auth-screen').classList.add('hidden');
-  const app = $('app-screen');
+  const app=$('app-screen');
   app.classList.remove('hidden'); app.classList.add('flex');
-  $('header-user').textContent = `Hallo, ${(prof?.display_name || 'Du').split(' ')[0]} 👋`;
-
+  $('header-user').textContent=`${(prof?.display_name||'Du').split(' ')[0]} 👋`;
   goTo('dashboard');
   await fetchData();
 }
 
 function handleSignOut() {
-  S.user = null; S.profile = null;
+  S.user=null; S.profile=null;
   $('auth-screen').classList.remove('hidden');
-  const app = $('app-screen');
+  const app=$('app-screen');
   app.classList.add('hidden'); app.classList.remove('flex');
 }
 
 async function initApp() {
-  const { data: { session } } = await db.auth.getSession();
-  if (session) {
-    await handleSession(session);
-  }
-
-  db.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && S.user?.id !== session?.user?.id) {
-      await handleSession(session);
-    } else if (event === 'SIGNED_OUT') {
-      handleSignOut();
-    }
+  const {data:{session}}=await db.auth.getSession();
+  if (session) await handleSession(session);
+  db.auth.onAuthStateChange(async(event,session)=>{
+    if (event==='SIGNED_IN'&&S.user?.id!==session?.user?.id) await handleSession(session);
+    else if (event==='SIGNED_OUT') handleSignOut();
   });
 }
 
