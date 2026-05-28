@@ -41,10 +41,9 @@
     .nav-item.active { color:#2563eb; }
     .nav-item svg { width:20px; height:20px; }
 
-    input[type=number]::-webkit-inner-spin-button,
-    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-    input[type=number] { -moz-appearance: textfield; }
-
+    input[type=text]::-webkit-inner-spin-button,
+    input[type=text]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    
     #auth-screen { background: radial-gradient(ellipse 80% 60% at 50% -10%, #1e3a5f 0%, #0f172a 60%); }
   </style>
 </head>
@@ -125,8 +124,8 @@
     <button class="nav-item" data-view="uebersicht" onclick="goTo('uebersicht')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Übersicht
     </button>
-    <button class="nav-item" data-view="bonus"      onclick="goTo('bonus')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>Bonus
+    <button class="nav-item" data-view="tabelle"    onclick="goTo('tabelle')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>Tabelle
     </button>
     <button class="nav-item" data-view="profil"     onclick="goTo('profil')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>Profil
@@ -187,6 +186,7 @@ const S = {
   pendingScorer: {},
   playerCache:   {},
   authMode:      'login',
+  allBetsCache:  null // Lazy Loaded für Tabelle
 };
 
 // ──────────────────────────────────────────
@@ -226,7 +226,6 @@ function loading(el) {
   el.innerHTML = `<div class="max-w-lg mx-auto p-4 space-y-4 fade-up">${skeletonCard()}${skeletonCard()}${skeletonCard()}</div>`; 
 }
 
-// Flaggen-Funktion bereinigt (Eltern-Container kümmern sich um Flexbox-Zentrierung!)
 function flag(team, imgCls = 'w-8 h-6') {
   if (!team?.flag_url) return `<span class="text-2xl leading-none">🏳️</span>`;
   if (team.flag_url.startsWith('http') || team.flag_url.startsWith('/')) {
@@ -253,7 +252,11 @@ function formatRelativeDate(ts) {
 }
 
 function isLocked(m) { return new Date(m.kickoff_time) <= new Date(); }
-function phases()    { return [...new Set(S.matches.map(m => m.phase).filter(Boolean))]; }
+function phases()    { 
+  const p = [...new Set(S.matches.map(m => m.phase).filter(Boolean))];
+  p.push('Bonusfragen'); // Bonusfragen architektonisch als Phase behandeln
+  return p;
+}
 
 function phaseTabs(activePhase, onclickFn) {
   return phases().map(p => `
@@ -264,7 +267,7 @@ function phaseTabs(activePhase, onclickFn) {
     </button>`).join('');
 }
 
-// Result nach 120min präferieren (laut Kontext)
+// Result nach 120min präferieren
 function getFinalScore(m, type) {
   if (type === 'home') return m.home_score_extratime !== null ? m.home_score_extratime : m.home_score;
   if (type === 'away') return m.away_score_extratime !== null ? m.away_score_extratime : m.away_score;
@@ -278,6 +281,21 @@ function jumpToMatch(phase, matchId) {
     const el = $(`match-card-${matchId}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 100);
+}
+
+// DOM-Awareness für Auto-Advance
+function focusNextMatchInput(currentMatchId) {
+  const inputs = Array.from(document.querySelectorAll('input[id^="h-"]'));
+  const currentIndex = inputs.findIndex(inp => inp.id === `h-${currentMatchId}`);
+  if (currentIndex >= 0 && currentIndex < inputs.length - 1) {
+    const nextInput = inputs[currentIndex + 1];
+    if (!nextInput.disabled) {
+      setTimeout(() => {
+        nextInput.focus();
+        nextInput.closest('[id^="match-card-"]').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 50);
+    }
+  }
 }
 
 function togglePw() {
@@ -379,7 +397,7 @@ function renderView() {
     case 'dashboard':  renderDashboard(main); break;
     case 'tippen':     renderBetting(main); break;
     case 'uebersicht': renderOverviewShell(main); loadOverviewData(); break;
-    case 'bonus':      renderBonus(main); break;
+    case 'tabelle':    renderTabelleShell(main); loadTabelleData('total'); break;
     case 'profil':     renderProfile(main); break;
   }
 }
@@ -394,14 +412,19 @@ function renderDashboard(main) {
   const total = S.leaderboard.length;
 
   const now  = new Date();
+  
+  // Chronologisch nächstes Spiel
   const next = S.matches.find(m => new Date(m.kickoff_time) > now && m.status !== 'FINISHED') || S.matches[0];
+  
+  // Nächstes UNGETIPPTES Spiel
+  const nextUntipped = S.matches.find(m => new Date(m.kickoff_time) > now && m.status !== 'FINISHED' && !S.bets[m.id]);
 
   let nextHtml = '';
   if (next) {
     const bet    = S.bets[next.id];
     const scoreOrTime = next.status === 'FINISHED'
       ? `${getFinalScore(next,'home')} : ${getFinalScore(next,'away')}${next.home_score_extratime !== null ? ' n.V.' : ''}`
-      : formatRelativeDate(next.kickoff_time) + ' Uhr';
+      : formatRelativeDate(next.kickoff_time);
     const badge = next.status === 'FINISHED'
       ? `<span class="text-xs font-bold bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full">Beendet</span>`
       : `<span class="text-xs font-bold bg-red-100 text-red-500 px-2.5 py-1 rounded-full pulse-badge">Bald</span>`;
@@ -432,6 +455,19 @@ function renderDashboard(main) {
       </div>`;
   }
 
+  // Warn-Kachel, falls ein anderes Spiel noch ungetippt ist
+  let warningHtml = '';
+  if (nextUntipped && (!next || nextUntipped.id !== next.id)) {
+    warningHtml = `
+      <div class="bg-orange-50 border border-orange-200 p-4 rounded-3xl shadow-sm flex items-center justify-between gap-4">
+        <div>
+          <h4 class="font-extrabold text-orange-800 text-sm">Fehlender Tipp!</h4>
+          <p class="text-xs text-orange-600 font-medium mt-0.5">${formatRelativeDate(nextUntipped.kickoff_time)}: ${nextUntipped.home_team?.name} - ${nextUntipped.away_team?.name}</p>
+        </div>
+        <button onclick="jumpToMatch('${nextUntipped.phase}', ${nextUntipped.id})" class="bg-orange-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shrink-0 active:scale-95 transition">Tippen</button>
+      </div>`;
+  }
+
   const lbRows = S.leaderboard.map((p, i) => {
     const isMe   = p.id === S.user.id;
     const medal  = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `<span class="font-bold text-slate-400 text-sm">${i+1}.</span>`;
@@ -457,6 +493,7 @@ function renderDashboard(main) {
         </div>
       </div>
       ${nextHtml}
+      ${warningHtml}
       <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
         <h3 class="font-extrabold text-slate-800 tracking-tight mb-4">Gesamtwertung</h3>
         <div class="space-y-1">${lbRows || '<p class="text-center text-slate-400 text-sm py-4">Noch keine Spieler.</p>'}</div>
@@ -468,22 +505,37 @@ function renderDashboard(main) {
 // BETTING VIEW
 // ──────────────────────────────────────────
 function renderBetting(main) {
-  const cards = S.matches.filter(m => m.phase === S.bettingPhase).map(betCard).join('');
   main.innerHTML = `
-    <div class="max-w-lg mx-auto">
-      <div class="flex overflow-x-auto p-4 gap-2 no-scrollbar bg-slate-50 shadow-sm sticky top-0 z-30 border-b border-slate-200">${phaseTabs(S.bettingPhase, 'setBettingPhase')}</div>
-      <div class="p-4 space-y-4 fade-up">${cards || '<p class="text-center text-slate-400 mt-12 font-medium">Keine Spiele in dieser Phase.</p>'}</div>
+    <div class="max-w-lg mx-auto flex flex-col h-full">
+      <div class="flex overflow-x-auto p-4 gap-2 no-scrollbar bg-slate-50 shadow-sm sticky top-0 z-30 border-b border-slate-200 shrink-0">
+        ${phaseTabs(S.bettingPhase, 'setBettingPhase')}
+      </div>
+      <div id="betting-content" class="p-4 space-y-4 fade-up flex-1"></div>
     </div>`;
+  renderBettingContent();
 }
 
-function setBettingPhase(p) { S.bettingPhase = p; renderBetting($('main')); }
+function setBettingPhase(p) { 
+  S.bettingPhase = p; 
+  renderBetting($('main')); 
+}
+
+function renderBettingContent() {
+  const container = $('betting-content');
+  if (S.bettingPhase === 'Bonusfragen') {
+    renderBonusInsideBetting(container);
+    return;
+  }
+
+  const cards = S.matches.filter(m => m.phase === S.bettingPhase).map(betCard).join('');
+  container.innerHTML = cards || '<p class="text-center text-slate-400 mt-12 font-medium">Keine Spiele in dieser Phase.</p>';
+}
 
 function betCard(m) {
   const bet    = S.bets[m.id];
   const locked = isLocked(m);
 
   if (m.status === 'FINISHED') {
-    // Die DB liefert points_awarded. Frontend Logik wurde entfernt, da die Wahrheit im Backend liegt.
     const pts     = bet?.points_awarded ?? 0;
     const tipLine = bet ? `${bet.home_score}:${bet.away_score} &nbsp;·&nbsp; ${bet.goalscorer?.name || 'Kein Torschütze'}` : 'Kein Tipp abgegeben';
     const ptColor = pts >= 3 ? 'bg-emerald-400 text-emerald-900' : pts >= 1 ? 'bg-yellow-400 text-yellow-900' : 'bg-slate-300 text-slate-600';
@@ -539,7 +591,7 @@ function betCard(m) {
               class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 disabled:opacity-40 disabled:bg-slate-100 transition mono" />
             <span class="font-bold text-slate-300 text-xl flex items-center">:</span>
             <input id="a-${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" value="${curAway}" ${dis} 
-              oninput="this.value=this.value.replace(/[^0-9]/g,''); if(this.value.length===1) triggerAutoSave(${m.id});"
+              oninput="this.value=this.value.replace(/[^0-9]/g,''); if(this.value.length===1) { triggerAutoSave(${m.id}); focusNextMatchInput(${m.id}); }"
               onblur="triggerAutoSave(${m.id})"
               class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 disabled:opacity-40 disabled:bg-slate-100 transition mono" />
           </div>
@@ -568,10 +620,8 @@ async function performSave(matchId, h, a) {
   const existing = S.bets[matchId];
   const scorerId = pending !== undefined ? (pending.id ?? null) : (existing?.first_goalscorer_id ?? null);
   
-  // Nichts tun, wenn sich de facto nichts geändert hat
   if (existing && existing.home_score === h && existing.away_score === a && existing.first_goalscorer_id === scorerId) return;
 
-  // 1. Optimistic UI Update & Cache Backup
   const backup = existing ? { ...existing } : null;
   const newBet = {
     id: existing?.id || crypto.randomUUID(),
@@ -584,7 +634,6 @@ async function performSave(matchId, h, a) {
   };
   S.bets[matchId] = newBet;
   
-  // UI-Indikator
   const btn = $(`sb-${matchId}`);
   if (btn) btn.classList.add('opacity-50');
 
@@ -601,64 +650,54 @@ async function performSave(matchId, h, a) {
     if (btn) btn.classList.remove('opacity-50');
     showToast('Tipp gespeichert');
   } catch (e) {
-    // 2. Rollback bei Fehler (verhindert False-State im Cache)
     if (backup) S.bets[matchId] = backup;
     else delete S.bets[matchId];
     
-    renderBetting($('main')); // Render completely reverts inputs to backup state
+    renderBettingContent(); 
     showToast('Fehler beim Speichern', 'error');
     console.error("Save error:", e);
   }
 }
 
 // ──────────────────────────────────────────
-// GOALSCORER MODAL (Neu: 2-Spalten Layout & strikte Sortierung)
+// GOALSCORER MODAL
 // ──────────────────────────────────────────
 async function openScorer(matchId) {
   $('modal-scorer').classList.remove('hidden');
   const list = $('scorer-list');
-  list.innerHTML = scorerSkeleton(); // Nutzt jetzt den Layout-getreuen Skeleton Loader
+  list.innerHTML = scorerSkeleton();
 
   const m = S.matches.find(x => x.id === matchId);
   if (!m) return;
 
-  // 1. Hole Lineups (Startaufstellung)
   const { data: lineups } = await db.from('match_lineups').select('player_id').eq('match_id', matchId);
   const lineupPlayerIds = new Set((lineups || []).map(l => l.player_id));
 
-  // 2. Hole Spieler inkl. Position und Toren
   const { data: players, error } = await db.from('players')
     .select('id,name,position,tournament_goals,team_id')
     .in('team_id', [m.home_team_id, m.away_team_id]);
 
   if (error) { list.innerHTML = `<p class="text-red-500 text-sm text-center">${error.message}</p>`; return; }
 
-  // 3. Konstanten für Sortierung und UI-Mapping
   const posMap = { 'Goalkeeper': 'TW', 'Defender': 'ABW', 'Midfielder': 'MF', 'Attacker': 'ST' };
   const posWeight = { 'Attacker': 1, 'Midfielder': 2, 'Defender': 3, 'Goalkeeper': 4 };
 
-  // 4. Strikte Sortierung anwenden
   (players || []).sort((a, b) => {
-    // Prio 1: Startelf (Ja vor Nein)
     const aStart = lineupPlayerIds.has(a.id);
     const bStart = lineupPlayerIds.has(b.id);
     if (aStart !== bStart) return aStart ? -1 : 1;
 
-    // Prio 2: Tore (absteigend)
     const aGoals = a.tournament_goals || 0;
     const bGoals = b.tournament_goals || 0;
     if (aGoals !== bGoals) return bGoals - aGoals;
 
-    // Prio 3: Position (ST -> MF -> ABW -> TW)
-    const wA = posWeight[a.position] || 99; // 99 als Fallback für unbekannte Positionen
+    const wA = posWeight[a.position] || 99; 
     const wB = posWeight[b.position] || 99;
     if (wA !== wB) return wA - wB;
 
-    // Fallback: Alphabetisch
     return a.name.localeCompare(b.name);
   });
 
-  // Spieler in Teams aufteilen
   const homePlayers = (players || []).filter(p => p.team_id === m.home_team_id);
   const awayPlayers = (players || []).filter(p => p.team_id === m.away_team_id);
 
@@ -667,16 +706,8 @@ async function openScorer(matchId) {
   const renderPlayer = (p) => {
     const isStarter = lineupPlayerIds.has(p.id);
     const posText = posMap[p.position] || p.position || '?';
-    
-    // Tore Badge: Nur anzeigen wenn > 0
-    const goalsBadge = (p.tournament_goals > 0) 
-      ? `<span class="ml-auto text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-extrabold shadow-sm">${p.tournament_goals} ⚽</span>` 
-      : '';
-    
-    // Optischer Indikator für Startelf
-    const starterDot = isStarter 
-      ? `<span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full shadow-sm"></span>` 
-      : '';
+    const goalsBadge = (p.tournament_goals > 0) ? `<span class="ml-auto text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-extrabold shadow-sm">${p.tournament_goals} ⚽</span>` : '';
+    const starterDot = isStarter ? `<span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full shadow-sm"></span>` : '';
 
     return `
       <button onclick="pickScorer(${matchId}, ${p.id})" class="relative w-full text-left px-2.5 py-2 rounded-xl border transition flex flex-col gap-0.5 ${isStarter ? 'bg-white border-blue-200 shadow-sm' : 'bg-slate-50/50 border-slate-100 hover:bg-slate-50'}">
@@ -694,7 +725,6 @@ async function openScorer(matchId) {
       🚫 &nbsp;Kein Torschütze (0:0)
     </button>
     <div class="grid grid-cols-2 gap-3 items-start">
-      <!-- Heimteam Spalte -->
       <div class="space-y-2">
         <div class="flex items-center justify-center gap-2 pb-2 mb-2 border-b-2 border-slate-200">
           ${flag(m.home_team, 'w-5 h-4')}
@@ -704,8 +734,6 @@ async function openScorer(matchId) {
           ${homePlayers.length ? homePlayers.map(renderPlayer).join('') : '<p class="text-[10px] text-slate-400 text-center py-2">Keine Spieler</p>'}
         </div>
       </div>
-      
-      <!-- Auswärtsteam Spalte -->
       <div class="space-y-2">
         <div class="flex items-center justify-center gap-2 pb-2 mb-2 border-b-2 border-slate-200">
           ${flag(m.away_team, 'w-5 h-4')}
@@ -715,8 +743,7 @@ async function openScorer(matchId) {
           ${awayPlayers.length ? awayPlayers.map(renderPlayer).join('') : '<p class="text-[10px] text-slate-400 text-center py-2">Keine Spieler</p>'}
         </div>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 function pickScorer(matchId, playerId) {
@@ -725,8 +752,6 @@ function pickScorer(matchId, playerId) {
   const btn = $(`sb-${matchId}`);
   if (btn) btn.innerHTML = `<span class="font-bold text-slate-800">${S.pendingScorer[matchId].name}</span><span class="text-slate-400 text-lg leading-none">›</span>`;
   closeScorer();
-  
-  // Auto-Save nach Torschützenauswahl triggern
   triggerAutoSave(matchId);
 }
 function closeScorer() { $('modal-scorer').classList.add('hidden'); }
@@ -737,7 +762,7 @@ function closeScorer() { $('modal-scorer').classList.add('hidden'); }
 function renderOverviewShell(main) {
   main.innerHTML = `
     <div class="max-w-lg mx-auto">
-      <div class="flex overflow-x-auto p-4 gap-2 no-scrollbar bg-white shadow-sm sticky top-0 z-0 border-b border-slate-100">${phaseTabs(S.overviewPhase, 'setOverviewPhase')}</div>
+      <div class="flex overflow-x-auto p-4 gap-2 no-scrollbar bg-white shadow-sm sticky top-0 z-0 border-b border-slate-100">${phaseTabs(S.overviewPhase, 'setOverviewPhase').replace('Bonusfragen', '')}</div>
       <div id="ov-cards" class="p-4 space-y-4 fade-up"></div>
     </div>`;
 }
@@ -797,21 +822,117 @@ async function loadOverviewData() {
 }
 
 // ──────────────────────────────────────────
-// BONUS (Dynamisch angebunden an DB)
+// TABELLE (Lazy Loaded Analytics)
 // ──────────────────────────────────────────
-async function renderBonus(main) {
-  loading(main);
+function renderTabelleShell(main) {
+  const filterOptions = [
+    `<option value="total">Gesamtwertung (Alle Punkte)</option>`,
+    `<option value="exact">Exakte Treffer (Richtige Ergebnisse)</option>`,
+    `<option value="trend">Richtige Tendenz (inkl. Tordifferenz)</option>`,
+    `<optgroup label="Stand nach Spieltag">`,
+    ...phases().filter(p => p !== 'Bonusfragen').map(p => `<option value="phase_${p}">${p}</option>`),
+    `</optgroup>`
+  ].join('');
+
+  main.innerHTML = `
+    <div class="p-4 max-w-lg mx-auto fade-up flex flex-col h-full">
+      <div class="sticky top-0 z-30 bg-slate-50 pt-2 pb-4">
+        <select id="table-filter" onchange="loadTabelleData(this.value)" class="w-full bg-white border-2 border-slate-200 text-slate-700 font-bold text-sm rounded-xl px-4 py-3 outline-none focus:border-blue-400 transition shadow-sm appearance-none">
+          ${filterOptions}
+        </select>
+        <div class="pointer-events-none absolute inset-y-0 right-4 flex items-center pt-2">
+          <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+        </div>
+      </div>
+      <div id="table-content" class="bg-white rounded-3xl shadow-sm border border-slate-100 p-5 flex-1 overflow-y-auto"></div>
+    </div>`;
+}
+
+async function loadTabelleData(filterType) {
+  const container = $('table-content');
+  if (!container) return;
+  container.innerHTML = `<div class="flex justify-center py-12"><div class="spinner w-6 h-6"></div></div>`;
+
+  // Lazy Loading aller abgerechneten Bets, falls nicht im Cache
+  if (!S.allBetsCache && filterType !== 'total') {
+    const { data, error } = await db.from('bets')
+      .select('user_id, home_score, away_score, points_awarded, match:matches!inner(id, phase, home_score, away_score, home_score_extratime, away_score_extratime, status)')
+      .eq('match.status', 'FINISHED');
+    if (error) { container.innerHTML = `<p class="text-red-500 text-sm">${error.message}</p>`; return; }
+    S.allBetsCache = data || [];
+  }
+
+  let ranked = [];
+
+  if (filterType === 'total') {
+    ranked = S.leaderboard.map(p => ({ id: p.id, display_name: p.display_name, value: p.total_points ?? 0 }));
+  } else {
+    // Analytics auf Basis aller Bets aggregieren
+    const scores = {};
+    S.leaderboard.forEach(p => scores[p.id] = { name: p.display_name, val: 0 });
+
+    S.allBetsCache.forEach(b => {
+      if (!scores[b.user_id]) return;
+      const m = b.match;
+      const finalH = m.home_score_extratime !== null ? m.home_score_extratime : m.home_score;
+      const finalA = m.away_score_extratime !== null ? m.away_score_extratime : m.away_score;
+      
+      if (filterType === 'exact') {
+        if (b.home_score === finalH && b.away_score === finalA) scores[b.user_id].val++;
+      } 
+      else if (filterType === 'trend') {
+        const isExact = b.home_score === finalH && b.away_score === finalA;
+        if (!isExact) {
+          const betDiff = b.home_score - b.away_score;
+          const matchDiff = finalH - finalA;
+          if ((betDiff > 0 && matchDiff > 0) || (betDiff < 0 && matchDiff < 0) || (betDiff === 0 && matchDiff === 0)) {
+            scores[b.user_id].val++;
+          }
+        }
+      } 
+      else if (filterType.startsWith('phase_')) {
+        const targetPhase = filterType.replace('phase_', '');
+        if (m.phase === targetPhase) scores[b.user_id].val += (b.points_awarded || 0);
+      }
+    });
+
+    ranked = Object.keys(scores).map(id => ({ id, display_name: scores[id].name, value: scores[id].val }));
+    ranked.sort((a, b) => b.value - a.value);
+  }
+
+  const unit = filterType === 'total' || filterType.startsWith('phase_') ? 'Pkt' : 'x';
+
+  container.innerHTML = `<div class="space-y-1">` + ranked.map((p, i) => {
+    const isMe = p.id === S.user.id;
+    const rankNum = i + 1;
+    const medal = rankNum === 1 ? '🥇' : rankNum === 2 ? '🥈' : rankNum === 3 ? '🥉' : `<span class="font-bold text-slate-400 text-sm">${rankNum}.</span>`;
+    
+    return `<div class="flex justify-between items-center px-3 py-2.5 rounded-xl ${isMe ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-slate-50'} transition">
+      <div class="flex items-center gap-3">
+        <div class="w-6 text-center text-base leading-none">${medal}</div>
+        <div class="font-semibold text-sm ${isMe ? 'text-blue-700' : 'text-slate-700'}">${p.display_name || '?'}</div>
+      </div>
+      <div class="font-extrabold text-sm mono">${p.value} <span class="text-xs font-normal text-slate-400">${unit}</span></div>
+    </div>`;
+  }).join('') + (ranked.length === 0 ? '<p class="text-center text-sm text-slate-400 py-4">Keine Daten verfügbar.</p>' : '') + `</div>`;
+}
+
+// ──────────────────────────────────────────
+// BONUS (Integriert ins Tippen)
+// ──────────────────────────────────────────
+async function renderBonusInsideBetting(container) {
+  container.innerHTML = `<div class="flex justify-center py-12"><div class="spinner w-6 h-6"></div></div>`;
   
   const [qRes, bRes] = await Promise.all([
     db.from('extra_questions').select('*').order('deadline', { ascending: true }),
     db.from('extra_bets').select('*').eq('user_id', S.user.id)
   ]);
 
-  if (qRes.error) { main.innerHTML = `<p class="p-4 text-red-500">${qRes.error.message}</p>`; return; }
+  if (qRes.error) { container.innerHTML = `<p class="p-4 text-red-500">${qRes.error.message}</p>`; return; }
   const questions = qRes.data || [];
   
   if (!questions.length) {
-    main.innerHTML = `<div class="p-4 max-w-lg mx-auto fade-up"><h2 class="text-2xl font-extrabold mb-5 tracking-tight">Bonusfragen</h2><p class="text-slate-400 bg-white p-5 rounded-2xl border border-slate-100 text-center">Derzeit keine Bonusfragen verfügbar.</p></div>`;
+    container.innerHTML = `<p class="text-slate-400 bg-white p-5 rounded-2xl border border-slate-100 text-center shadow-sm">Derzeit keine Bonusfragen verfügbar.</p>`;
     return;
   }
 
@@ -823,8 +944,7 @@ async function renderBonus(main) {
     const myBet  = betsMap[q.id]?.bet_value || '';
     const ptsAw  = betsMap[q.id]?.points_awarded;
     
-    // Ohne die Info im Kontext, was "answer_type" genau beinhaltet, nutze ich hier einen Fallback (Text-Input).
-    const inputHtml = `<input id="q-${q.id}" type="text" value="${myBet}" placeholder="Deine Antwort..." ${locked ? 'disabled' : ''} class="w-full px-4 py-3 border-2 border-slate-200 rounded-2xl bg-white outline-none focus:border-blue-400 transition text-sm font-semibold disabled:bg-slate-50 disabled:opacity-60" />`;
+    const inputHtml = `<input id="q-${q.id}" type="text" value="${myBet}" placeholder="Deine Antwort..." ${locked ? 'disabled' : ''} class="w-full px-4 py-3 border-2 border-slate-200 rounded-2xl bg-white outline-none focus:border-blue-400 transition text-sm font-semibold disabled:bg-slate-50 disabled:opacity-60 shadow-sm" />`;
     
     const badge = locked 
       ? (ptsAw !== null && ptsAw !== undefined ? `<span class="bg-slate-100 text-slate-500 text-xs font-extrabold px-3 py-1.5 rounded-full ml-3 shrink-0">${ptsAw} Pkt erreicht</span>` : `<span class="bg-red-50 text-red-500 text-xs font-extrabold px-3 py-1.5 rounded-full ml-3 shrink-0">Abgelaufen</span>`)
@@ -840,11 +960,11 @@ async function renderBonus(main) {
           ${badge}
         </div>
         ${inputHtml}
-        ${!locked ? `<button id="btn-q-${q.id}" onclick="saveBonus(${q.id})" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-2xl active:scale-95 transition">Speichern</button>` : ''}
+        ${!locked ? `<button id="btn-q-${q.id}" onclick="saveBonus(${q.id})" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-2xl active:scale-95 transition shadow-sm">Speichern</button>` : ''}
       </div>`;
   }).join('');
 
-  main.innerHTML = `<div class="p-4 max-w-lg mx-auto fade-up"><h2 class="text-2xl font-extrabold mb-5 tracking-tight">Bonusfragen</h2><div class="space-y-4">${html}</div></div>`;
+  container.innerHTML = html;
 }
 
 async function saveBonus(qId) {
@@ -855,7 +975,6 @@ async function saveBonus(qId) {
   btn.disabled = true; btn.innerHTML = `<div class="spinner spinner-white w-5 h-5"></div>`;
   
   try {
-    // Upsert logic - verify if exists
     const { data: existing } = await db.from('extra_bets').select('id').eq('user_id', S.user.id).eq('question_id', qId).maybeSingle();
     
     if (existing) {
@@ -904,12 +1023,11 @@ function renderProfile(main) {
 async function handleSession(session) {
   S.user = session.user;
 
-  // Tiefgründige Lösung: Warte auf den Postgres-Trigger anstatt fehlerhaft selbst zu inserten.
   let prof = null;
   for (let i = 0; i < 4; i++) {
     const { data } = await db.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
     if (data) { prof = data; break; }
-    await new Promise(r => setTimeout(r, 400)); // Warten auf DB Trigger
+    await new Promise(r => setTimeout(r, 400));
   }
   S.profile = prof;
 
@@ -930,13 +1048,11 @@ function handleSignOut() {
 }
 
 async function initApp() {
-  // 1. Initial sofort die Session aus dem LocalStorage prüfen
   const { data: { session } } = await db.auth.getSession();
   if (session) {
     await handleSession(session);
   }
 
-  // 2. Auth State Änderungen überwachen (Login/Logout Events)
   db.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && S.user?.id !== session?.user?.id) {
       await handleSession(session);
