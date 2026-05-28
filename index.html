@@ -107,7 +107,12 @@
     <h1 class="text-lg font-extrabold flex items-center gap-2 tracking-tight">
       <span class="text-yellow-400 text-xl">🏆</span> WM 2026
     </h1>
-    <span id="header-user" class="text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 font-semibold text-slate-300"></span>
+    <div class="flex items-center gap-3">
+      <span id="header-user" class="text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 font-semibold text-slate-300"></span>
+      <button onclick="triggerSoftRefresh()" id="btn-refresh" class="text-slate-400 hover:text-white transition duration-300 active:rotate-180 p-1">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+      </button>
+    </div>
   </header>
 
   <!-- Main scroll area -->
@@ -186,13 +191,19 @@ const S = {
   pendingScorer: {},
   playerCache:   {},
   authMode:      'login',
-  allBetsCache:  null // Lazy Loaded für Tabelle
+  allBetsCache:  null
 };
 
 // ──────────────────────────────────────────
 // HELPERS
 // ──────────────────────────────────────────
 const $  = id  => document.getElementById(id);
+
+// Robuste Prüfung, ob ein Spiel beendet ist (API-Football Kompatibilität)
+function isFinished(status) {
+  if (!status) return false;
+  return ['FINISHED', 'FT', 'AET', 'PEN'].includes(status.toUpperCase());
+}
 
 function showToast(msg, type = 'success') {
   const container = $('toast-container');
@@ -235,7 +246,14 @@ function flag(team, imgCls = 'w-8 h-6') {
 }
 
 function fmtTime(ts) { return new Date(ts).toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' }); }
-function fmtDate(ts) { return new Date(ts).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit' }); }
+
+// Manuelle Formatierung für exakt "dd.mm"
+function fmtDate(ts) { 
+  const d = new Date(ts);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${day}.${month}`;
+}
 
 function formatRelativeDate(ts) {
   const d = new Date(ts);
@@ -246,15 +264,13 @@ function formatRelativeDate(ts) {
   if (d.toDateString() === today.toDateString()) return 'Heute ' + time;
   if (d.toDateString() === tmrw.toDateString()) return 'Morgen ' + time;
   
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  return `${day}.${month} ${time}`; // Punkt nach Monat entfernt
+  return `${fmtDate(ts)} ${time}`;
 }
 
 function isLocked(m) { return new Date(m.kickoff_time) <= new Date(); }
 function phases()    { 
   const p = [...new Set(S.matches.map(m => m.phase).filter(Boolean))];
-  p.push('Bonusfragen'); // Bonusfragen architektonisch als Phase behandeln
+  p.push('Bonusfragen'); 
   return p;
 }
 
@@ -267,7 +283,6 @@ function phaseTabs(activePhase, onclickFn) {
     </button>`).join('');
 }
 
-// Result nach 120min präferieren
 function getFinalScore(m, type) {
   if (type === 'home') return m.home_score_extratime !== null ? m.home_score_extratime : m.home_score;
   if (type === 'away') return m.away_score_extratime !== null ? m.away_score_extratime : m.away_score;
@@ -283,7 +298,6 @@ function jumpToMatch(phase, matchId) {
   }, 100);
 }
 
-// DOM-Awareness für Auto-Advance
 function focusNextMatchInput(currentMatchId) {
   const inputs = Array.from(document.querySelectorAll('input[id^="h-"]'));
   const currentIndex = inputs.findIndex(inp => inp.id === `h-${currentMatchId}`);
@@ -353,8 +367,15 @@ async function handleAuth() {
 // ──────────────────────────────────────────
 // DATA FETCHING
 // ──────────────────────────────────────────
-async function fetchData() {
-  loading($('main'));
+async function triggerSoftRefresh() {
+  const btn = $('btn-refresh');
+  if (btn) btn.classList.add('animate-spin');
+  await fetchData(false); // fetch without destroying UI layout initially
+  if (btn) btn.classList.remove('animate-spin');
+}
+
+async function fetchData(showLoadingState = true) {
+  if (showLoadingState) loading($('main'));
 
   try {
     const [matchRes, betRes, lbRes] = await Promise.all([
@@ -378,7 +399,8 @@ async function fetchData() {
 
     renderView();
   } catch (err) {
-    $('main').innerHTML = `<div class="p-5 text-center"><p class="text-red-500 font-bold mb-2">Fehler beim Laden</p><p class="text-sm text-slate-500">${err.message}</p></div>`;
+    if (showLoadingState) $('main').innerHTML = `<div class="p-5 text-center"><p class="text-red-500 font-bold mb-2">Fehler beim Laden</p><p class="text-sm text-slate-500">${err.message}</p></div>`;
+    else showToast('Fehler beim Aktualisieren', 'error');
   }
 }
 
@@ -410,60 +432,40 @@ function renderDashboard(main) {
   const rank  = (S.leaderboard.findIndex(p => p.id === S.user.id) + 1) || '–';
   const pts   = me?.total_points ?? 0;
   const total = S.leaderboard.length;
-
   const now  = new Date();
   
-  // Chronologisch nächstes Spiel
-  const next = S.matches.find(m => new Date(m.kickoff_time) > now && m.status !== 'FINISHED') || S.matches[0];
-  
-  // Nächstes UNGETIPPTES Spiel
-  const nextUntipped = S.matches.find(m => new Date(m.kickoff_time) > now && m.status !== 'FINISHED' && !S.bets[m.id]);
+  // 1. Suche nach Live-Spielen (angepfiffen, aber nicht beendet)
+  let activeMatches = S.matches.filter(m => new Date(m.kickoff_time) <= now && !isFinished(m.status));
+  const hasLiveMatches = activeMatches.length > 0;
 
-  let nextHtml = '';
-  if (next) {
-    const bet    = S.bets[next.id];
-    const scoreOrTime = next.status === 'FINISHED'
-      ? `${getFinalScore(next,'home')} : ${getFinalScore(next,'away')}${next.home_score_extratime !== null ? ' n.V.' : ''}`
-      : formatRelativeDate(next.kickoff_time) + ' Uhr';
-    const badge = next.status === 'FINISHED'
-      ? `<span class="text-xs font-bold bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full">Beendet</span>`
-      : ``; // "Bald" Badge komplett entfernt
-
-    let action = '';
-    if (next.status !== 'FINISHED' && !bet) {
-      action = `<button onclick="jumpToMatch('${next.phase}', ${next.id})" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition">Jetzt Tipp abgeben &rsaquo;</button>`;
-    } else if (next.status !== 'FINISHED' && bet) {
-      action = `<div class="bg-slate-50 px-4 py-3 rounded-xl text-center border border-slate-100">
-        <span class="text-slate-400 text-xs font-bold uppercase tracking-wide">Dein Tipp</span>
-        <div class="text-2xl font-extrabold mt-1 tracking-tight">${bet.home_score} : ${bet.away_score}</div>
-        <div class="text-slate-400 text-xs mt-0.5">⚽ ${bet.goalscorer?.name || 'Kein Torschütze'}</div>
-        <button onclick="jumpToMatch('${next.phase}', ${next.id})" class="mt-3 w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 rounded-xl text-sm transition">Tipp ändern</button>
-      </div>`;
+  // 2. Falls keine Live-Spiele, finde die nächsten anstehenden Spiele (gleiche Uhrzeit)
+  if (!hasLiveMatches) {
+    const upcoming = S.matches.filter(m => new Date(m.kickoff_time) > now && !isFinished(m.status));
+    if (upcoming.length > 0) {
+      const nextTime = upcoming[0].kickoff_time;
+      activeMatches = upcoming.filter(m => m.kickoff_time === nextTime);
     }
-
-    nextHtml = `
-      <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="font-extrabold text-slate-800 tracking-tight">Nächstes Spiel</h3>${badge}
-        </div>
-        <div class="flex justify-between items-center mb-4">
-          <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(next.home_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${next.home_team?.name || 'Heim'}</div></div>
-          <div class="text-center font-bold text-sm bg-slate-100 px-4 py-2 rounded-xl mono tracking-widest">${scoreOrTime}</div>
-          <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(next.away_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${next.away_team?.name || 'Gast'}</div></div>
-        </div>
-        ${action}
-      </div>`;
   }
 
-  // Warn-Kachel, falls ein anderes Spiel noch ungetippt ist
+  // Suche nach dem nächsten Spiel in der Zukunft, das noch NICHT getippt wurde
+  const nextUntipped = S.matches.find(m => new Date(m.kickoff_time) > now && !isFinished(m.status) && !S.bets[m.id]);
+
   let warningHtml = '';
-  if (nextUntipped && (!next || nextUntipped.id !== next.id)) {
+  // Warn-Kachel rendern, wenn das ungetippte Spiel NICHT Teil der aktuell angezeigten activeMatches ist
+  if (nextUntipped && !activeMatches.find(m => m.id === nextUntipped.id)) {
     const diffMs = new Date(nextUntipped.kickoff_time) - now;
     let countdownStr = '';
+    
     if (diffMs > 0) {
-      const h = Math.floor(diffMs / 3600000);
+      const d = Math.floor(diffMs / 86400000);
+      const h = Math.floor((diffMs % 86400000) / 3600000);
       const m = Math.floor((diffMs % 3600000) / 60000);
-      countdownStr = `In: ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      
+      if (d > 0) {
+        countdownStr = `In: ${String(d).padStart(2, '0')}:${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      } else {
+        countdownStr = `In: ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      }
     } else {
       countdownStr = `Jetzt`;
     }
@@ -475,6 +477,55 @@ function renderDashboard(main) {
           <p class="text-xs text-slate-500 font-medium mt-0.5">${countdownStr} &nbsp;·&nbsp; ${nextUntipped.home_team?.name} - ${nextUntipped.away_team?.name}</p>
         </div>
         <button onclick="jumpToMatch('${nextUntipped.phase}', ${nextUntipped.id})" class="bg-slate-900 text-white font-bold text-xs px-4 py-2.5 rounded-xl shrink-0 active:scale-95 transition">Tippen</button>
+      </div>`;
+  }
+
+  // Next/Live Matches rendern
+  let nextHtml = '';
+  if (activeMatches.length > 0) {
+    const isLiveGroup = hasLiveMatches;
+    const cardTitle = activeMatches.length > 1 ? 'Nächste Spiele' : 'Nächstes Spiel';
+    
+    const matchRows = activeMatches.map(m => {
+      const bet = S.bets[m.id];
+      const isCurrentlyLive = new Date(m.kickoff_time) <= now && !isFinished(m.status);
+      
+      // Anzeige Score (live von API) oder Anstoßzeit
+      const displayScore = isCurrentlyLive 
+        ? `<div class="text-red-500 font-extrabold">${m.home_score ?? 0}:${m.away_score ?? 0}</div><div class="text-[9px] text-red-500 uppercase animate-pulse leading-none mt-1">Live</div>`
+        : formatRelativeDate(m.kickoff_time);
+
+      let action = '';
+      if (!bet && !isLocked(m)) {
+        action = `<button onclick="jumpToMatch('${m.phase}', ${m.id})" class="w-full mt-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-sm active:scale-95 transition">Jetzt tippen</button>`;
+      } else if (bet) {
+        action = `<div class="mt-3 bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-100 flex justify-between items-center">
+          <div class="font-extrabold text-lg tracking-tight">${bet.home_score}:${bet.away_score}</div>
+          <div class="text-slate-500 text-xs text-right leading-tight font-medium w-3/4 truncate">⚽ ${bet.goalscorer?.name || 'Kein Torschütze'}</div>
+        </div>`;
+        if (!isLocked(m)) {
+            action += `<button onclick="jumpToMatch('${m.phase}', ${m.id})" class="mt-2 w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2 rounded-xl text-xs transition">Tipp ändern</button>`;
+        }
+      }
+
+      return `
+        <div class="${activeMatches.length > 1 ? 'border-b border-slate-100 pb-4 mb-4 last:border-0 last:pb-0 last:mb-0' : ''}">
+          <div class="flex justify-between items-center mb-2">
+            <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.home_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.home_team?.name || 'Heim'}</div></div>
+            <div class="text-center font-bold text-sm bg-slate-100 px-3 py-1.5 rounded-xl mono tracking-widest flex flex-col items-center justify-center min-w-[70px]">${displayScore}</div>
+            <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.away_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.away_team?.name || 'Gast'}</div></div>
+          </div>
+          ${action}
+        </div>
+      `;
+    }).join('');
+
+    nextHtml = `
+      <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-extrabold text-slate-800 tracking-tight">${isLiveGroup ? '<span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>Live Matches</span>' : cardTitle}</h3>
+        </div>
+        ${matchRows}
       </div>`;
   }
 
@@ -492,7 +543,6 @@ function renderDashboard(main) {
 
   main.innerHTML = `
     <div class="p-4 space-y-5 max-w-lg mx-auto fade-up">
-      <!-- Einheitliche weiße Kachel für Platzierung -->
       <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex justify-between items-center">
         <div>
           <p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Deine Platzierung</p>
@@ -504,8 +554,8 @@ function renderDashboard(main) {
         </div>
       </div>
       
-      ${nextHtml}
       ${warningHtml}
+      ${nextHtml}
       
       <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
         <h3 class="font-extrabold text-slate-800 tracking-tight mb-4">Gesamtwertung</h3>
@@ -548,7 +598,7 @@ function betCard(m) {
   const bet    = S.bets[m.id];
   const locked = isLocked(m);
 
-  if (m.status === 'FINISHED') {
+  if (isFinished(m.status)) {
     const pts     = bet?.points_awarded ?? 0;
     const tipLine = bet ? `${bet.home_score}:${bet.away_score} &nbsp;·&nbsp; ${bet.goalscorer?.name || 'Kein Torschütze'}` : 'Kein Tipp abgegeben';
     const ptColor = pts >= 3 ? 'bg-emerald-400 text-emerald-900' : pts >= 1 ? 'bg-yellow-400 text-yellow-900' : 'bg-slate-300 text-slate-600';
@@ -807,16 +857,16 @@ async function loadOverviewData() {
     const locked = isLocked(m);
     const fnH = getFinalScore(m, 'home'), fnA = getFinalScore(m, 'away');
     const ext = m.home_score_extratime !== null ? ' n.V.' : '';
-    const status = m.status === 'FINISHED' ? `<span class="mono">${fnH}:${fnA}${ext}</span>` : locked ? 'LIVE' : fmtTime(m.kickoff_time);
+    const status = isFinished(m.status) ? `<span class="mono">${fnH}:${fnA}${ext}</span>` : locked ? 'LIVE' : fmtTime(m.kickoff_time);
 
     const bets = byMatch[m.id] || [];
     const rows = bets.length ? bets.map(b => {
       const isMe  = b.user_id === S.user.id;
-      const show  = locked || m.status === 'FINISHED';
+      const show  = locked || isFinished(m.status);
       const bh    = show ? b.home_score : '?';
       const ba    = show ? b.away_score : '?';
       const sc    = show ? (b.goalscorer?.name || 'Kein Torschütze') : '?';
-      const pt    = show && m.status === 'FINISHED' ? `<span class="text-xs font-bold text-slate-400 w-8 text-right block">${b.points_awarded??0} P</span>` : '';
+      const pt    = show && isFinished(m.status) ? `<span class="text-xs font-bold text-slate-400 w-8 text-right block">${b.points_awarded??0} P</span>` : '';
       return `<div class="flex items-center justify-between px-3 py-2 text-sm ${isMe ? 'bg-blue-50/60' : ''}">
         <span class="w-1/3 truncate font-${isMe?'bold':'medium'} text-${isMe?'blue-700':'slate-600'}">${b.user?.display_name||'?'}</span>
         <span class="w-1/4 text-center font-extrabold mono text-slate-900">${bh}:${ba}</span>
@@ -827,12 +877,15 @@ async function loadOverviewData() {
     const hn = (m.home_team?.name || 'HM').substring(0,3).toUpperCase();
     const an = (m.away_team?.name || 'GS').substring(0,3).toUpperCase();
     
-    // Kleine Flaggen für die Übersicht
-    const hFlag = flag(m.home_team, 'w-5 h-3.5 rounded-[2px]');
-    const aFlag = flag(m.away_team, 'w-5 h-3.5 rounded-[2px]');
+    // Kleine Flaggen für die Übersicht, wie gefordert
+    const hFlag = flag(m.home_team, 'w-4 h-3 rounded-[2px] shadow-sm');
+    const aFlag = flag(m.away_team, 'w-4 h-3 rounded-[2px] shadow-sm');
 
     return `<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-      <div class="bg-slate-800 text-white px-4 py-2.5 flex justify-between items-center"><div class="font-bold text-sm flex items-center gap-2">${hFlag} <span>${hn} – ${an}</span> ${aFlag}</div><div class="text-xs font-bold mono bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">${status}</div></div>
+      <div class="bg-slate-800 text-white px-4 py-2.5 flex justify-between items-center">
+        <div class="font-bold text-sm flex items-center gap-2">${hFlag} <span>${hn} – ${an}</span> ${aFlag}</div>
+        <div class="text-xs font-bold mono bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">${status}</div>
+      </div>
       <div class="divide-y divide-slate-100">${rows}</div>
     </div>`;
   }).join('');
@@ -872,11 +925,13 @@ async function loadTabelleData(filterType) {
 
   // Lazy Loading aller abgerechneten Bets, falls nicht im Cache
   if (!S.allBetsCache && filterType !== 'total') {
+    // Hole alle beendeten Spiele
     const { data, error } = await db.from('bets')
-      .select('user_id, home_score, away_score, points_awarded, match:matches!inner(id, phase, home_score, away_score, home_score_extratime, away_score_extratime, status)')
-      .eq('match.status', 'FINISHED');
+      .select('user_id, home_score, away_score, points_awarded, match:matches!inner(id, phase, home_score, away_score, home_score_extratime, away_score_extratime, status)');
+      
     if (error) { container.innerHTML = `<p class="text-red-500 text-sm">${error.message}</p>`; return; }
-    S.allBetsCache = data || [];
+    // Nach Finished filtern
+    S.allBetsCache = (data || []).filter(b => isFinished(b.match.status));
   }
 
   let ranked = [];
@@ -972,7 +1027,7 @@ async function renderBonusInsideBetting(container) {
         <div class="flex justify-between items-start">
           <div>
             <h3 class="font-extrabold text-lg tracking-tight">${q.question_text}</h3>
-            <p class="text-xs text-slate-400 mt-1">Frist: ${fmtDate(q.deadline)} ${fmtTime(q.deadline)} Uhr</p>
+            <p class="text-xs text-slate-400 mt-1">Frist: ${fmtDate(q.deadline)} ${fmtTime(q.deadline)}</p>
           </div>
           ${badge}
         </div>
