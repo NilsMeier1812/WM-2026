@@ -908,7 +908,8 @@ async function loadOverviewData() {
   const phaseMatches = S.matches.filter(m => m.phase === S.overviewPhase);
   if (!phaseMatches.length) { cards.innerHTML = '<p class="text-center text-slate-400 mt-12 font-medium">Keine Spiele in dieser Phase.</p>'; return; }
 
-  const { data: allBets, error } = await db.from('bets').select(`*, user:profiles!user_id(id,display_name), goalscorer:players!first_goalscorer_id(id,name)`).in('match_id', phaseMatches.map(m => m.id));
+  // HIER GEÄNDERT: Wir fragen secure_bets_view statt bets ab!
+  const { data: allBets, error } = await db.from('secure_bets_view').select(`*, goalscorer:players!first_goalscorer_id(id,name)`).in('match_id', phaseMatches.map(m => m.id));
   if (error) { cards.innerHTML = `<p class="text-red-500 text-sm p-4 text-center">${error.message}</p>`; return; }
 
   const byMatch = {};
@@ -925,35 +926,59 @@ async function loadOverviewData() {
       : isLive ? `<span class="text-red-400 animate-pulse font-extrabold">LIVE ${fnH??0}:${fnA??0}</span>` 
       : fmtTime(m.kickoff_time);
 
-    const bets = byMatch[m.id] || [];
-    
-    // Live-Punkte kalkulieren und array sortieren
-    bets.forEach(b => b._pts = calcBetPoints(m, b));
-    if (locked) bets.sort((a, b) => b._pts - a._pts);
+    const matchBets = byMatch[m.id] || [];
+    matchBets.forEach(b => b._pts = calcBetPoints(m, b));
 
-    const rows = bets.length ? bets.map(b => {
-      const isMe  = b.user_id === S.user.id;
-      const show  = locked;
-      const bh    = show ? b.home_score : '?';
-      const ba    = show ? b.away_score : '?';
+    let displayRows = S.leaderboard.map(player => {
+      const b = matchBets.find(x => x.user_id === player.id);
+      return { player, bet: b, pts: b ? b._pts : 0 };
+    });
 
-      // color goalscorer name instead of showing check/cross
-      let scorerHtml = show ? (b.goalscorer?.name || 'Kein Torschütze') : '?';
-      if (m.first_goalscorer_id && show) {
-        scorerHtml = b.first_goalscorer_id === m.first_goalscorer_id
-          ? `<span class="text-emerald-600 font-bold">${b.goalscorer?.name || 'Kein Torschütze'}</span>`
-          : `<span class="text-red-500 font-bold">${b.goalscorer?.name || 'Kein Torschütze'}</span>`;
+    if (locked) displayRows.sort((a, b) => b.pts - a.pts);
+
+    const rows = displayRows.map(({ player, bet, pts }) => {
+      const isMe = player.id === S.user.id;
+      const show = locked || isMe;
+      
+      let bh = '-';
+      let ba = '-';
+      let scorerHtml = '';
+      let ptHtml = '';
+
+      if (bet) {
+        // HIER GEÄNDERT: Logik für die Zensur-View
+        if (bet.home_score === null && bet.away_score === null) {
+          // Die View hat den Tipp zensiert -> Spiel liegt in der Zukunft, fremder Nutzer hat aber schon getippt!
+          bh = '?'; ba = '?';
+          scorerHtml = '<span class="text-slate-400 font-medium">Tipp verdeckt</span>';
+        } else {
+          // Normaler Fall: Wir dürfen den Tipp sehen (eigenes Spiel oder Spiel gestartet)
+          bh = bet.home_score ?? '?';
+          ba = bet.away_score ?? '?';
+          ptHtml = locked ? `<span class="text-xs font-bold ${isLive ? 'text-blue-500' : 'text-slate-400'} w-8 text-right block">${pts} P</span>` : '';
+          
+          if (m.first_goalscorer_id && locked) {
+            scorerHtml = bet.first_goalscorer_id === m.first_goalscorer_id
+              ? `<span class="text-emerald-600 font-bold">${bet.goalscorer?.name || 'Kein Torschütze'}</span>`
+              : `<span class="text-red-500 font-bold">${bet.goalscorer?.name || 'Kein Torschütze'}</span>`;
+          } else {
+            scorerHtml = bet.goalscorer?.name || 'Kein Torschütze';
+          }
+        }
+      } else {
+        // Kein Tipp in der Datenbank vorhanden
+        bh = '-'; ba = '-';
+        scorerHtml = '<span class="text-slate-400 italic">Noch kein Tipp</span>';
       }
 
-      const pt = show ? `<span class="text-xs font-bold ${isLive ? 'text-blue-500' : 'text-slate-400'} w-8 text-right block">${b._pts} P</span>` : '';
-
-      // Order: Ergebnis * Spieler * Punkte
       return `<div class="flex items-center justify-between px-3 py-2 text-sm ${isMe ? 'bg-blue-50/60' : ''}">
         <span class="w-1/4 text-center font-extrabold mono text-slate-900">${bh}:${ba}</span>
-        <span class="w-1/2 truncate font-${isMe?'bold':'medium'} text-${isMe?'blue-700':'slate-600'}">${b.user?.display_name||'?'}${show ? `<div class="text-xs text-slate-400 mt-0.5 truncate">${scorerHtml}</div>` : ''}</span>
-        <span class="w-1/4 text-right">${pt}</span>
+        <span class="w-1/2 truncate font-${isMe?'bold':'medium'} text-${isMe?'blue-700':'slate-600'}">${player.display_name||'?'}
+          <div class="text-xs text-slate-400 mt-0.5 truncate">${scorerHtml}</div>
+        </span>
+        <span class="w-1/4 text-right">${ptHtml}</span>
       </div>`;
-    }).join('') : `<div class="px-3 py-3 text-center text-xs text-slate-400">Noch keine Tipps.</div>`;
+    }).join('');
 
     const hn = (m.home_team?.name || 'HM').substring(0,3).toUpperCase();
     const an = (m.away_team?.name || 'GS').substring(0,3).toUpperCase();
