@@ -174,9 +174,9 @@
 // ──────────────────────────────────────────
 // CONFIG — replace with your Supabase project values
 // ──────────────────────────────────────────
+const SUPABASE_URL      = 'https://kuzxrwzydddykliunhvg.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1enhyd3p5ZGRkeWtsaXVuaHZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NDE0OTMsImV4cCI6MjA5NTQxNzQ5M30.dnIGUpCh2DvPbVi8r-iCdHXKaIIBz_6lbSGTR_ys57U';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -277,30 +277,24 @@ async function handleAuth() {
   okEl.classList.add('hidden');
   btn.disabled = true;
   btn.innerHTML = `<div class="spinner spinner-white w-5 h-5"></div>`;
-
-  try {
     if (S.authMode === 'login') {
       const { error } = await db.auth.signInWithPassword({ email, password: pw });
       if (error) throw error;
     } else {
       if (!name) throw new Error('Bitte gib einen Anzeigenamen ein.');
-      const { data, error } = await db.auth.signUp({ email, password: pw });
+      // Der Anzeigename wird in den User-Metadaten gespeichert
+      const { data, error } = await db.auth.signUp({ 
+        email, 
+        password: pw,
+        options: {
+          data: { display_name: name }
+        }
+      });
       if (error) throw error;
-      if (data.user) {
-        await db.from('profiles').upsert({
-          id: data.user.id, display_name: name, total_points: 0,
-        });
-        okEl.textContent = '✓ Konto erstellt! Bitte bestätige deine E-Mail, dann melde dich an.';
-        okEl.classList.remove('hidden');
-      }
+      
+      okEl.textContent = '✓ Konto erstellt! Bitte bestätige deine E-Mail, dann melde dich an.';
+      okEl.classList.remove('hidden');
     }
-  } catch (e) {
-    errEl.textContent = e.message;
-    errEl.classList.remove('hidden');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = S.authMode === 'login' ? 'Anmelden' : 'Registrieren';
-  }
 }
 
 // ──────────────────────────────────────────
