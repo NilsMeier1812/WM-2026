@@ -156,9 +156,9 @@
     }
     .score-input {
       width:58px; height:70px;
-      background:var(--navy);
-      color:#fff;
-      border:2px solid transparent;
+      background:var(--surface);
+      color:var(--text);
+      border:2px solid var(--border);
       border-radius:12px;
       text-align:center;
       font-family:'Syne', sans-serif;
@@ -167,8 +167,8 @@
       transition:border-color .15s, background .15s;
       caret-color:var(--accent);
     }
-    .score-input::placeholder { color:rgba(255,255,255,.25); }
-    .score-input:focus { border-color:var(--accent); background:var(--navy-2); }
+    .score-input::placeholder { color:var(--text-3); }
+    .score-input:focus { border-color:var(--accent); background:var(--bg); }
     .score-sep {
       font-family:'Syne', sans-serif;
       font-size:26px; font-weight:800;
