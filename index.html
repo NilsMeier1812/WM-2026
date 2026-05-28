@@ -185,6 +185,7 @@ const S = {
   bets:            {},
   leaderboard:     [],
   liveLeaderboard: [],
+  teams:           [],
   view:            'dashboard',
   bettingPhase:    null,
   overviewPhase:   null,
@@ -407,10 +408,11 @@ async function fetchData(showLoadingState = true) {
   if (showLoadingState) loading($('main'));
 
   try {
-    const [matchRes, betRes, lbRes] = await Promise.all([
+    const [matchRes, betRes, lbRes, teamsRes] = await Promise.all([
       db.from('matches').select('*, home_team:teams!home_team_id(id,name,flag_url), away_team:teams!away_team_id(id,name,flag_url), first_goalscorer:players!first_goalscorer_id(id,name)').order('kickoff_time', { ascending: true }),
       db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name)').eq('user_id', S.user.id),
       db.from('profiles').select('id,display_name,total_points').order('total_points', { ascending: false }),
+      db.from('teams').select('*').order('name', { ascending: true })
     ]);
 
     if (matchRes.error) throw matchRes.error;
@@ -419,6 +421,7 @@ async function fetchData(showLoadingState = true) {
 
     S.matches     = matchRes.data || [];
     S.leaderboard = lbRes.data    || [];
+    S.teams       = teamsRes.data || [];
     S.bets = {};
     (betRes.data || []).forEach(b => { S.bets[b.match_id] = b; });
 
@@ -885,7 +888,7 @@ function renderOverviewShell(main) {
   main.innerHTML = `
     <div class="max-w-lg mx-auto flex flex-col min-h-full">
       <div class="flex overflow-x-auto p-4 gap-2 no-scrollbar bg-slate-50 shadow-sm sticky top-0 z-30 border-b border-slate-200 shrink-0">
-        ${phaseTabs(S.overviewPhase, 'setOverviewPhase').replace('Bonusfragen', '')}
+        ${phaseTabs(S.overviewPhase, 'setOverviewPhase')}
       </div>
       <div id="ov-cards" class="p-4 pb-8 space-y-4 fade-up flex-1"></div>
     </div>`;
@@ -900,10 +903,104 @@ async function setOverviewPhase(p) {
   await loadOverviewData();
 }
 
+async function renderBonusOverview(cards) {
+  const [qRes, bRes] = await Promise.all([
+    db.from('extra_questions').select('*').order('deadline', { ascending: true }),
+    db.from('extra_bets').select('*')
+  ]);
+
+  if (qRes.error) { cards.innerHTML = `<p class="p-4 text-red-500">${qRes.error.message}</p>`; return; }
+  
+  const questions = qRes.data || [];
+  if (!questions.length) { cards.innerHTML = '<p class="text-center text-slate-400 mt-12 font-medium">Keine Bonusfragen verfügbar.</p>'; return; }
+
+  const byQ = {};
+  (bRes.data || []).forEach(b => { (byQ[b.question_id] ??= []).push(b); });
+
+  cards.innerHTML = questions.map(q => {
+    const locked = new Date(q.deadline) <= new Date();
+    const qBets = byQ[q.id] || [];
+    
+    let displayRows = S.leaderboard.map(player => {
+      return { player, bet: qBets.find(x => x.user_id === player.id) };
+    });
+
+    displayRows.sort((a, b) => {
+      if (a.player.id === S.user.id) return -1;
+      if (b.player.id === S.user.id) return 1;
+      
+      if (locked) {
+        const ptA = a.bet?.points_awarded || 0;
+        const ptB = b.bet?.points_awarded || 0;
+        if (ptA !== ptB) return ptB - ptA;
+      } else {
+        const aHasBet = !!a.bet;
+        const bHasBet = !!b.bet;
+        if (aHasBet && !bHasBet) return -1;
+        if (!aHasBet && bHasBet) return 1;
+      }
+      return a.player.display_name.localeCompare(b.player.display_name);
+    });
+
+    const rows = displayRows.map(({ player, bet }) => {
+      const isMe = player.id === S.user.id;
+      const show = locked || isMe;
+      
+      let ans = '-';
+      let ptHtml = '';
+
+      if (bet) {
+        if (!show) {
+          ans = '<span class="text-slate-400 font-medium">Verdeckt</span>';
+        } else {
+          ans = bet.bet_value || '-';
+          if (q.answer_type === 'teams') {
+            const t = S.teams.find(x => x.name === bet.bet_value);
+            if (t && t.flag_url && !t.flag_url.startsWith('http') && !t.flag_url.startsWith('/')) {
+              ans = `${t.flag_url} ${bet.bet_value}`;
+            }
+          }
+          ptHtml = locked ? `<span class="font-bold ${(bet.points_awarded || 0) > 0 ? 'text-blue-500' : 'text-slate-500'}">${bet.points_awarded ?? 0}</span>` : '';
+        }
+      } else {
+        ans = '<span class="text-slate-300">-</span>';
+        if (locked) ptHtml = '<span class="text-slate-300">0</span>';
+      }
+
+      return `<div class="flex items-center px-3 py-2 text-[11px] sm:text-xs border-b border-slate-50 last:border-0 ${isMe ? 'bg-blue-50/60' : 'hover:bg-slate-50'}">
+        <span class="w-[35%] truncate font-${isMe?'bold text-blue-700':'semibold text-slate-700'} pr-1">${player.display_name||'?'}</span>
+        <span class="w-[50%] truncate pl-1 text-slate-800 font-medium">${ans}</span>
+        <span class="w-[15%] text-right">${ptHtml}</span>
+      </div>`;
+    }).join('');
+
+    let headerRight = '';
+    if (locked) {
+       headerRight = q.correct_answer 
+         ? `<span class="text-[10px] text-emerald-400 font-bold truncate">Lösung: ${q.correct_answer}</span>` 
+         : `<span class="text-[10px] text-slate-400 font-medium">Ausstehend</span>`;
+    } else {
+       headerRight = `<div class="text-[10px] font-bold mono bg-slate-900 px-2 py-1 rounded-md border border-slate-700 whitespace-nowrap shrink-0">Frist: ${fmtDate(q.deadline)}</div>`;
+    }
+
+    return `<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div class="bg-slate-800 text-white px-3 py-2 flex justify-between items-center gap-2">
+        <div class="font-bold text-[11px] sm:text-xs truncate">${q.question_text}</div>
+        <div class="flex items-center justify-end shrink-0">${headerRight}</div>
+      </div>
+      <div class="flex flex-col">${rows}</div>
+    </div>`;
+  }).join('');
+}
+
 async function loadOverviewData() {
   const cards = $('ov-cards');
   if (!cards) return;
   loading(cards);
+
+  if (S.overviewPhase === 'Bonusfragen') {
+    return renderBonusOverview(cards);
+  }
 
   const phaseMatches = S.matches.filter(m => m.phase === S.overviewPhase);
   if (!phaseMatches.length) { cards.innerHTML = '<p class="text-center text-slate-400 mt-12 font-medium">Keine Spiele in dieser Phase.</p>'; return; }
@@ -978,7 +1075,7 @@ async function loadOverviewData() {
       if (bet) {
         if (!show) {
           bh = '?'; ba = '?';
-          scorerHtml = '<span class="text-slate-400 font-medium">Verdeckt</span>';
+          scorerHtml = '<span class="text-slate-400 font-medium">???</span>';
         } else {
           bh = bet.home_score ?? '?';
           ba = bet.away_score ?? '?';
@@ -1152,7 +1249,23 @@ async function renderBonusInsideBetting(container) {
     const myBet  = betsMap[q.id]?.bet_value || '';
     const ptsAw  = betsMap[q.id]?.points_awarded;
     
-    const inputHtml = `<input id="q-${q.id}" type="text" value="${myBet}" placeholder="Deine Antwort..." ${locked ? 'disabled' : ''} class="w-full px-4 py-3 border-2 border-slate-200 rounded-2xl bg-white outline-none focus:border-blue-400 transition text-sm font-semibold disabled:bg-slate-50 disabled:opacity-60 shadow-sm" />`;
+    let inputHtml = '';
+    
+    if (q.answer_type === 'teams') {
+      const opts = S.teams.map(t => {
+        // Native Dropdowns unterstützen keine Bilder. Wenn Flagge ein Emoji ist, zeigen, sonst weglassen.
+        const flagPrefix = (!t.flag_url || t.flag_url.startsWith('http') || t.flag_url.startsWith('/')) ? '' : t.flag_url + ' ';
+        const sel = myBet === t.name ? 'selected' : '';
+        return `<option value="${t.name}" ${sel}>${flagPrefix}${t.name}</option>`;
+      }).join('');
+      
+      inputHtml = `<select id="q-${q.id}" ${locked ? 'disabled' : ''} class="w-full px-4 py-3 border-2 border-slate-200 rounded-2xl bg-white outline-none focus:border-blue-400 transition text-sm font-semibold disabled:bg-slate-50 disabled:opacity-60 shadow-sm">
+        <option value="" disabled ${!myBet ? 'selected' : ''}>Bitte wählen...</option>
+        ${opts}
+      </select>`;
+    } else {
+      inputHtml = `<input id="q-${q.id}" type="text" value="${myBet}" placeholder="Deine Antwort..." ${locked ? 'disabled' : ''} class="w-full px-4 py-3 border-2 border-slate-200 rounded-2xl bg-white outline-none focus:border-blue-400 transition text-sm font-semibold disabled:bg-slate-50 disabled:opacity-60 shadow-sm" />`;
+    }
     
     const badge = locked 
       ? (ptsAw !== null && ptsAw !== undefined ? `<span class="bg-slate-100 text-slate-500 text-xs font-extrabold px-3 py-1.5 rounded-full ml-3 shrink-0">${ptsAw} Pkt erreicht</span>` : `<span class="bg-red-50 text-red-500 text-xs font-extrabold px-3 py-1.5 rounded-full ml-3 shrink-0">Abgelaufen</span>`)
