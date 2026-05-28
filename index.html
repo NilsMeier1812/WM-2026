@@ -642,12 +642,16 @@ function betCard(m) {
 
   if (showResults) {
     const pts = calcBetPoints(m, bet);
-    let scorerSuffix = '';
-    if (m.first_goalscorer_id) {
-       scorerSuffix = (bet?.first_goalscorer_id === m.first_goalscorer_id) ? ' <span class="text-emerald-500 text-sm font-normal">✅</span>' : ' <span class="text-red-500 text-sm font-normal">❌</span>';
-    }
-    const tipLine = bet ? `${bet.home_score}:${bet.away_score} &nbsp;·&nbsp; ${bet.goalscorer?.name || 'Kein Torschütze'}${scorerSuffix}` : 'Kein Tipp abgegeben';
-    const ptColor = pts >= 3 ? 'bg-emerald-400 text-emerald-900' : pts >= 1 ? 'bg-yellow-400 text-yellow-900' : 'bg-slate-300 text-slate-600';
+    // color the chosen goalscorer name green/red instead of showing check/cross
+    const scorerNameHtml = bet
+      ? (m.first_goalscorer_id
+          ? (bet.first_goalscorer_id === m.first_goalscorer_id
+              ? `<span class="text-emerald-600 font-bold">${bet.goalscorer?.name || 'Kein Torschütze'}</span>`
+              : `<span class="text-red-500 font-bold">${bet.goalscorer?.name || 'Kein Torschütze'}</span>`)
+          : `<span class="font-bold text-slate-800">${bet.goalscorer?.name || 'Kein Torschütze'}</span>`)
+      : 'Kein Tipp abgegeben';
+    const tipLine = bet ? `${bet.home_score}:${bet.away_score} &nbsp;·&nbsp; ${scorerNameHtml}` : 'Kein Tipp abgegeben';
+    const ptClass = pts >= 3 ? 'text-emerald-600 font-extrabold' : pts >= 1 ? 'text-yellow-700 font-extrabold' : 'text-slate-500 font-semibold';
     const finalH  = getFinalScore(m, 'home') ?? 0;
     const finalA  = getFinalScore(m, 'away') ?? 0;
     const extInfo = m.home_score_extratime !== null ? '<span class="text-xs font-bold text-slate-400 mt-1 block">n.V.</span>' : '';
@@ -662,7 +666,6 @@ function betCard(m) {
           <span class="text-xs font-bold text-slate-400 mono">${fmtDate(m.kickoff_time)}</span>${badge}
         </div>
         <div class="p-5 relative">
-          <div class="absolute top-5 right-0 ${ptColor} font-extrabold text-sm px-4 py-1.5 rounded-l-2xl shadow">+${pts} Pkt.</div>
           <div class="flex justify-between items-center mb-6 mt-2">
             <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.home_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.home_team?.name||''}</div></div>
             <div class="w-1/3 text-center">
@@ -671,9 +674,12 @@ function betCard(m) {
             </div>
             <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.away_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.away_team?.name||''}</div></div>
           </div>
-          <div class="bg-slate-50 px-4 py-3 rounded-xl border border-slate-100 text-center">
-            <div class="text-xs text-slate-400 font-bold uppercase tracking-wide mb-1">Dein Tipp</div>
-            <div class="text-slate-700 font-bold">${tipLine}</div>
+          <div class="bg-slate-50 px-4 py-3 rounded-xl border border-slate-100">
+            <div class="text-xs text-slate-400 font-bold uppercase tracking-wide mb-2">Dein Tipp</div>
+            <div class="flex items-center justify-between gap-3">
+              <div class="text-slate-700 font-bold truncate">${tipLine}</div>
+              <div class="${ptClass} text-sm ml-3">+${pts} Pkt.</div>
+            </div>
           </div>
         </div>
       </div>`;
@@ -920,17 +926,22 @@ async function loadOverviewData() {
       const show  = locked;
       const bh    = show ? b.home_score : '?';
       const ba    = show ? b.away_score : '?';
-      
-      let scSuffix = '';
-      if (m.first_goalscorer_id && show) scSuffix = (b.first_goalscorer_id === m.first_goalscorer_id) ? ' ✅' : ' ❌';
-      
-      const sc    = show ? ((b.goalscorer?.name || 'Kein Torschütze') + scSuffix) : '?';
-      const pt    = show ? `<span class="text-xs font-bold ${isLive ? 'text-blue-500' : 'text-slate-400'} w-8 text-right block">${b._pts} P</span>` : '';
-      
+
+      // color goalscorer name instead of showing check/cross
+      let scorerHtml = show ? (b.goalscorer?.name || 'Kein Torschütze') : '?';
+      if (m.first_goalscorer_id && show) {
+        scorerHtml = b.first_goalscorer_id === m.first_goalscorer_id
+          ? `<span class="text-emerald-600 font-bold">${b.goalscorer?.name || 'Kein Torschütze'}</span>`
+          : `<span class="text-red-500 font-bold">${b.goalscorer?.name || 'Kein Torschütze'}</span>`;
+      }
+
+      const pt = show ? `<span class="text-xs font-bold ${isLive ? 'text-blue-500' : 'text-slate-400'} w-8 text-right block">${b._pts} P</span>` : '';
+
+      // Order: Ergebnis * Spieler * Punkte
       return `<div class="flex items-center justify-between px-3 py-2 text-sm ${isMe ? 'bg-blue-50/60' : ''}">
-        <span class="w-1/3 truncate font-${isMe?'bold':'medium'} text-${isMe?'blue-700':'slate-600'}">${b.user?.display_name||'?'}</span>
         <span class="w-1/4 text-center font-extrabold mono text-slate-900">${bh}:${ba}</span>
-        <div class="flex items-center gap-2 w-5/12 justify-end"><span class="text-xs text-slate-400 truncate text-right" title="${sc}">${sc}</span>${pt}</div>
+        <span class="w-1/2 truncate font-${isMe?'bold':'medium'} text-${isMe?'blue-700':'slate-600'}">${b.user?.display_name||'?'}${show ? `<div class="text-xs text-slate-400 mt-0.5 truncate">${scorerHtml}</div>` : ''}</span>
+        <span class="w-1/4 text-right">${pt}</span>
       </div>`;
     }).join('') : `<div class="px-3 py-3 text-center text-xs text-slate-400">Noch keine Tipps.</div>`;
 
