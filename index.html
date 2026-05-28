@@ -581,18 +581,8 @@ async function handleAuth() {
       if (error) throw error;
     } else {
       if (!name) throw new Error('Bitte gib einen Anzeigenamen ein.');
-      const {data,error}=await db.auth.signUp({email,password:pw,options:{data:{display_name:name}}});
+      const {error}=await db.auth.signUp({email,password:pw,options:{data:{display_name:name}}});
       if (error) throw error;
-      
-      // Profil manuell erstellen, falls nicht automatisch erstellt wurde
-      if (data?.user) {
-        const {data:existing}=await db.from('profiles').select('id').eq('id',data.user.id).maybeSingle();
-        if (!existing) {
-          const {error:profError}=await db.from('profiles').insert({id:data.user.id,display_name:name});
-          if (profError) throw new Error('Fehler beim Erstellen des Benutzerprofils: '+profError.message);
-        }
-      }
-      
       okEl.textContent='✓ Konto erstellt! Bitte E-Mail bestätigen.';
       okEl.style.display='block';
     }
@@ -650,7 +640,7 @@ async function fetchData(showLoadingState=true) {
       return {
         id: p.id,
         display_name: p.display_name,
-        total_points: r&&r.total_points!==null ? Number(r.total_points) : 0,
+        total_points: r&&r.total_points!==null&&r.total_points!==undefined ? Number(r.total_points) : 0,
         total_bets: r ? Number(r.total_bets) : 0
       };
     }).sort((a,b)=>b.total_points-a.total_points);
