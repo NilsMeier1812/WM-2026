@@ -139,15 +139,15 @@
 ════════════════════════════════════════════ -->
 <div id="modal-scorer" class="hidden fixed inset-0 z-50 flex flex-col justify-end" style="background:rgba(15,23,42,0.7); backdrop-filter:blur(6px);">
   <div class="flex-1" onclick="closeScorer()"></div>
-  <div class="bg-white rounded-t-3xl max-h-[82vh] flex flex-col w-full max-w-lg mx-auto shadow-2xl fade-up">
-    <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white rounded-t-3xl z-10">
+  <div class="bg-slate-50 rounded-t-3xl max-h-[85vh] flex flex-col w-full max-w-lg mx-auto shadow-2xl fade-up">
+    <div class="px-5 py-4 border-b border-slate-200 flex justify-between items-center sticky top-0 bg-white rounded-t-3xl z-10">
       <h3 class="font-extrabold text-lg tracking-tight">Torschütze wählen</h3>
       <button onclick="closeScorer()" class="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center active:bg-slate-200 transition">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </div>
-    <div id="scorer-list" class="overflow-y-auto p-4 space-y-4" style="padding-bottom: calc(1rem + env(safe-area-inset-bottom));">
-      <div class="flex justify-center py-8"><div class="spinner w-6 h-6"></div></div>
+    <div id="scorer-list" class="overflow-y-auto p-4" style="padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));">
+      <!-- Wird dynamisch gefüllt -->
     </div>
   </div>
 </div>
@@ -212,16 +212,27 @@ function skeletonCard() {
   </div>`;
 }
 
+function scorerSkeleton() {
+  const col = `<div class="space-y-2"><div class="h-12 bg-slate-200 rounded-xl"></div><div class="h-12 bg-slate-200 rounded-xl"></div><div class="h-12 bg-slate-200 rounded-xl"></div></div>`;
+  return `<div class="animate-pulse w-full">
+    <div class="h-12 bg-slate-200 rounded-2xl mb-4 w-full"></div>
+    <div class="grid grid-cols-2 gap-3">
+      ${col}${col}
+    </div>
+  </div>`;
+}
+
 function loading(el) { 
   el.innerHTML = `<div class="max-w-lg mx-auto p-4 space-y-4 fade-up">${skeletonCard()}${skeletonCard()}${skeletonCard()}</div>`; 
 }
 
+// Flaggen-Funktion bereinigt (Eltern-Container kümmern sich um Flexbox-Zentrierung!)
 function flag(team, imgCls = 'w-8 h-6') {
-  if (!team?.flag_url) return '<span class="text-2xl block mx-auto text-center">🏳️</span>';
+  if (!team?.flag_url) return `<span class="text-2xl leading-none">🏳️</span>`;
   if (team.flag_url.startsWith('http') || team.flag_url.startsWith('/')) {
-    return `<img src="${team.flag_url}" class="${imgCls} object-cover rounded-sm shadow-sm mx-auto" alt="${team.name}" />`;
+    return `<img src="${team.flag_url}" class="${imgCls} object-cover rounded-sm shadow-sm" alt="${team.name}" />`;
   }
-  return `<span class="text-3xl leading-none block mx-auto text-center">${team.flag_url}</span>`;
+  return `<span class="text-3xl leading-none">${team.flag_url}</span>`;
 }
 
 function fmtTime(ts) { return new Date(ts).toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' }); }
@@ -413,9 +424,9 @@ function renderDashboard(main) {
           <h3 class="font-extrabold text-slate-800 tracking-tight">Nächstes Spiel</h3>${badge}
         </div>
         <div class="flex justify-between items-center mb-4">
-          <div class="text-center w-1/3 space-y-1.5">${flag(next.home_team)}<div class="text-xs font-bold text-slate-600 truncate">${next.home_team?.name || 'Heim'}</div></div>
+          <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(next.home_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${next.home_team?.name || 'Heim'}</div></div>
           <div class="text-center font-bold text-sm bg-slate-100 px-4 py-2 rounded-xl mono tracking-widest">${scoreOrTime}</div>
-          <div class="text-center w-1/3 space-y-1.5">${flag(next.away_team)}<div class="text-xs font-bold text-slate-600 truncate">${next.away_team?.name || 'Gast'}</div></div>
+          <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(next.away_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${next.away_team?.name || 'Gast'}</div></div>
         </div>
         ${action}
       </div>`;
@@ -489,12 +500,12 @@ function betCard(m) {
         <div class="p-5 relative">
           <div class="absolute top-5 right-0 ${ptColor} font-extrabold text-sm px-4 py-1.5 rounded-l-2xl shadow">+${pts} Pkt.</div>
           <div class="flex justify-between items-center mb-4">
-            <div class="text-center w-1/3 space-y-1.5">${flag(m.home_team)}<div class="text-xs font-bold text-slate-600 truncate">${m.home_team?.name||''}</div></div>
+            <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.home_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.home_team?.name||''}</div></div>
             <div class="w-1/3 text-center">
               <div class="text-4xl font-extrabold text-slate-900 mono tracking-wider">${finalH}:${finalA}</div>
               ${extInfo}
             </div>
-            <div class="text-center w-1/3 space-y-1.5">${flag(m.away_team)}<div class="text-xs font-bold text-slate-600 truncate">${m.away_team?.name||''}</div></div>
+            <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.away_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.away_team?.name||''}</div></div>
           </div>
           <div class="bg-slate-50 px-4 py-2.5 rounded-xl text-center mb-3 border border-slate-100">
             <div class="text-xs text-slate-400 font-bold uppercase tracking-wide mb-0.5">1. Torschütze (Offiziell)</div>
@@ -520,7 +531,7 @@ function betCard(m) {
       </div>
       <div class="p-5">
         <div class="flex justify-between items-center mb-5">
-          <div class="text-center flex-1 space-y-1.5">${flag(m.home_team)}<div class="text-xs font-bold text-slate-600 truncate">${m.home_team?.name||'Heim'}</div></div>
+          <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.home_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.home_team?.name||'Heim'}</div></div>
           <div class="flex gap-2 items-center px-3">
             <input id="h-${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" value="${curHome}" ${dis} 
               oninput="this.value=this.value.replace(/[^0-9]/g,''); if(this.value.length===1) document.getElementById('a-${m.id}').focus();"
@@ -532,7 +543,7 @@ function betCard(m) {
               onblur="triggerAutoSave(${m.id})"
               class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 disabled:opacity-40 disabled:bg-slate-100 transition mono" />
           </div>
-          <div class="text-center flex-1 space-y-1.5">${flag(m.away_team)}<div class="text-xs font-bold text-slate-600 truncate">${m.away_team?.name||'Gast'}</div></div>
+          <div class="w-1/3 flex flex-col items-center text-center space-y-1.5">${flag(m.away_team)}<div class="text-xs font-bold text-slate-600 truncate w-full">${m.away_team?.name||'Gast'}</div></div>
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Erster Torschütze</label>
@@ -563,7 +574,7 @@ async function performSave(matchId, h, a) {
   // 1. Optimistic UI Update & Cache Backup
   const backup = existing ? { ...existing } : null;
   const newBet = {
-    id: existing?.id || crypto.randomUUID(), // Fix für not-null uuid Fehler
+    id: existing?.id || crypto.randomUUID(),
     user_id: S.user.id,
     match_id: matchId,
     home_score: h,
@@ -601,53 +612,111 @@ async function performSave(matchId, h, a) {
 }
 
 // ──────────────────────────────────────────
-// GOALSCORER MODAL
+// GOALSCORER MODAL (Neu: 2-Spalten Layout & strikte Sortierung)
 // ──────────────────────────────────────────
 async function openScorer(matchId) {
   $('modal-scorer').classList.remove('hidden');
   const list = $('scorer-list');
-  list.innerHTML = `<div class="flex justify-center py-8"><div class="spinner w-6 h-6"></div></div>`;
+  list.innerHTML = scorerSkeleton(); // Nutzt jetzt den Layout-getreuen Skeleton Loader
 
   const m = S.matches.find(x => x.id === matchId);
   if (!m) return;
 
-  // Zuerst Lineups (Startelf) abfragen
-  const { data: lineups, error: lErr } = await db.from('match_lineups').select('player_id').eq('match_id', matchId);
+  // 1. Hole Lineups (Startaufstellung)
+  const { data: lineups } = await db.from('match_lineups').select('player_id').eq('match_id', matchId);
   const lineupPlayerIds = new Set((lineups || []).map(l => l.player_id));
-  const hasLineup = lineupPlayerIds.size > 0;
 
-  // Dann alle Spieler der Teams laden
+  // 2. Hole Spieler inkl. Position und Toren
   const { data: players, error } = await db.from('players')
-    .select('id,name,team:teams!team_id(id,name)')
-    .in('team_id', [m.home_team_id, m.away_team_id])
-    .order('name');
+    .select('id,name,position,tournament_goals,team_id')
+    .in('team_id', [m.home_team_id, m.away_team_id]);
 
   if (error) { list.innerHTML = `<p class="text-red-500 text-sm text-center">${error.message}</p>`; return; }
 
-  const starters = [];
-  const bench = [];
+  // 3. Konstanten für Sortierung und UI-Mapping
+  const posMap = { 'Goalkeeper': 'TW', 'Defender': 'ABW', 'Midfielder': 'MF', 'Attacker': 'ST' };
+  const posWeight = { 'Attacker': 1, 'Midfielder': 2, 'Defender': 3, 'Goalkeeper': 4 };
 
-  (players || []).forEach(p => {
-    S.playerCache[p.id] = p;
-    if (hasLineup) {
-      if (lineupPlayerIds.has(p.id)) starters.push(p);
-      else bench.push(p);
-    } else {
-      bench.push(p); // Ohne offizielle Aufstellung sind alle im Gesamtkader
-    }
+  // 4. Strikte Sortierung anwenden
+  (players || []).sort((a, b) => {
+    // Prio 1: Startelf (Ja vor Nein)
+    const aStart = lineupPlayerIds.has(a.id);
+    const bStart = lineupPlayerIds.has(b.id);
+    if (aStart !== bStart) return aStart ? -1 : 1;
+
+    // Prio 2: Tore (absteigend)
+    const aGoals = a.tournament_goals || 0;
+    const bGoals = b.tournament_goals || 0;
+    if (aGoals !== bGoals) return bGoals - aGoals;
+
+    // Prio 3: Position (ST -> MF -> ABW -> TW)
+    const wA = posWeight[a.position] || 99; // 99 als Fallback für unbekannte Positionen
+    const wB = posWeight[b.position] || 99;
+    if (wA !== wB) return wA - wB;
+
+    // Fallback: Alphabetisch
+    return a.name.localeCompare(b.name);
   });
 
-  const playerBtn = (p, isStarter) => `
-    <button onclick="pickScorer(${matchId}, ${p.id})" class="w-full text-left px-4 py-3 rounded-xl border transition flex justify-between items-center ${isStarter ? 'bg-slate-50 border-slate-200 active:bg-blue-50' : 'bg-white border-slate-100 active:bg-blue-50'}">
-      <span class="font-${isStarter?'bold':'medium'} text-slate-${isStarter?'900':'600'} text-sm">${p.name}</span>
-      <span class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-lg">${p.team?.name||''}</span>
-    </button>`;
+  // Spieler in Teams aufteilen
+  const homePlayers = (players || []).filter(p => p.team_id === m.home_team_id);
+  const awayPlayers = (players || []).filter(p => p.team_id === m.away_team_id);
+
+  (players || []).forEach(p => { S.playerCache[p.id] = p; });
+
+  const renderPlayer = (p) => {
+    const isStarter = lineupPlayerIds.has(p.id);
+    const posText = posMap[p.position] || p.position || '?';
+    
+    // Tore Badge: Nur anzeigen wenn > 0
+    const goalsBadge = (p.tournament_goals > 0) 
+      ? `<span class="ml-auto text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-extrabold shadow-sm">${p.tournament_goals} ⚽</span>` 
+      : '';
+    
+    // Optischer Indikator für Startelf
+    const starterDot = isStarter 
+      ? `<span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full shadow-sm"></span>` 
+      : '';
+
+    return `
+      <button onclick="pickScorer(${matchId}, ${p.id})" class="relative w-full text-left px-2.5 py-2 rounded-xl border transition flex flex-col gap-0.5 ${isStarter ? 'bg-white border-blue-200 shadow-sm' : 'bg-slate-50/50 border-slate-100 hover:bg-slate-50'}">
+        ${starterDot}
+        <span class="font-${isStarter?'bold':'medium'} text-slate-${isStarter?'900':'600'} text-[11px] truncate w-full">${p.name}</span>
+        <div class="flex items-center w-full mt-0.5 h-4">
+          <span class="text-[9px] font-extrabold text-slate-400 tracking-wider">${posText}</span>
+          ${goalsBadge}
+        </div>
+      </button>`;
+  };
 
   list.innerHTML = `
-    <button onclick="pickScorer(${matchId}, null)" class="w-full text-left px-4 py-3.5 rounded-2xl border-2 border-dashed border-slate-200 hover:border-slate-300 font-bold text-slate-600 active:bg-slate-50 transition text-sm mb-2">🚫 &nbsp;Kein Torschütze (0:0)</button>
-    ${hasLineup && starters.length ? `<div><h4 class="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-3 mt-2">Offizielle Startelf</h4><div class="space-y-2">${starters.map(p => playerBtn(p, true)).join('')}</div></div>` : ''}
-    ${bench.length ? `<div><h4 class="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-3 mt-4">${hasLineup ? 'Bank / Restkader' : 'Gesamter Kader (Aufstellung ausstehend)'}</h4><div class="space-y-2">${bench.map(p => playerBtn(p, false)).join('')}</div></div>` : ''}
-    ${!players?.length ? '<p class="text-center text-slate-400 text-sm py-4">Keine Spieler gefunden.</p>' : ''}`;
+    <button onclick="pickScorer(${matchId}, null)" class="w-full text-center px-4 py-3 rounded-2xl border-2 border-dashed border-slate-200 hover:border-slate-300 font-bold text-slate-500 active:bg-slate-50 transition text-sm mb-4 bg-white">
+      🚫 &nbsp;Kein Torschütze (0:0)
+    </button>
+    <div class="grid grid-cols-2 gap-3 items-start">
+      <!-- Heimteam Spalte -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-center gap-2 pb-2 mb-2 border-b-2 border-slate-200">
+          ${flag(m.home_team, 'w-5 h-4')}
+          <span class="font-extrabold text-[11px] uppercase tracking-wide truncate text-slate-800">${m.home_team?.name || 'Heim'}</span>
+        </div>
+        <div class="space-y-2">
+          ${homePlayers.length ? homePlayers.map(renderPlayer).join('') : '<p class="text-[10px] text-slate-400 text-center py-2">Keine Spieler</p>'}
+        </div>
+      </div>
+      
+      <!-- Auswärtsteam Spalte -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-center gap-2 pb-2 mb-2 border-b-2 border-slate-200">
+          ${flag(m.away_team, 'w-5 h-4')}
+          <span class="font-extrabold text-[11px] uppercase tracking-wide truncate text-slate-800">${m.away_team?.name || 'Gast'}</span>
+        </div>
+        <div class="space-y-2">
+          ${awayPlayers.length ? awayPlayers.map(renderPlayer).join('') : '<p class="text-[10px] text-slate-400 text-center py-2">Keine Spieler</p>'}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function pickScorer(matchId, playerId) {
