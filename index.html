@@ -1489,7 +1489,7 @@ async function handleSession(session) {
   $('auth-screen').classList.add('hidden');
   const app=$('app-screen');
   app.classList.remove('hidden'); app.classList.add('flex');
-  $('header-user').textContent=`${(prof?.display_name||'Du').split(' ')[0]} 👋`;
+  $('header-user').textContent=`${(prof?.display_name||'Du').split(' ')[0]}`;
   goTo('dashboard');
   await fetchData();
 }
