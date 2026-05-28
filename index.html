@@ -2,14 +2,21 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>WM 2026 Tipprunde</title>
+  
+  <link rel="manifest" href="manifest.json">
+  
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@500&display=swap" rel="stylesheet" />
+  
   <style>
-    * { font-family: 'DM Sans', sans-serif; }
+    * { font-family: 'DM Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
     .mono { font-family: 'DM Mono', monospace; }
 
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -34,20 +41,11 @@
     .nav-item.active { color:#2563eb; }
     .nav-item svg { width:20px; height:20px; }
 
-    /* Input number arrow hide */
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     input[type=number] { -moz-appearance: textfield; }
 
-    /* Auth gradient bg */
-    #auth-screen {
-      background: radial-gradient(ellipse 80% 60% at 50% -10%, #1e3a5f 0%, #0f172a 60%);
-    }
-
-    /* Points badge shimmer */
-    .pts-badge {
-      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-    }
+    #auth-screen { background: radial-gradient(ellipse 80% 60% at 50% -10%, #1e3a5f 0%, #0f172a 60%); }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900" style="height:100dvh; overflow:hidden;">
@@ -63,16 +61,9 @@
       <p class="text-slate-400 text-sm mt-1 font-medium">Zeig was du drauf hast</p>
     </div>
 
-    <!-- Tabs -->
     <div class="flex bg-slate-100 rounded-2xl p-1 mb-6 gap-1">
-      <button id="tab-login" onclick="switchTab('login')"
-        class="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all bg-white shadow-sm text-slate-900">
-        Anmelden
-      </button>
-      <button id="tab-register" onclick="switchTab('register')"
-        class="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all text-slate-400">
-        Registrieren
-      </button>
+      <button id="tab-login" onclick="switchTab('login')" class="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all bg-white shadow-sm text-slate-900">Anmelden</button>
+      <button id="tab-register" onclick="switchTab('register')" class="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all text-slate-400">Registrieren</button>
     </div>
 
     <div id="auth-error"   class="hidden text-red-700   text-sm p-3 rounded-xl mb-4 bg-red-50   border border-red-200"></div>
@@ -81,24 +72,17 @@
     <div class="space-y-3">
       <div id="name-field" class="hidden">
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Anzeigename</label>
-        <input id="inp-name" type="text" placeholder="Dein Name im Spiel"
-          onkeydown="if(event.key==='Enter')handleAuth()"
-          class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 transition bg-slate-50" />
+        <input id="inp-name" type="text" placeholder="Dein Name im Spiel" onkeydown="if(event.key==='Enter')handleAuth()" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 transition bg-slate-50" />
       </div>
       <div>
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">E-Mail</label>
-        <input id="inp-email" type="email" placeholder="email@beispiel.de"
-          onkeydown="if(event.key==='Enter')handleAuth()"
-          class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 transition bg-slate-50" />
+        <input id="inp-email" type="email" placeholder="email@beispiel.de" onkeydown="if(event.key==='Enter')handleAuth()" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 transition bg-slate-50" />
       </div>
       <div>
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Passwort</label>
-        <input id="inp-password" type="password" placeholder="Mindestens 6 Zeichen"
-          onkeydown="if(event.key==='Enter')handleAuth()"
-          class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 transition bg-slate-50" />
+        <input id="inp-password" type="password" placeholder="Mindestens 6 Zeichen" onkeydown="if(event.key==='Enter')handleAuth()" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 transition bg-slate-50" />
       </div>
-      <button id="auth-btn" onclick="handleAuth()"
-        class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 mt-1">
+      <button id="auth-btn" onclick="handleAuth()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 mt-1">
         Anmelden
       </button>
     </div>
@@ -109,40 +93,33 @@
      APP SHELL
 ════════════════════════════════════════════ -->
 <div id="app-screen" class="hidden flex-col" style="height:100dvh;">
-
   <!-- Header -->
   <header class="bg-slate-900 text-white px-4 py-3 flex justify-between items-center shrink-0 border-b border-slate-800">
     <h1 class="text-lg font-extrabold flex items-center gap-2 tracking-tight">
-      <span class="text-yellow-400 text-xl">🏆</span> WM 2026 Tipprunde
+      <span class="text-yellow-400 text-xl">🏆</span> WM 2026
     </h1>
     <span id="header-user" class="text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 font-semibold text-slate-300"></span>
   </header>
 
   <!-- Main scroll area -->
-  <main id="main" class="flex-1 overflow-y-auto" style="padding-bottom:4.5rem;"></main>
+  <main id="main" class="flex-1 overflow-y-auto" style="padding-bottom:5.5rem;"></main>
 
   <!-- Bottom Nav -->
-  <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 flex z-20"
-    style="height:calc(3.75rem + env(safe-area-inset-bottom)); padding-bottom:env(safe-area-inset-bottom);">
+  <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 flex z-20" style="height:calc(3.75rem + env(safe-area-inset-bottom)); padding-bottom:env(safe-area-inset-bottom);">
     <button class="nav-item" data-view="dashboard"  onclick="goTo('dashboard')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      Home
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
     </button>
     <button class="nav-item" data-view="tippen"     onclick="goTo('tippen')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-      Tippen
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Tippen
     </button>
     <button class="nav-item" data-view="uebersicht" onclick="goTo('uebersicht')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      Übersicht
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Übersicht
     </button>
     <button class="nav-item" data-view="bonus"      onclick="goTo('bonus')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
-      Bonus
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>Bonus
     </button>
     <button class="nav-item" data-view="profil"     onclick="goTo('profil')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
-      Profil
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>Profil
     </button>
   </nav>
 </div>
@@ -150,8 +127,7 @@
 <!-- ═══════════════════════════════════════════
      GOALSCORER MODAL
 ════════════════════════════════════════════ -->
-<div id="modal-scorer" class="hidden fixed inset-0 z-50 flex flex-col justify-end"
-  style="background:rgba(15,23,42,0.7); backdrop-filter:blur(6px);">
+<div id="modal-scorer" class="hidden fixed inset-0 z-50 flex flex-col justify-end" style="background:rgba(15,23,42,0.7); backdrop-filter:blur(6px);">
   <div class="flex-1" onclick="closeScorer()"></div>
   <div class="bg-white rounded-t-3xl max-h-[82vh] flex flex-col w-full max-w-lg mx-auto shadow-2xl fade-up">
     <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white rounded-t-3xl z-10">
@@ -166,17 +142,22 @@
   </div>
 </div>
 
-
 <!-- ═══════════════════════════════════════════
      JAVASCRIPT
 ════════════════════════════════════════════ -->
 <script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .catch(err => console.error('Service Worker Registrierung fehlgeschlagen:', err));
+  });
+}
+
 // ──────────────────────────────────────────
-// CONFIG — replace with your Supabase project values
+// CONFIG
 // ──────────────────────────────────────────
 const SUPABASE_URL      = 'https://kuzxrwzydddykliunhvg.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1enhyd3p5ZGRkeWtsaXVuaHZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NDE0OTMsImV4cCI6MjA5NTQxNzQ5M30.dnIGUpCh2DvPbVi8r-iCdHXKaIIBz_6lbSGTR_ys57U';
-
 
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -188,13 +169,13 @@ const S = {
   user:          null,
   profile:       null,
   matches:       [],
-  bets:          {},    // match_id → bet row (with joined goalscorer)
+  bets:          {},
   leaderboard:   [],
   view:          'dashboard',
   bettingPhase:  null,
   overviewPhase: null,
-  pendingScorer: {},    // match_id → { id, name }
-  playerCache:   {},    // player_id → player row
+  pendingScorer: {},
+  playerCache:   {},
   authMode:      'login',
 };
 
@@ -202,46 +183,20 @@ const S = {
 // HELPERS
 // ──────────────────────────────────────────
 const $  = id  => document.getElementById(id);
-const qs = sel => document.querySelector(sel);
+function loading(el) { el.innerHTML = `<div class="flex justify-center py-16"><div class="spinner w-7 h-7"></div></div>`; }
 
-function loading(el) {
-  el.innerHTML = `<div class="flex justify-center py-16"><div class="spinner w-7 h-7"></div></div>`;
-}
-
-/** Render a team flag — handles both emoji and image URLs */
 function flag(team, imgCls = 'w-8 h-6') {
   if (!team?.flag_url) return '<span class="text-2xl">🏳️</span>';
   if (team.flag_url.startsWith('http') || team.flag_url.startsWith('/')) {
-    return `<img src="${team.flag_url}" class="${imgCls} object-cover rounded-sm" alt="${team.name}" />`;
+    return `<img src="${team.flag_url}" class="${imgCls} object-cover rounded-sm shadow-sm" alt="${team.name}" />`;
   }
   return `<span class="text-3xl leading-none">${team.flag_url}</span>`;
 }
 
-function fmtTime(ts) {
-  return new Date(ts).toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' });
-}
-function fmtDate(ts) {
-  return new Date(ts).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit' });
-}
-function isLocked(m) {
-  return new Date(m.kickoff_time) <= new Date();
-}
-function phases() {
-  // Deduplicate, preserving insertion order
-  return [...new Set(S.matches.map(m => m.phase).filter(Boolean))];
-}
-
-function calcPoints(match, bet) {
-  if (match.status !== 'FINISHED' || match.home_score == null || !bet) return 0;
-  const th = +bet.home_score, ta = +bet.away_score;
-  const ah = +match.home_score, aa = +match.away_score;
-  let pts = 0;
-  if (th === ah && ta === aa)                              pts += 3;
-  else if ((th - ta) === (ah - aa))                        pts += 2;
-  else if ((th > ta && ah > aa) || (th < ta && ah < aa))  pts += 1;
-  if (bet.first_goalscorer_id && bet.first_goalscorer_id === match.first_goalscorer_id) pts += 1;
-  return pts;
-}
+function fmtTime(ts) { return new Date(ts).toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' }); }
+function fmtDate(ts) { return new Date(ts).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit' }); }
+function isLocked(m) { return new Date(m.kickoff_time) <= new Date(); }
+function phases()    { return [...new Set(S.matches.map(m => m.phase).filter(Boolean))]; }
 
 function phaseTabs(activePhase, onclickFn) {
   return phases().map(p => `
@@ -250,6 +205,13 @@ function phaseTabs(activePhase, onclickFn) {
              ${p === activePhase ? 'bg-slate-900 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}">
       ${p}
     </button>`).join('');
+}
+
+// Result nach 120min präferieren (laut Kontext)
+function getFinalScore(m, type) {
+  if (type === 'home') return m.home_score_extratime !== null ? m.home_score_extratime : m.home_score;
+  if (type === 'away') return m.away_score_extratime !== null ? m.away_score_extratime : m.away_score;
+  return null;
 }
 
 // ──────────────────────────────────────────
@@ -277,24 +239,26 @@ async function handleAuth() {
   okEl.classList.add('hidden');
   btn.disabled = true;
   btn.innerHTML = `<div class="spinner spinner-white w-5 h-5"></div>`;
+  
+  try {
     if (S.authMode === 'login') {
       const { error } = await db.auth.signInWithPassword({ email, password: pw });
       if (error) throw error;
     } else {
       if (!name) throw new Error('Bitte gib einen Anzeigenamen ein.');
-      // Der Anzeigename wird in den User-Metadaten gespeichert
-      const { data, error } = await db.auth.signUp({ 
-        email, 
-        password: pw,
-        options: {
-          data: { display_name: name }
-        }
-      });
+      const { error } = await db.auth.signUp({ email, password: pw, options: { data: { display_name: name } } });
       if (error) throw error;
-      
-      okEl.textContent = '✓ Konto erstellt! Bitte bestätige deine E-Mail, dann melde dich an.';
+      okEl.textContent = '✓ Konto erstellt! (Bitte E-Mail bestätigen, falls in Supabase aktiviert)';
       okEl.classList.remove('hidden');
     }
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    if (S.authMode === 'login') btn.textContent = 'Anmelden';
+    else btn.textContent = 'Registrieren';
+    btn.disabled = false;
+  }
 }
 
 // ──────────────────────────────────────────
@@ -304,27 +268,10 @@ async function fetchData() {
   loading($('main'));
 
   const [matchRes, betRes, lbRes] = await Promise.all([
-    db.from('matches')
-      .select(`
-        *,
-        home_team:teams!home_team_id(id,name,flag_url),
-        away_team:teams!away_team_id(id,name,flag_url),
-        first_goalscorer:players!first_goalscorer_id(id,name)
-      `)
-      .order('kickoff_time', { ascending: true }),
-
-    db.from('bets')
-      .select(`*, goalscorer:players!first_goalscorer_id(id,name)`)
-      .eq('user_id', S.user.id),
-
-    db.from('profiles')
-      .select('id,display_name,total_points')
-      .order('total_points', { ascending: false }),
+    db.from('matches').select('*, home_team:teams!home_team_id(id,name,flag_url), away_team:teams!away_team_id(id,name,flag_url), first_goalscorer:players!first_goalscorer_id(id,name)').order('kickoff_time', { ascending: true }),
+    db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name)').eq('user_id', S.user.id),
+    db.from('profiles').select('id,display_name,total_points').order('total_points', { ascending: false }),
   ]);
-
-  if (matchRes.error) console.error('Matches:', matchRes.error);
-  if (betRes.error)   console.error('Bets:',    betRes.error);
-  if (lbRes.error)    console.error('LB:',      lbRes.error);
 
   S.matches     = matchRes.data || [];
   S.leaderboard = lbRes.data    || [];
@@ -338,33 +285,23 @@ async function fetchData() {
   renderView();
 }
 
-async function reloadBets() {
-  const { data } = await db.from('bets')
-    .select(`*, goalscorer:players!first_goalscorer_id(id,name)`)
-    .eq('user_id', S.user.id);
-  S.bets = {};
-  (data || []).forEach(b => { S.bets[b.match_id] = b; });
-}
-
 // ──────────────────────────────────────────
 // NAVIGATION
 // ──────────────────────────────────────────
 function goTo(view) {
   S.view = view;
-  document.querySelectorAll('.nav-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.view === view);
-  });
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.view === view));
   renderView();
 }
 
 function renderView() {
   const main = $('main');
   switch (S.view) {
-    case 'dashboard':  renderDashboard(main);           break;
-    case 'tippen':     renderBetting(main);             break;
+    case 'dashboard':  renderDashboard(main); break;
+    case 'tippen':     renderBetting(main); break;
     case 'uebersicht': renderOverviewShell(main); loadOverviewData(); break;
-    case 'bonus':      renderBonus(main);               break;
-    case 'profil':     renderProfile(main);             break;
+    case 'bonus':      renderBonus(main); break;
+    case 'profil':     renderProfile(main); break;
   }
 }
 
@@ -377,17 +314,14 @@ function renderDashboard(main) {
   const pts   = me?.total_points ?? 0;
   const total = S.leaderboard.length;
 
-  // Next upcoming match
   const now  = new Date();
-  const next = S.matches.find(m => new Date(m.kickoff_time) > now && m.status !== 'FINISHED')
-            || S.matches[0];
+  const next = S.matches.find(m => new Date(m.kickoff_time) > now && m.status !== 'FINISHED') || S.matches[0];
 
   let nextHtml = '';
   if (next) {
     const bet    = S.bets[next.id];
-    const locked = isLocked(next);
     const scoreOrTime = next.status === 'FINISHED'
-      ? `${next.home_score} : ${next.away_score}`
+      ? `${getFinalScore(next,'home')} : ${getFinalScore(next,'away')}${next.home_score_extratime !== null ? ' n.V.' : ''}`
       : `${fmtTime(next.kickoff_time)} Uhr`;
     const badge = next.status === 'FINISHED'
       ? `<span class="text-xs font-bold bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full">Beendet</span>`
@@ -395,10 +329,7 @@ function renderDashboard(main) {
 
     let action = '';
     if (next.status !== 'FINISHED' && !bet) {
-      action = `<button onclick="goTo('tippen')"
-        class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition">
-        Jetzt Tipp abgeben &rsaquo;
-      </button>`;
+      action = `<button onclick="goTo('tippen')" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition">Jetzt Tipp abgeben &rsaquo;</button>`;
     } else if (next.status !== 'FINISHED' && bet) {
       action = `<div class="bg-slate-50 px-4 py-3 rounded-xl text-center border border-slate-100">
         <span class="text-slate-400 text-xs font-bold uppercase tracking-wide">Dein Tipp</span>
@@ -413,18 +344,14 @@ function renderDashboard(main) {
           <h3 class="font-extrabold text-slate-800 tracking-tight">Nächstes Spiel</h3>${badge}
         </div>
         <div class="flex justify-between items-center mb-4">
-          <div class="text-center w-1/3 space-y-1.5">${flag(next.home_team)}
-            <div class="text-xs font-bold text-slate-600 truncate">${next.home_team?.name || 'Heim'}</div></div>
-          <div class="text-center font-bold text-sm bg-slate-100 px-4 py-2 rounded-xl mono tracking-widest">
-            ${scoreOrTime}</div>
-          <div class="text-center w-1/3 space-y-1.5">${flag(next.away_team)}
-            <div class="text-xs font-bold text-slate-600 truncate">${next.away_team?.name || 'Gast'}</div></div>
+          <div class="text-center w-1/3 space-y-1.5">${flag(next.home_team)}<div class="text-xs font-bold text-slate-600 truncate">${next.home_team?.name || 'Heim'}</div></div>
+          <div class="text-center font-bold text-sm bg-slate-100 px-4 py-2 rounded-xl mono tracking-widest">${scoreOrTime}</div>
+          <div class="text-center w-1/3 space-y-1.5">${flag(next.away_team)}<div class="text-xs font-bold text-slate-600 truncate">${next.away_team?.name || 'Gast'}</div></div>
         </div>
         ${action}
       </div>`;
   }
 
-  // Leaderboard
   const lbRows = S.leaderboard.map((p, i) => {
     const isMe   = p.id === S.user.id;
     const medal  = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `<span class="font-bold text-slate-400 text-sm">${i+1}.</span>`;
@@ -433,35 +360,26 @@ function renderDashboard(main) {
         <div class="w-6 text-center text-base leading-none">${medal}</div>
         <div class="font-semibold text-sm ${isMe ? 'text-blue-700' : 'text-slate-700'}">${p.display_name || '?'}</div>
       </div>
-      <div class="font-extrabold text-sm mono">${p.total_points ?? 0}
-        <span class="text-xs font-normal text-slate-400">Pkt</span></div>
+      <div class="font-extrabold text-sm mono">${p.total_points ?? 0} <span class="text-xs font-normal text-slate-400">Pkt</span></div>
     </div>`;
   }).join('');
 
   main.innerHTML = `
     <div class="p-4 space-y-5 max-w-lg mx-auto fade-up">
-      <!-- Hero card -->
-      <div style="background:linear-gradient(135deg,#1e40af 0%,#1d4ed8 50%,#2563eb 100%);"
-        class="text-white p-5 rounded-3xl shadow-lg flex justify-between items-center">
+      <div style="background:linear-gradient(135deg,#1e40af 0%,#1d4ed8 50%,#2563eb 100%);" class="text-white p-5 rounded-3xl shadow-lg flex justify-between items-center">
         <div>
           <p class="text-blue-200 text-xs font-bold uppercase tracking-wider mb-1">Deine Platzierung</p>
-          <div class="text-4xl font-extrabold tracking-tight">Platz ${rank}
-            <span class="text-xl font-semibold text-blue-300">/ ${total}</span></div>
+          <div class="text-4xl font-extrabold tracking-tight">Platz ${rank} <span class="text-xl font-semibold text-blue-300">/ ${total}</span></div>
         </div>
         <div class="text-right">
           <p class="text-blue-200 text-xs font-bold uppercase tracking-wider mb-1">Punkte</p>
           <p class="text-4xl font-extrabold tracking-tight">${pts}</p>
         </div>
       </div>
-
       ${nextHtml}
-
-      <!-- Leaderboard -->
       <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
         <h3 class="font-extrabold text-slate-800 tracking-tight mb-4">Gesamtwertung</h3>
-        <div class="space-y-1">
-          ${lbRows || '<p class="text-center text-slate-400 text-sm py-4">Noch keine Spieler.</p>'}
-        </div>
+        <div class="space-y-1">${lbRows || '<p class="text-center text-slate-400 text-sm py-4">Noch keine Spieler.</p>'}</div>
       </div>
     </div>`;
 }
@@ -470,37 +388,28 @@ function renderDashboard(main) {
 // BETTING VIEW
 // ──────────────────────────────────────────
 function renderBetting(main) {
-  const cards = S.matches
-    .filter(m => m.phase === S.bettingPhase)
-    .map(betCard).join('');
-
+  const cards = S.matches.filter(m => m.phase === S.bettingPhase).map(betCard).join('');
   main.innerHTML = `
     <div class="max-w-lg mx-auto">
-      <div class="flex overflow-x-auto p-4 gap-2 no-scrollbar bg-white shadow-sm sticky top-0 z-0 border-b border-slate-100">
-        ${phaseTabs(S.bettingPhase, 'setBettingPhase')}
-      </div>
-      <div class="p-4 space-y-4 fade-up">
-        ${cards || '<p class="text-center text-slate-400 mt-12 font-medium">Keine Spiele in dieser Phase.</p>'}
-      </div>
+      <div class="flex overflow-x-auto p-4 gap-2 no-scrollbar bg-white shadow-sm sticky top-0 z-0 border-b border-slate-100">${phaseTabs(S.bettingPhase, 'setBettingPhase')}</div>
+      <div class="p-4 space-y-4 fade-up">${cards || '<p class="text-center text-slate-400 mt-12 font-medium">Keine Spiele in dieser Phase.</p>'}</div>
     </div>`;
 }
 
-function setBettingPhase(p) {
-  S.bettingPhase = p;
-  renderBetting($('main'));
-}
+function setBettingPhase(p) { S.bettingPhase = p; renderBetting($('main')); }
 
 function betCard(m) {
   const bet    = S.bets[m.id];
   const locked = isLocked(m);
 
-  /* ── FINISHED ────────────────────────────── */
   if (m.status === 'FINISHED') {
-    const pts     = calcPoints(m, bet);
-    const tipLine = bet
-      ? `${bet.home_score}:${bet.away_score} &nbsp;·&nbsp; ${bet.goalscorer?.name || 'Kein Torschütze'}`
-      : 'Kein Tipp abgegeben (0 Punkte)';
+    // Die DB liefert points_awarded. Frontend Logik wurde entfernt, da die Wahrheit im Backend liegt.
+    const pts     = bet?.points_awarded ?? 0;
+    const tipLine = bet ? `${bet.home_score}:${bet.away_score} &nbsp;·&nbsp; ${bet.goalscorer?.name || 'Kein Torschütze'}` : 'Kein Tipp abgegeben';
     const ptColor = pts >= 3 ? 'bg-emerald-400 text-emerald-900' : pts >= 1 ? 'bg-yellow-400 text-yellow-900' : 'bg-slate-300 text-slate-600';
+    const finalH  = getFinalScore(m, 'home');
+    const finalA  = getFinalScore(m, 'away');
+    const extInfo = m.home_score_extratime !== null ? '<span class="text-xs font-bold text-slate-400 mt-1 block">n.V.</span>' : '';
 
     return `
       <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
@@ -509,74 +418,54 @@ function betCard(m) {
           <span class="text-xs font-bold text-slate-400">Beendet</span>
         </div>
         <div class="p-5 relative">
-          <div class="absolute top-5 right-0 ${ptColor} font-extrabold text-sm px-4 py-1.5 rounded-l-2xl shadow">
-            +${pts} Pkt.
-          </div>
+          <div class="absolute top-5 right-0 ${ptColor} font-extrabold text-sm px-4 py-1.5 rounded-l-2xl shadow">+${pts} Pkt.</div>
           <div class="flex justify-between items-center mb-4">
-            <div class="text-center w-1/3 space-y-1.5">${flag(m.home_team)}
-              <div class="text-xs font-bold text-slate-600 truncate">${m.home_team?.name||''}</div></div>
+            <div class="text-center w-1/3 space-y-1.5">${flag(m.home_team)}<div class="text-xs font-bold text-slate-600 truncate">${m.home_team?.name||''}</div></div>
             <div class="w-1/3 text-center">
-              <div class="text-4xl font-extrabold text-slate-900 mono tracking-wider">${m.home_score}:${m.away_score}</div>
+              <div class="text-4xl font-extrabold text-slate-900 mono tracking-wider">${finalH}:${finalA}</div>
+              ${extInfo}
             </div>
-            <div class="text-center w-1/3 space-y-1.5">${flag(m.away_team)}
-              <div class="text-xs font-bold text-slate-600 truncate">${m.away_team?.name||''}</div></div>
+            <div class="text-center w-1/3 space-y-1.5">${flag(m.away_team)}<div class="text-xs font-bold text-slate-600 truncate">${m.away_team?.name||''}</div></div>
           </div>
           <div class="bg-slate-50 px-4 py-2.5 rounded-xl text-center mb-3 border border-slate-100">
-            <div class="text-xs text-slate-400 font-bold uppercase tracking-wide mb-0.5">1. Torschütze</div>
+            <div class="text-xs text-slate-400 font-bold uppercase tracking-wide mb-0.5">1. Torschütze (Offiziell)</div>
             <div class="text-sm font-bold text-slate-800">⚽ ${m.first_goalscorer?.name || 'Kein Torschütze'}</div>
           </div>
-          <div class="text-xs text-slate-400 pt-1">Dein Tipp: <span class="text-slate-600 font-semibold">${tipLine}</span></div>
+          <div class="text-xs text-slate-400 pt-1 border-t border-slate-100 mt-2">Dein Tipp: <span class="text-slate-600 font-semibold">${tipLine}</span></div>
         </div>
       </div>`;
   }
 
-  /* ── UPCOMING / LIVE ──────────────────────── */
-  const curHome    = bet?.home_score ?? '';
-  const curAway    = bet?.away_score ?? '';
-  const pending    = S.pendingScorer[m.id];
-  const scorerName = pending?.name ?? bet?.goalscorer?.name ?? '';
-  const scorerHint = scorerName
-    ? `<span class="font-bold text-slate-800">${scorerName}</span>`
-    : `<span class="text-slate-400">Torschütze auswählen …</span>`;
-  const dis = locked ? 'disabled' : '';
-  const badge = locked
-    ? `<span class="text-red-500 text-xs font-bold flex items-center gap-1">⚠ Gesperrt</span>`
-    : `<span class="text-emerald-600 text-xs font-bold flex items-center gap-1">✓ Offen</span>`;
+  const curHome = bet?.home_score ?? '';
+  const curAway = bet?.away_score ?? '';
+  const pending = S.pendingScorer[m.id];
+  const sName   = pending?.name ?? bet?.goalscorer?.name ?? '';
+  const sHint   = sName ? `<span class="font-bold text-slate-800">${sName}</span>` : `<span class="text-slate-400">Torschütze auswählen …</span>`;
+  const dis     = locked ? 'disabled' : '';
+  const badge   = locked ? `<span class="text-red-500 text-xs font-bold flex items-center gap-1">⚠ Gesperrt</span>` : `<span class="text-emerald-600 text-xs font-bold flex items-center gap-1">✓ Offen</span>`;
 
   return `
     <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
       <div class="bg-slate-50 px-4 py-2.5 flex justify-between items-center border-b border-slate-100">
-        <span class="text-xs font-bold text-slate-400 mono">${fmtDate(m.kickoff_time)} · ${fmtTime(m.kickoff_time)}</span>
-        ${badge}
+        <span class="text-xs font-bold text-slate-400 mono">${fmtDate(m.kickoff_time)} · ${fmtTime(m.kickoff_time)}</span>${badge}
       </div>
       <div class="p-5">
         <div class="flex justify-between items-center mb-5">
-          <div class="text-center flex-1 space-y-1.5">${flag(m.home_team)}
-            <div class="text-xs font-bold text-slate-600 truncate">${m.home_team?.name||'Heim'}</div></div>
+          <div class="text-center flex-1 space-y-1.5">${flag(m.home_team)}<div class="text-xs font-bold text-slate-600 truncate">${m.home_team?.name||'Heim'}</div></div>
           <div class="flex gap-2 items-center px-3">
-            <input id="h-${m.id}" type="number" min="0" max="15" value="${curHome}" ${dis}
-              class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 disabled:opacity-40 disabled:bg-slate-100 transition mono" />
+            <input id="h-${m.id}" type="number" min="0" max="15" value="${curHome}" ${dis} class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 disabled:opacity-40 disabled:bg-slate-100 transition mono" />
             <span class="font-bold text-slate-300 text-xl">:</span>
-            <input id="a-${m.id}" type="number" min="0" max="15" value="${curAway}" ${dis}
-              class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 disabled:opacity-40 disabled:bg-slate-100 transition mono" />
+            <input id="a-${m.id}" type="number" min="0" max="15" value="${curAway}" ${dis} class="w-14 h-16 text-center text-2xl font-extrabold bg-slate-100 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-0 disabled:opacity-40 disabled:bg-slate-100 transition mono" />
           </div>
-          <div class="text-center flex-1 space-y-1.5">${flag(m.away_team)}
-            <div class="text-xs font-bold text-slate-600 truncate">${m.away_team?.name||'Gast'}</div></div>
+          <div class="text-center flex-1 space-y-1.5">${flag(m.away_team)}<div class="text-xs font-bold text-slate-600 truncate">${m.away_team?.name||'Gast'}</div></div>
         </div>
-
         <div class="mb-4">
           <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Erster Torschütze</label>
-          <button id="sb-${m.id}" ${dis} onclick="openScorer(${m.id})"
-            class="w-full px-4 py-3 text-left bg-slate-50 border-2 border-slate-200 rounded-2xl text-sm flex justify-between items-center active:bg-slate-100 disabled:opacity-40 transition">
-            ${scorerHint}
-            ${!locked ? '<span class="text-slate-400 text-lg leading-none">›</span>' : ''}
+          <button id="sb-${m.id}" ${dis} onclick="openScorer(${m.id})" class="w-full px-4 py-3 text-left bg-slate-50 border-2 border-slate-200 rounded-2xl text-sm flex justify-between items-center active:bg-slate-100 disabled:opacity-40 transition">
+            ${sHint}${!locked ? '<span class="text-slate-400 text-lg leading-none">›</span>' : ''}
           </button>
         </div>
-
-        ${!locked ? `<button id="save-${m.id}" onclick="saveBet(${m.id})"
-          class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition">
-          Tipp speichern
-        </button>` : ''}
+        ${!locked ? `<button id="save-${m.id}" onclick="saveBet(${m.id})" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition">Tipp speichern</button>` : ''}
       </div>
     </div>`;
 }
@@ -589,43 +478,25 @@ async function saveBet(matchId) {
 
   const pending  = S.pendingScorer[matchId];
   const existing = S.bets[matchId];
-  // Prefer newly selected scorer; fall back to existing bet's scorer
-  const scorerId = pending !== undefined
-    ? (pending.id ?? null)
-    : (existing?.first_goalscorer_id ?? null);
-
+  const scorerId = pending !== undefined ? (pending.id ?? null) : (existing?.first_goalscorer_id ?? null);
   const btn = $(`save-${matchId}`);
   if (btn) { btn.disabled = true; btn.innerHTML = `<div class="spinner spinner-white w-5 h-5"></div>`; }
 
   try {
     if (existing) {
-      const { error } = await db.from('bets').update({
-        home_score: h, away_score: a,
-        first_goalscorer_id: scorerId,
-        updated_at: new Date().toISOString(),
-      }).eq('id', existing.id);
+      const { error } = await db.from('bets').update({ home_score: h, away_score: a, first_goalscorer_id: scorerId, updated_at: new Date().toISOString() }).eq('id', existing.id);
       if (error) throw error;
     } else {
-      const { error } = await db.from('bets').insert({
-        user_id: S.user.id, match_id: matchId,
-        home_score: h, away_score: a,
-        first_goalscorer_id: scorerId,
-      });
+      const { error } = await db.from('bets').insert({ user_id: S.user.id, match_id: matchId, home_score: h, away_score: a, first_goalscorer_id: scorerId });
       if (error) throw error;
     }
-
-    await reloadBets();
+    const { data } = await db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name)').eq('user_id', S.user.id);
+    S.bets = {}; (data || []).forEach(b => { S.bets[b.match_id] = b; });
     delete S.pendingScorer[matchId];
 
     if (btn) {
-      btn.disabled = false;
-      btn.textContent = '✓ Gespeichert!';
-      btn.style.background = '#10b981';
-      setTimeout(() => {
-        if (!btn) return;
-        btn.textContent = 'Tipp speichern';
-        btn.style.background = '';
-      }, 2200);
+      btn.disabled = false; btn.textContent = '✓ Gespeichert!'; btn.style.background = '#10b981';
+      setTimeout(() => { if (!btn) return; btn.textContent = 'Tipp speichern'; btn.style.background = ''; }, 2200);
     }
   } catch (e) {
     alert('Fehler beim Speichern: ' + e.message);
@@ -645,61 +516,38 @@ async function openScorer(matchId) {
   if (!m) return;
 
   const { data: players, error } = await db.from('players')
-    .select('id,name,is_in_starting_xi,team_id,team:teams!team_id(id,name)')
+    .select('id,name,is_in_starting_xi,team:teams!team_id(id,name)')
     .in('team_id', [m.home_team_id, m.away_team_id])
     .eq('is_in_squad', true)
-    .order('is_in_starting_xi', { ascending: false })
-    .order('name');
+    .order('is_in_starting_xi', { ascending: false }).order('name');
 
-  if (error) {
-    list.innerHTML = `<p class="text-red-500 text-sm text-center">${error.message}</p>`;
-    return;
-  }
+  if (error) { list.innerHTML = `<p class="text-red-500 text-sm text-center">${error.message}</p>`; return; }
 
-  // Populate player cache
   (players || []).forEach(p => { S.playerCache[p.id] = p; });
-
   const starters = (players || []).filter(p =>  p.is_in_starting_xi);
   const bench    = (players || []).filter(p => !p.is_in_starting_xi);
 
   const playerBtn = p => `
-    <button onclick="pickScorer(${matchId}, ${p.id})"
-      class="w-full text-left px-4 py-3 rounded-xl border transition flex justify-between items-center
-             ${p.is_in_starting_xi ? 'bg-slate-50 border-slate-200 active:bg-blue-50' : 'bg-white border-slate-100 active:bg-blue-50'}">
+    <button onclick="pickScorer(${matchId}, ${p.id})" class="w-full text-left px-4 py-3 rounded-xl border transition flex justify-between items-center ${p.is_in_starting_xi ? 'bg-slate-50 border-slate-200 active:bg-blue-50' : 'bg-white border-slate-100 active:bg-blue-50'}">
       <span class="font-${p.is_in_starting_xi?'bold':'medium'} text-slate-${p.is_in_starting_xi?'900':'600'} text-sm">${p.name}</span>
       <span class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-lg">${p.team?.name||''}</span>
     </button>`;
 
   list.innerHTML = `
-    <button onclick="pickScorer(${matchId}, null)"
-      class="w-full text-left px-4 py-3.5 rounded-2xl border-2 border-dashed border-slate-200 hover:border-slate-300 font-bold text-slate-600 active:bg-slate-50 transition text-sm">
-      🚫 &nbsp;Kein Torschütze (0:0)
-    </button>
-    ${starters.length ? `<div>
-      <h4 class="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-3">Startelf / Bekannt</h4>
-      <div class="space-y-2">${starters.map(playerBtn).join('')}</div>
-    </div>` : ''}
-    ${bench.length ? `<div>
-      <h4 class="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-3">Restlicher Kader</h4>
-      <div class="space-y-2">${bench.map(playerBtn).join('')}</div>
-    </div>` : ''}
+    <button onclick="pickScorer(${matchId}, null)" class="w-full text-left px-4 py-3.5 rounded-2xl border-2 border-dashed border-slate-200 hover:border-slate-300 font-bold text-slate-600 active:bg-slate-50 transition text-sm mb-2">🚫 &nbsp;Kein Torschütze (0:0)</button>
+    ${starters.length ? `<div><h4 class="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-3 mt-2">Startelf / Bekannt</h4><div class="space-y-2">${starters.map(playerBtn).join('')}</div></div>` : ''}
+    ${bench.length ? `<div><h4 class="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-3 mt-4">Gesamter Kader</h4><div class="space-y-2">${bench.map(playerBtn).join('')}</div></div>` : ''}
     ${!players?.length ? '<p class="text-center text-slate-400 text-sm py-4">Keine Spieler in der Datenbank.</p>' : ''}`;
 }
 
 function pickScorer(matchId, playerId) {
   const player = playerId != null ? S.playerCache[playerId] : null;
   S.pendingScorer[matchId] = { id: playerId, name: player?.name || 'Kein Torschütze' };
-
   const btn = $(`sb-${matchId}`);
-  if (btn) {
-    btn.innerHTML = `<span class="font-bold text-slate-800">${S.pendingScorer[matchId].name}</span><span class="text-slate-400 text-lg leading-none">›</span>`;
-  }
+  if (btn) btn.innerHTML = `<span class="font-bold text-slate-800">${S.pendingScorer[matchId].name}</span><span class="text-slate-400 text-lg leading-none">›</span>`;
   closeScorer();
 }
-
-function closeScorer() {
-  $('modal-scorer').classList.add('hidden');
-}
+function closeScorer() { $('modal-scorer').classList.add('hidden'); }
 
 // ──────────────────────────────────────────
 // OVERVIEW
@@ -707,20 +555,16 @@ function closeScorer() {
 function renderOverviewShell(main) {
   main.innerHTML = `
     <div class="max-w-lg mx-auto">
-      <div class="flex overflow-x-auto p-4 gap-2 no-scrollbar bg-white shadow-sm sticky top-0 z-0 border-b border-slate-100">
-        ${phaseTabs(S.overviewPhase, 'setOverviewPhase')}
-      </div>
+      <div class="flex overflow-x-auto p-4 gap-2 no-scrollbar bg-white shadow-sm sticky top-0 z-0 border-b border-slate-100">${phaseTabs(S.overviewPhase, 'setOverviewPhase')}</div>
       <div id="ov-cards" class="p-4 space-y-4 fade-up"></div>
     </div>`;
 }
 
 async function setOverviewPhase(p) {
   S.overviewPhase = p;
-  // Refresh tab styling
   document.querySelectorAll('[onclick^="setOverviewPhase"]').forEach(btn => {
     const bp = btn.getAttribute('onclick').match(/'([^']+)'/)?.[1];
-    btn.className = `whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all
-      ${bp === p ? 'bg-slate-900 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`;
+    btn.className = `whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all ${bp === p ? 'bg-slate-900 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`;
   });
   await loadOverviewData();
 }
@@ -731,84 +575,119 @@ async function loadOverviewData() {
   loading(cards);
 
   const phaseMatches = S.matches.filter(m => m.phase === S.overviewPhase);
-  if (!phaseMatches.length) {
-    cards.innerHTML = '<p class="text-center text-slate-400 mt-12 font-medium">Keine Spiele in dieser Phase.</p>';
-    return;
-  }
+  if (!phaseMatches.length) { cards.innerHTML = '<p class="text-center text-slate-400 mt-12 font-medium">Keine Spiele in dieser Phase.</p>'; return; }
 
-  const { data: allBets, error } = await db.from('bets')
-    .select(`*, user:profiles!user_id(id,display_name), goalscorer:players!first_goalscorer_id(id,name)`)
-    .in('match_id', phaseMatches.map(m => m.id));
-
-  if (error) {
-    cards.innerHTML = `<p class="text-red-500 text-sm p-4 text-center">${error.message}</p>`;
-    return;
-  }
+  const { data: allBets, error } = await db.from('bets').select(`*, user:profiles!user_id(id,display_name), goalscorer:players!first_goalscorer_id(id,name)`).in('match_id', phaseMatches.map(m => m.id));
+  if (error) { cards.innerHTML = `<p class="text-red-500 text-sm p-4 text-center">${error.message}</p>`; return; }
 
   const byMatch = {};
   (allBets || []).forEach(b => { (byMatch[b.match_id] ??= []).push(b); });
 
   cards.innerHTML = phaseMatches.map(m => {
     const locked = isLocked(m);
-    const status = m.status === 'FINISHED'
-      ? `<span class="mono">${m.home_score}:${m.away_score}</span>`
-      : locked ? 'LIVE' : fmtTime(m.kickoff_time);
+    const fnH = getFinalScore(m, 'home'), fnA = getFinalScore(m, 'away');
+    const ext = m.home_score_extratime !== null ? ' n.V.' : '';
+    const status = m.status === 'FINISHED' ? `<span class="mono">${fnH}:${fnA}${ext}</span>` : locked ? 'LIVE' : fmtTime(m.kickoff_time);
 
     const bets = byMatch[m.id] || [];
-    const rows = bets.length
-      ? bets.map(b => {
-          const isMe  = b.user_id === S.user.id;
-          const show  = locked || m.status === 'FINISHED';
-          const bh    = show ? b.home_score : '?';
-          const ba    = show ? b.away_score : '?';
-          const sc    = show ? (b.goalscorer?.name || 'Kein Torschütze') : '?';
-          return `<div class="flex items-center justify-between px-3 py-2 text-sm ${isMe ? 'bg-blue-50/60' : ''}">
-            <span class="w-1/3 truncate font-${isMe?'bold':'medium'} text-${isMe?'blue-700':'slate-600'}">${b.user?.display_name||'?'}</span>
-            <span class="w-1/4 text-center font-extrabold mono text-slate-900">${bh}:${ba}</span>
-            <span class="w-5/12 text-right text-xs text-slate-400 truncate" title="${sc}">${sc}</span>
-          </div>`;
-        }).join('')
-      : `<div class="px-3 py-3 text-center text-xs text-slate-400">Noch keine Tipps.</div>`;
+    const rows = bets.length ? bets.map(b => {
+      const isMe  = b.user_id === S.user.id;
+      const show  = locked || m.status === 'FINISHED';
+      const bh    = show ? b.home_score : '?';
+      const ba    = show ? b.away_score : '?';
+      const sc    = show ? (b.goalscorer?.name || 'Kein Torschütze') : '?';
+      const pt    = show && m.status === 'FINISHED' ? `<span class="text-xs font-bold text-slate-400 w-8 text-right block">${b.points_awarded??0} P</span>` : '';
+      return `<div class="flex items-center justify-between px-3 py-2 text-sm ${isMe ? 'bg-blue-50/60' : ''}">
+        <span class="w-1/3 truncate font-${isMe?'bold':'medium'} text-${isMe?'blue-700':'slate-600'}">${b.user?.display_name||'?'}</span>
+        <span class="w-1/4 text-center font-extrabold mono text-slate-900">${bh}:${ba}</span>
+        <div class="flex items-center gap-2 w-5/12 justify-end"><span class="text-xs text-slate-400 truncate text-right" title="${sc}">${sc}</span>${pt}</div>
+      </div>`;
+    }).join('') : `<div class="px-3 py-3 text-center text-xs text-slate-400">Noch keine Tipps.</div>`;
 
     const hn = (m.home_team?.name || 'HM').substring(0,3).toUpperCase();
     const an = (m.away_team?.name || 'GS').substring(0,3).toUpperCase();
 
     return `<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-      <div class="bg-slate-800 text-white px-4 py-2.5 flex justify-between items-center">
-        <div class="font-bold text-sm">${hn} – ${an}</div>
-        <div class="text-xs font-bold mono bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">${status}</div>
-      </div>
+      <div class="bg-slate-800 text-white px-4 py-2.5 flex justify-between items-center"><div class="font-bold text-sm">${hn} – ${an}</div><div class="text-xs font-bold mono bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">${status}</div></div>
       <div class="divide-y divide-slate-100">${rows}</div>
     </div>`;
   }).join('');
 }
 
 // ──────────────────────────────────────────
-// BONUS
+// BONUS (Dynamisch angebunden an DB)
 // ──────────────────────────────────────────
-function renderBonus(main) {
-  main.innerHTML = `
-    <div class="p-4 max-w-lg mx-auto fade-up">
-      <h2 class="text-2xl font-extrabold mb-5 tracking-tight">Bonusfragen</h2>
+async function renderBonus(main) {
+  loading(main);
+  
+  const [qRes, bRes] = await Promise.all([
+    db.from('extra_questions').select('*').order('deadline', { ascending: true }),
+    db.from('extra_bets').select('*').eq('user_id', S.user.id)
+  ]);
+
+  if (qRes.error) { main.innerHTML = `<p class="p-4 text-red-500">${qRes.error.message}</p>`; return; }
+  const questions = qRes.data || [];
+  
+  if (!questions.length) {
+    main.innerHTML = `<div class="p-4 max-w-lg mx-auto fade-up"><h2 class="text-2xl font-extrabold mb-5 tracking-tight">Bonusfragen</h2><p class="text-slate-400 bg-white p-5 rounded-2xl border border-slate-100 text-center">Derzeit keine Bonusfragen verfügbar.</p></div>`;
+    return;
+  }
+
+  const betsMap = {};
+  (bRes.data || []).forEach(b => betsMap[b.question_id] = b);
+
+  const html = questions.map(q => {
+    const locked = new Date(q.deadline) <= new Date();
+    const myBet  = betsMap[q.id]?.bet_value || '';
+    const ptsAw  = betsMap[q.id]?.points_awarded;
+    
+    // Ohne die Info im Kontext, was "answer_type" genau beinhaltet, nutze ich hier einen Fallback (Text-Input).
+    const inputHtml = `<input id="q-${q.id}" type="text" value="${myBet}" placeholder="Deine Antwort..." ${locked ? 'disabled' : ''} class="w-full px-4 py-3 border-2 border-slate-200 rounded-2xl bg-white outline-none focus:border-blue-400 transition text-sm font-semibold disabled:bg-slate-50 disabled:opacity-60" />`;
+    
+    const badge = locked 
+      ? (ptsAw !== null && ptsAw !== undefined ? `<span class="bg-slate-100 text-slate-500 text-xs font-extrabold px-3 py-1.5 rounded-full ml-3 shrink-0">${ptsAw} Pkt erreicht</span>` : `<span class="bg-red-50 text-red-500 text-xs font-extrabold px-3 py-1.5 rounded-full ml-3 shrink-0">Abgelaufen</span>`)
+      : `<span class="bg-yellow-100 text-yellow-700 text-xs font-extrabold px-3 py-1.5 rounded-full shrink-0 ml-3">+${q.points} Pkt</span>`;
+
+    return `
       <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 space-y-4">
         <div class="flex justify-between items-start">
           <div>
-            <h3 class="font-extrabold text-lg tracking-tight">Wer wird Weltmeister?</h3>
-            <p class="text-xs text-slate-400 mt-1">Muss vor Turnierbeginn abgegeben werden.</p>
+            <h3 class="font-extrabold text-lg tracking-tight">${q.question_text}</h3>
+            <p class="text-xs text-slate-400 mt-1">Frist: ${fmtDate(q.deadline)} ${fmtTime(q.deadline)} Uhr</p>
           </div>
-          <span class="bg-yellow-100 text-yellow-700 text-xs font-extrabold px-3 py-1.5 rounded-full shrink-0 ml-3">+5 Pkt</span>
+          ${badge}
         </div>
-        <select class="w-full px-4 py-3 border-2 border-slate-200 rounded-2xl bg-white outline-none focus:border-blue-400 transition text-sm font-semibold">
-          <option value="">Bitte wählen …</option>
-          <option>Deutschland</option><option>Spanien</option><option>Argentinien</option>
-          <option>Frankreich</option><option>Brasilien</option><option>England</option>
-          <option>USA</option><option>Portugal</option><option>Niederlande</option>
-        </select>
-        <button class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-2xl active:scale-95 transition">
-          Speichern
-        </button>
-      </div>
-    </div>`;
+        ${inputHtml}
+        ${!locked ? `<button id="btn-q-${q.id}" onclick="saveBonus(${q.id})" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-2xl active:scale-95 transition">Speichern</button>` : ''}
+      </div>`;
+  }).join('');
+
+  main.innerHTML = `<div class="p-4 max-w-lg mx-auto fade-up"><h2 class="text-2xl font-extrabold mb-5 tracking-tight">Bonusfragen</h2><div class="space-y-4">${html}</div></div>`;
+}
+
+async function saveBonus(qId) {
+  const val = $(`q-${qId}`).value.trim();
+  if (!val) return alert('Bitte etwas eintragen!');
+  
+  const btn = $(`btn-q-${qId}`);
+  btn.disabled = true; btn.innerHTML = `<div class="spinner spinner-white w-5 h-5"></div>`;
+  
+  try {
+    // Upsert logic - verify if exists
+    const { data: existing } = await db.from('extra_bets').select('id').eq('user_id', S.user.id).eq('question_id', qId).maybeSingle();
+    
+    if (existing) {
+      const { error } = await db.from('extra_bets').update({ bet_value: val }).eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await db.from('extra_bets').insert({ user_id: S.user.id, question_id: qId, bet_value: val });
+      if (error) throw error;
+    }
+    btn.textContent = '✓ Gespeichert'; btn.style.background = '#10b981';
+    setTimeout(() => { btn.textContent = 'Speichern'; btn.style.background = ''; btn.disabled=false; }, 2000);
+  } catch (e) {
+    alert(e.message); btn.textContent = 'Speichern'; btn.disabled=false;
+  }
 }
 
 // ──────────────────────────────────────────
@@ -823,41 +702,18 @@ function renderProfile(main) {
   main.innerHTML = `
     <div class="p-4 max-w-lg mx-auto space-y-4 fade-up">
       <h2 class="text-2xl font-extrabold tracking-tight">Profil</h2>
-
       <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 space-y-4">
-        <!-- Avatar + name -->
         <div class="flex items-center gap-4">
-          <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-extrabold text-white shrink-0"
-            style="background:linear-gradient(135deg,#3b82f6,#1d4ed8)">${initial}</div>
-          <div>
-            <h3 class="font-extrabold text-xl tracking-tight">${p?.display_name || 'Spieler'}</h3>
-            <p class="text-sm text-slate-400">${S.user?.email || ''}</p>
-          </div>
+          <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-extrabold text-white shrink-0" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8)">${initial}</div>
+          <div><h3 class="font-extrabold text-xl tracking-tight">${p?.display_name || 'Spieler'}</h3><p class="text-sm text-slate-400">${S.user?.email || ''}</p></div>
         </div>
-
-        <!-- Stats -->
         <div class="grid grid-cols-2 gap-3">
-          <div class="bg-slate-50 rounded-2xl p-4 text-center border border-slate-100">
-            <div class="text-3xl font-extrabold tracking-tight mono text-blue-600">${pts}</div>
-            <div class="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wide">Punkte</div>
-          </div>
-          <div class="bg-slate-50 rounded-2xl p-4 text-center border border-slate-100">
-            <div class="text-3xl font-extrabold tracking-tight mono text-blue-600">${rank}</div>
-            <div class="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wide">Platz</div>
-          </div>
+          <div class="bg-slate-50 rounded-2xl p-4 text-center border border-slate-100"><div class="text-3xl font-extrabold tracking-tight mono text-blue-600">${pts}</div><div class="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wide">Punkte</div></div>
+          <div class="bg-slate-50 rounded-2xl p-4 text-center border border-slate-100"><div class="text-3xl font-extrabold tracking-tight mono text-blue-600">${rank}</div><div class="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wide">Platz</div></div>
         </div>
-
-        <!-- Sign out -->
-        <button onclick="doSignOut()"
-          class="w-full py-3.5 px-4 text-center text-red-500 font-bold text-sm border-2 border-red-100 rounded-2xl bg-red-50 active:bg-red-100 transition">
-          Abmelden
-        </button>
+        <button onclick="db.auth.signOut()" class="w-full py-3.5 px-4 text-center text-red-500 font-bold text-sm border-2 border-red-100 rounded-2xl bg-red-50 active:bg-red-100 transition">Abmelden</button>
       </div>
     </div>`;
-}
-
-async function doSignOut() {
-  await db.auth.signOut();
 }
 
 // ──────────────────────────────────────────
@@ -867,25 +723,18 @@ db.auth.onAuthStateChange(async (event, session) => {
   if (session?.user) {
     S.user = session.user;
 
-    // Ensure profile row exists
-    let { data: prof } = await db.from('profiles')
-      .select('*').eq('id', session.user.id).maybeSingle();
-
-    if (!prof) {
-      const fallbackName = session.user.email?.split('@')[0] || 'Spieler';
-      const { data } = await db.from('profiles').insert({
-        id: session.user.id, display_name: fallbackName, total_points: 0,
-      }).select().maybeSingle();
-      prof = data;
+    // Tiefgründige Lösung: Warte auf den Postgres-Trigger anstatt fehlerhaft selbst zu inserten.
+    let prof = null;
+    for (let i = 0; i < 4; i++) {
+      const { data } = await db.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+      if (data) { prof = data; break; }
+      await new Promise(r => setTimeout(r, 400)); // Warten auf DB Trigger
     }
     S.profile = prof;
 
-    // Switch to app
     $('auth-screen').classList.add('hidden');
     const app = $('app-screen');
-    app.classList.remove('hidden');
-    app.classList.add('flex');
-
+    app.classList.remove('hidden'); app.classList.add('flex');
     $('header-user').textContent = `Hallo, ${(prof?.display_name || 'Du').split(' ')[0]} 👋`;
 
     goTo('dashboard');
@@ -894,8 +743,7 @@ db.auth.onAuthStateChange(async (event, session) => {
     S.user = null; S.profile = null;
     $('auth-screen').classList.remove('hidden');
     const app = $('app-screen');
-    app.classList.add('hidden');
-    app.classList.remove('flex');
+    app.classList.add('hidden'); app.classList.remove('flex');
   }
 });
 </script>
