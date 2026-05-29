@@ -1562,6 +1562,19 @@ async function saveBonus(qId) {
 // ──────────────────────────────────────────
 // PROFILE
 // ──────────────────────────────────────────
+window.toggleReminder = async function(checked) {
+  S.profile.missing_tip_reminder = checked;
+  renderView(); 
+  try {
+    const { error } = await db.from('profiles').update({ missing_tip_reminder: checked }).eq('id', S.user.id);
+    if (error) throw error;
+  } catch (err) {
+    if (typeof showToast === 'function') showToast('Fehler beim Speichern', 'error');
+    S.profile.missing_tip_reminder = !checked;
+    renderView();
+  }
+};
+
 function renderProfile(main) {
   const p=S.profile;
   const initial=(p?.display_name||'?').charAt(0).toUpperCase();
@@ -1595,12 +1608,24 @@ function renderProfile(main) {
           </div>
         </div>
 
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:#F4F0E8;border-radius:12px;border:1px solid var(--border-light);margin-bottom:20px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--navy);">Email Reminder</div>
+            <div style="font-size:11px;color:var(--text-2);margin-top:2px;">Erinnerung bei fehlenden Tipps</div>
+          </div>
+          <div style="position:relative;display:inline-block;width:40px;height:22px;">
+            <input type="checkbox" ${p?.missing_tip_reminder ? 'checked' : ''} onchange="toggleReminder(this.checked)" style="position:absolute;opacity:0;cursor:pointer;width:100%;height:100%;z-index:2;margin:0;">
+            <div style="width:100%;height:100%;background:${p?.missing_tip_reminder ? 'var(--navy)' : '#D1D5DB'};border-radius:22px;transition:all 0.2s;">
+              <div style="position:absolute;top:2px;left:${p?.missing_tip_reminder ? '20px' : '2px'};width:18px;height:18px;background:white;border-radius:50%;transition:all 0.2s;box-shadow:0 1px 2px rgba(0,0,0,0.1);"></div>
+            </div>
+          </div>
+        </div>
+
         <button onclick="db.auth.signOut()" style="width:100%;padding:13px;border-radius:10px;border:1.5px solid #FCA5A5;background:#FEF2F2;color:var(--red);font-size:14px;font-weight:700;cursor:pointer;transition:background .15s;">
           Abmelden
         </button>
       </div>
     </div>`;
-}
 
 // ──────────────────────────────────────────
 // BOOT
