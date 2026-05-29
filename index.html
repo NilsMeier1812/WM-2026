@@ -1006,7 +1006,7 @@ function betCard(m) {
   const boostBtnStyle = isBoosted
     ? 'background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:800;'
     : 'background:#F4F0E8; color:var(--text-2); border-color:var(--border); font-weight:700;';
-  const boostText = isBoosted ? '🔥 2x Punkte' : '2x Punkte';
+  const boostText = isBoosted ? '2x Punkte' : '2x Punkte';
 
   return `
     <div id="match-card-${m.id}" class="mc" style="scroll-margin-top:140px;">
@@ -1045,7 +1045,7 @@ function betCard(m) {
               <span style="color:var(--text-3);font-size:18px;line-height:1;margin-left:4px;flex-shrink:0;">›</span>
             </button>
           </div>
-          <div style="width:115px; flex-shrink:0;">
+          <div style="width:115px; flex-shrink:0; align-items:right;">
             <div class="section-label">Boost</div>
             <button id="bb-${m.id}" onclick="toggleBoost(${m.id})" style="width:100%; padding:11px 14px; border-radius:10px; border:1.5px solid transparent; font-size:13px; transition:all .15s; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px; ${boostBtnStyle}">
               ${boostText}
