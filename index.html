@@ -946,7 +946,6 @@ function betCard(m) {
       tipLine = `<span class="mono" style="font-weight:700;">${bet.home_score ?? '-'}:${bet.away_score ?? '-'}</span> <span style="color:var(--text-3);">·</span> ${scorerHtml}`;
     }
 
-    // Wenn das Spiel gesperrt und geboostet ist, verändern wir den Hintergrund des Tipp-Ergebnisses leicht
     const betResultBg = isBoosted ? 'background:#FEF3C7; border-color:var(--accent);' : 'background:#F4F0E8; border-color:var(--border-light);';
 
     return `
@@ -996,19 +995,18 @@ function betCard(m) {
     } else if (bet.first_goalscorer_id) {
       sHint = `⚽ <span style="font-weight:700;color:var(--text);">${bet.goalscorer?.name || '–'}</span>`;
     } else {
-      sHint = `<span style="color:var(--text-3);">Torschütze auswählen …</span>`;
+      sHint = `<span style="color:var(--text-3);">Wählen …</span>`;
     }
   } else {
-    sHint = `<span style="color:var(--text-3);">Torschütze auswählen …</span>`;
+    sHint = `<span style="color:var(--text-3);">Wählen …</span>`;
   }
 
   let headerBadge = isGetippt ? `<span class="pill pill-getippt">✓ Getippt</span>` : `<span class="pill pill-offen">Offen</span>`;
 
-  // Dynamisches Styling für den Boost-Button im offenen Zustand
   const boostBtnStyle = isBoosted
     ? 'background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:800;'
     : 'background:#F4F0E8; color:var(--text-2); border-color:var(--border); font-weight:700;';
-  const boostText = isBoosted ? '🔥 Spiel geboostet (2x Punkte)' : '🚀 Dieses Spiel boosten (2x)';
+  const boostText = isBoosted ? '🔥 2x Punkte' : '2x Punkte';
 
   return `
     <div id="match-card-${m.id}" class="mc" style="scroll-margin-top:140px;">
@@ -1039,18 +1037,20 @@ function betCard(m) {
           </div>
         </div>
         
-        <div style="margin-bottom:14px;">
-          <div class="section-label">Erster Torschütze</div>
-          <button id="sb-${m.id}" onclick="openScorer(${m.id})" class="scorer-btn">
-            ${sHint}<span style="color:var(--text-3);font-size:18px;line-height:1;">›</span>
-          </button>
-        </div>
-
-        <div>
-          <div class="section-label">Tipp-Boost</div>
-          <button id="bb-${m.id}" onclick="toggleBoost(${m.id})" style="width:100%; padding:11px 14px; border-radius:10px; border:1.5px solid transparent; font-size:13px; transition:all .15s; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; ${boostBtnStyle}">
-            ${boostText}
-          </button>
+        <div style="display:flex; gap:12px; align-items:flex-start;">
+          <div style="flex:1; min-width:0;">
+            <div class="section-label">Erster Torschütze</div>
+            <button id="sb-${m.id}" onclick="openScorer(${m.id})" class="scorer-btn">
+              <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${sHint}</span>
+              <span style="color:var(--text-3);font-size:18px;line-height:1;margin-left:4px;flex-shrink:0;">›</span>
+            </button>
+          </div>
+          <div style="width:115px; flex-shrink:0;">
+            <div class="section-label">Boost</div>
+            <button id="bb-${m.id}" onclick="toggleBoost(${m.id})" style="width:100%; padding:11px 14px; border-radius:10px; border:1.5px solid transparent; font-size:13px; transition:all .15s; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px; ${boostBtnStyle}">
+              ${boostText}
+            </button>
+          </div>
         </div>
       </div>
     </div>`;
