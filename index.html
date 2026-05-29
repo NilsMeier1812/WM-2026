@@ -971,10 +971,10 @@ function betCard(m) {
           </div>
           <div class="bet-result" style="${betResultBg}">
             <div>
-              <div class="bet-result-label">${isBoosted ? '🔥 Geboosteter Tipp' : 'Dein Tipp'}</div>
+              <div class="bet-result-label">${isBoosted ? 'Geboosteter Tipp (2x)' : 'Dein Tipp'}</div>
               <div style="font-size:13px;font-weight:600;">${tipLine}</div>
             </div>
-            <div class="bet-pts syne" style="${ptClass}">${isBoosted ? '🔥 ' : ''}+${pts}</div>
+            <div class="bet-pts syne" style="${ptClass}">+${pts}</div>
           </div>
         </div>
       </div>`;
@@ -1006,7 +1006,7 @@ function betCard(m) {
   const boostBtnStyle = isBoosted
     ? 'background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:800;'
     : 'background:#F4F0E8; color:var(--text-2); border-color:var(--border); font-weight:700;';
-  const boostText = isBoosted ? '2x Punkte' : '2x Punkte';
+  const boostText = '2x Punkte';
 
   return `
     <div id="match-card-${m.id}" class="mc" style="scroll-margin-top:140px;">
@@ -1018,7 +1018,7 @@ function betCard(m) {
         <div class="mc-teams">
           <div style="display:flex;flex-direction:column;align-items:center;gap:5px;width:80px;text-align:center;">
             ${flag(m.home_team, 'w-9 h-6')}
-            <span style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:78px;">${m.home_team?.name || 'Heim'}</span>
+            <span style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:78px;">${m.home_team || 'Heim'}</span>
           </div>
           <div class="score-area">
             <input id="h-${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" value="${curHome}" placeholder="–"
@@ -1033,7 +1033,7 @@ function betCard(m) {
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;gap:5px;width:80px;text-align:center;">
             ${flag(m.away_team, 'w-9 h-6')}
-            <span style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:78px;">${m.away_team?.name || 'Gast'}</span>
+            <span style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:78px;">${m.away_team || 'Gast'}</span>
           </div>
         </div>
         
@@ -1045,8 +1045,8 @@ function betCard(m) {
               <span style="color:var(--text-3);font-size:18px;line-height:1;margin-left:4px;flex-shrink:0;">›</span>
             </button>
           </div>
-          <div style="width:115px; flex-shrink:0; align-items:right;">
-            <div class="section-label">Boost</div>
+          <div style="width:115px; flex-shrink:0;">
+            <div class="section-label" style="text-align:right;">Boost</div>
             <button id="bb-${m.id}" onclick="toggleBoost(${m.id})" style="width:100%; padding:11px 14px; border-radius:10px; border:1.5px solid transparent; font-size:13px; transition:all .15s; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px; ${boostBtnStyle}">
               ${boostText}
             </button>
@@ -1358,13 +1358,11 @@ async function loadOverviewData() {
         }
         if (hasBet) {
           if (betIsGoalless) {
-            // User wettete auf "kein Tor"
             scorerHtml = `<span style="color:var(--red);font-weight:600;">🚫 Kein Tor</span>`;
             if (locked && isFinished(m.status) && m.is_goalless === true) {
                scorerHtml = `<span style="color:var(--green);font-weight:700;">🚫 Kein Tor</span>`;
             }
           } else if (hasScorer) {
-            // User wettete auf einen bestimmten Torschützen
             const t = S.teams.find(x => x.id === bet.goalscorer?.team_id);
             const tAcr = t ? t.name.substring(0,3).toUpperCase() : '';
             const sName = tAcr ? `${bet.goalscorer.name} (${tAcr})` : (bet.goalscorer?.name || '–');
@@ -1384,22 +1382,22 @@ async function loadOverviewData() {
         }
         ptHtml = locked ? `<span style="font-weight:700;color:${isLive?'var(--blue)':'var(--text-2)'};">${pts}</span>` : '';
       } else {
-        // Nicht begonnen und nicht ich
-        if (hasHome) {
-          bh = '?'; ba = '?';
-        }
-        if (hasBet) {
-          scorerHtml = `<span style="color:var(--text-2);font-weight:600;">???</span>`;
-        } else {
-          scorerHtml = `<span style="color:var(--text-3);">---</span>`;
-        }
+        if (hasHome) { bh = '?'; ba = '?'; }
+        if (hasBet) { scorerHtml = `<span style="color:var(--text-2);font-weight:600;">???</span>`; }
+        else { scorerHtml = `<span style="color:var(--text-3);">---</span>`; }
+      }
+
+      // Boost-Indikator für die Übersicht (wird nur angezeigt, wenn das Spiel gesperrt/freigegeben ist)
+      let boostBadge = '';
+      if (locked && bet && bet.is_boosted === true) {
+        boostBadge = `<span style="font-size:9px; background:var(--accent); color:var(--accent-text); padding:1px 4px; border-radius:4px; font-weight:800; margin-left:5px; vertical-align:middle; display:inline-block;">2x</span>`;
       }
 
       return `<div class="ov-row ${isMe?'me':''}">
         <span style="width:28%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isMe?700:600};color:${isMe?'var(--blue)':'var(--text)'};">${player.display_name||'?'}</span>
         <span class="mono" style="width:16%;text-align:center;font-weight:800;font-size:12px;">${bh}:${ba}</span>
         <span style="width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;">${scorerHtml}</span>
-        <span style="width:12%;text-align:right;font-size:12px;">${ptHtml}</span>
+        <span style="width:12%;text-align:right;font-size:12px;display:flex;align-items:center;justify-content:flex-end;">${ptHtml}${boostBadge}</span>
       </div>`;
     }).join('');
 
