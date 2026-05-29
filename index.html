@@ -1029,7 +1029,7 @@ async function triggerAutoSave(matchId, forceScorer=false) {
 async function performSave(matchId, h, a) {
   const pending=S.pendingScorer[matchId], existing=S.bets[matchId];
   const scorerId=pending!==undefined ? (pending.id??null) : (existing?.first_goalscorer_id??null);
-  const isGoalless=pending!==undefined ? (pending.is_goalless??false) : (existing?.is_goalless??false);
+  const isGoalless=pending!==undefined ? (pending.is_goalless??false) : (existing?.is_goalless??null);
   
   if (scorerId===null && (h===null || a===null)) return;
   
