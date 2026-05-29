@@ -542,7 +542,16 @@ function calcBetPoints(m, b) {
   if (mh===bh && ma===ba) pts+=3;
   else if (mh-ma===bh-ba) pts+=2;
   else if ((mh>ma&&bh>ba)||(mh<ma&&bh<ba)) pts+=1;
-  if (m.first_goalscorer_id && b.first_goalscorer_id===m.first_goalscorer_id) pts+=1;
+  
+  // Torschützen-Bonus berücksichtigt is_goalless
+  if (m.is_goalless === false && m.first_goalscorer_id && b.first_goalscorer_id===m.first_goalscorer_id) {
+    // Ein Tor ist gefallen und IDs stimmen
+    pts+=1;
+  } else if (m.is_goalless === true && b.is_goalless === true) {
+    // Kein Tor gefallen und User wettete auch auf "kein Tor"
+    pts+=1;
+  }
+  
   return pts;
 }
 
@@ -665,7 +674,7 @@ async function fetchData(showLoadingState=true) {
     const liveMatches = S.matches.filter(m=>isLocked(m)&&!isFinished(m.status));
     if (liveMatches.length>0) {
       const {data:liveBets} = await db.from('bets')
-        .select('user_id,match_id,home_score,away_score,first_goalscorer_id,points_awarded')
+        .select('user_id,match_id,home_score,away_score,first_goalscorer_id,is_goalless,points_awarded')
         .in('match_id', liveMatches.map(m=>m.id));
       (liveBets||[]).forEach(b => {
         const m = S.matches.find(x=>x.id===b.match_id);
@@ -778,7 +787,7 @@ function renderDashboard(main) {
       if (!bet&&!isLocked(m)) {
         action=`<button onclick="jumpToMatch('${m.phase}',${m.id})" style="width:100%;margin-top:12px;background:var(--green);color:#fff;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;padding:11px;border-radius:10px;border:none;cursor:pointer;letter-spacing:.02em;">Jetzt tippen</button>`;
       } else if (bet) {
-        let displayScorer = bet.first_goalscorer_id ? `⚽ ${bet.goalscorer?.name}` : `🚫 Kein Tor`;
+        let displayScorer = bet.is_goalless ? `🚫 Kein Tor` : (bet.first_goalscorer_id ? `⚽ ${bet.goalscorer?.name}` : '–');
         action=`<div style="margin-top:12px;background:#F4F0E8;padding:10px 14px;border-radius:10px;border:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;">
           <div class="syne" style="font-size:20px;font-weight:800;letter-spacing:-.02em;">${bet.home_score??'–'}:${bet.away_score??'–'}</div>
           <div style="font-size:11px;color:var(--text-2);font-weight:600;text-align:right;max-width:60%;">${displayScorer}</div>
@@ -886,7 +895,16 @@ function betCard(m) {
     if (bet) {
       ptClass = pts>=3 ? 'color:var(--green);' : pts>=1 ? 'color:var(--accent-text);' : 'color:var(--text-2);';
       let scorerHtml='';
-      if (bet.first_goalscorer_id) {
+      
+      if (bet.is_goalless) {
+        // User wettete auf "kein Tor"
+        scorerHtml = `<span style="font-weight:600;color:var(--red);">🚫 Kein Tor</span>`;
+        // Finished game with NO scorer (is_goalless), and user picked "Kein Tor" -> Green
+        if (isFinished(m.status) && m.is_goalless === true) {
+          scorerHtml = `<span style="font-weight:700;color:var(--green);">🚫 Kein Tor</span>`;
+        }
+      } else if (bet.first_goalscorer_id) {
+        // User wettete auf einen bestimmten Torschützen
         const sName = bet.goalscorer?.name || '–';
         if (m.first_goalscorer_id) {
           scorerHtml = bet.first_goalscorer_id === m.first_goalscorer_id
@@ -894,18 +912,14 @@ function betCard(m) {
             : `<span style="color:var(--red);">⚽ ${sName}</span>`;
         } else {
           // Finished game with NO scorer, but user picked someone -> Red
-          if (isFinished(m.status) && !m.first_goalscorer_id) {
+          if (isFinished(m.status) && m.is_goalless === true) {
             scorerHtml = `<span style="color:var(--red);">⚽ ${sName}</span>`;
           } else {
             scorerHtml = `⚽ ${sName}`;
           }
         }
       } else {
-        scorerHtml = `<span style="font-weight:600;color:var(--red);">🚫 Kein Tor</span>`;
-        // Finished game with NO scorer, and user picked Keiner -> Green
-        if (isFinished(m.status) && !m.first_goalscorer_id) {
-          scorerHtml = `<span style="font-weight:700;color:var(--green);">🚫 Kein Tor</span>`;
-        }
+        scorerHtml = '<span style="color:var(--text-3);">–</span>';
       }
       tipLine=`<span class="mono" style="font-weight:700;">${bet.home_score??'-'}:${bet.away_score??'-'}</span> <span style="color:var(--text-3);">·</span> ${scorerHtml}`;
     }
@@ -1015,16 +1029,17 @@ async function triggerAutoSave(matchId, forceScorer=false) {
 async function performSave(matchId, h, a) {
   const pending=S.pendingScorer[matchId], existing=S.bets[matchId];
   const scorerId=pending!==undefined ? (pending.id??null) : (existing?.first_goalscorer_id??null);
+  const isGoalless=pending!==undefined ? (pending.is_goalless??false) : (existing?.is_goalless??false);
   
   if (scorerId===null && (h===null || a===null)) return;
   
-  if (existing&&existing.home_score===h&&existing.away_score===a&&existing.first_goalscorer_id===scorerId) return;
+  if (existing&&existing.home_score===h&&existing.away_score===a&&existing.first_goalscorer_id===scorerId&&existing.is_goalless===isGoalless) return;
 
   const backup=existing?{...existing}:null;
   const newBet={
     id:existing?.id||crypto.randomUUID(),
     user_id:S.user.id, match_id:matchId,
-    home_score:h, away_score:a, first_goalscorer_id:scorerId,
+    home_score:h, away_score:a, first_goalscorer_id:scorerId, is_goalless:isGoalless,
     goalscorer: pending !== undefined 
       ? (scorerId ? { name: pending.name, team_id: pending.team_id } : null) 
       : existing?.goalscorer
@@ -1036,10 +1051,10 @@ async function performSave(matchId, h, a) {
 
   try {
     if (backup) {
-      const {error}=await db.from('bets').update({home_score:h,away_score:a,first_goalscorer_id:scorerId,updated_at:new Date().toISOString()}).eq('id',backup.id);
+      const {error}=await db.from('bets').update({home_score:h,away_score:a,first_goalscorer_id:scorerId,is_goalless:isGoalless,updated_at:new Date().toISOString()}).eq('id',backup.id);
       if (error) throw error;
     } else {
-      const {error}=await db.from('bets').insert({id:newBet.id,user_id:S.user.id,match_id:matchId,home_score:h,away_score:a,first_goalscorer_id:scorerId});
+      const {error}=await db.from('bets').insert({id:newBet.id,user_id:S.user.id,match_id:matchId,home_score:h,away_score:a,first_goalscorer_id:scorerId,is_goalless:isGoalless});
       if (error) throw error;
     }
     delete S.pendingScorer[matchId];
@@ -1134,7 +1149,8 @@ window.pickScorer = function(matchId, playerId) {
   S.pendingScorer[matchId] = {
     id: playerId, 
     name: player?.name || 'Kein Tor',
-    team_id: player?.team_id || null
+    team_id: player?.team_id || null,
+    is_goalless: playerId === null
   };
   const btn=$(`sb-${matchId}`);
   if (btn) {
@@ -1250,7 +1266,7 @@ async function loadOverviewData() {
 
     let actualScorer='';
     if (locked&&m.first_goalscorer) actualScorer=`<span style="font-size:10px;color:#6EE7B7;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">⚽ ${m.first_goalscorer.name}</span>`;
-    else if (locked&&isFinished(m.status)&&!m.first_goalscorer_id) actualScorer=`<span style="font-size:10px;color:rgba(255,255,255,.4);">🚫 Kein Tor</span>`;
+    else if (locked&&isFinished(m.status)&&m.is_goalless === true) actualScorer=`<span style="font-size:10px;color:rgba(255,255,255,.4);">🚫 Kein Tor</span>`;
 
     const matchBets=byMatch[m.id]||[];
     matchBets.forEach(b=>b._pts=calcBetPoints(m,b));
@@ -1279,6 +1295,7 @@ async function loadOverviewData() {
       const hasBet = !!bet;
       const hasHome = hasBet && bet.home_score !== null && bet.away_score !== null;
       const hasScorer = hasBet && bet.first_goalscorer_id !== null && bet.first_goalscorer_id !== undefined;
+      const betIsGoalless = hasBet && bet.is_goalless === true;
 
       if (locked || isMe) {
         if (hasHome) {
@@ -1286,7 +1303,14 @@ async function loadOverviewData() {
           ba = bet.away_score;
         }
         if (hasBet) {
-          if (hasScorer) {
+          if (betIsGoalless) {
+            // User wettete auf "kein Tor"
+            scorerHtml = `<span style="color:var(--red);font-weight:600;">🚫 Kein Tor</span>`;
+            if (locked && isFinished(m.status) && m.is_goalless === true) {
+               scorerHtml = `<span style="color:var(--green);font-weight:700;">🚫 Kein Tor</span>`;
+            }
+          } else if (hasScorer) {
+            // User wettete auf einen bestimmten Torschützen
             const t = S.teams.find(x => x.id === bet.goalscorer?.team_id);
             const tAcr = t ? t.name.substring(0,3).toUpperCase() : '';
             const sName = tAcr ? `${bet.goalscorer.name} (${tAcr})` : (bet.goalscorer?.name || '–');
@@ -1299,10 +1323,7 @@ async function loadOverviewData() {
               scorerHtml = `<span style="color:var(--text-2);">⚽ ${sName}</span>`;
             }
           } else {
-            scorerHtml = `<span style="color:var(--red);font-weight:600;">🚫 Kein Tor</span>`;
-            if (locked && isFinished(m.status) && !m.first_goalscorer_id) {
-               scorerHtml = `<span style="color:var(--green);font-weight:700;">🚫 Kein Tor</span>`;
-            }
+            scorerHtml = '<span style="color:var(--text-3);">–</span>';
           }
         } else {
           scorerHtml = '<span style="color:var(--text-3);">–</span>';
