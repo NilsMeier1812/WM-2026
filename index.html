@@ -510,6 +510,27 @@ function formatRelativeDate(ts) {
 
 function isLocked(m) { return new Date(m.kickoff_time) <= new Date(); }
 
+function formatMatchStatus(status) {
+  const statusMap = {
+    '1H': '1.HZ',
+    '2H': '2.HZ',
+    'HT': 'HZ',
+    'ET': 'Verl.',
+    'P': 'ELF',
+    'FT': 'Fertig',
+    'BT': 'Verl.',
+    'PST': 'Abg.',
+    'SUSP': 'Unterb.',
+    'INT': 'Unterb.',
+    'CANC': 'Abg.',
+    'ABD': 'Abg.',
+    'AWD': 'Abg.',
+    'TBD': 'TBD',
+    'NOT_STARTED': 'Startet'
+  };
+  return statusMap[status] || status;
+}
+
 function matchPhases() {
   return [...new Set(S.matches.map(m => m.phase).filter(Boolean))];
 }
