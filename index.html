@@ -660,7 +660,7 @@ async function fetchData(showLoadingState=true) {
 
   try {
     const [matchRes,betRes,profRes,teamsRes,rankRes] = await Promise.all([
-      db.from('matches').select('*, home_team:teams!home_team_id(id,name,flag_url), away_team:teams!away_team_id(id,name,flag_url), first_goalscorer:players!first_goalscorer_id(id,name)').order('kickoff_time',{ascending:true}),
+      db.from('matches').select('*, home_team:teams!home_team_id(id,name,flag_url), away_team:teams!away_team_id(id,name,flag_url), first_goalscorer:players!first_goalscorer_id(id,name,team_id)').order('kickoff_time',{ascending:true}),
       db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)').eq('user_id',S.user.id),
       db.from('profiles').select('id,display_name'),
       db.from('teams').select('*').order('name',{ascending:true}),
@@ -1292,8 +1292,15 @@ async function loadOverviewData() {
     else statusHtml=formatRelativeDate(m.kickoff_time);
 
     let actualScorer='';
-    if (locked&&m.first_goalscorer) actualScorer=`<span style="font-size:10px;color:#6EE7B7;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">⚽ ${m.first_goalscorer.name}</span>`;
-    else if (locked&&isFinished(m.status)&&m.is_goalless === true) actualScorer=`<span style="font-size:10px;color:rgba(255,255,255,.4);">🚫 Kein Tor</span>`;
+    if (locked && m.first_goalscorer) {
+      const scorerTeam = S.teams.find(x => x.id === m.first_goalscorer.team_id);
+      const teamAcr = scorerTeam ? scorerTeam.name.substring(0,3).toUpperCase() : '';
+      const sName = teamAcr ? `${m.first_goalscorer.name} (${teamAcr})` : m.first_goalscorer.name;
+      actualScorer=`<span style="font-size:10px;color:#6EE7B7;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">⚽ ${sName}</span>`;
+    }
+    else if (locked && isFinished(m.status) && m.is_goalless === true) {
+      actualScorer=`<span style="font-size:10px;color:rgba(255,255,255,.4);">🚫 Kein Tor</span>`;
+    }
 
     const matchBets=byMatch[m.id]||[];
     matchBets.forEach(b=>b._pts=calcBetPoints(m,b));
