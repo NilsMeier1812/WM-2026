@@ -787,7 +787,7 @@ function renderDashboard(main) {
       if (!bet&&!isLocked(m)) {
         action=`<button onclick="jumpToMatch('${m.phase}',${m.id})" style="width:100%;margin-top:12px;background:var(--green);color:#fff;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;padding:11px;border-radius:10px;border:none;cursor:pointer;letter-spacing:.02em;">Jetzt tippen</button>`;
       } else if (bet) {
-        let displayScorer = bet.is_goalless ? `🚫 Kein Tor` : (bet.first_goalscorer_id ? `⚽ ${bet.goalscorer?.name}` : '–');
+        let displayScorer = bet.is_goalless === true ? `🚫 Kein Tor` : (bet.first_goalscorer_id ? `⚽ ${bet.goalscorer?.name}` : '–');
         action=`<div style="margin-top:12px;background:#F4F0E8;padding:10px 14px;border-radius:10px;border:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;">
           <div class="syne" style="font-size:20px;font-weight:800;letter-spacing:-.02em;">${bet.home_score??'–'}:${bet.away_score??'–'}</div>
           <div style="font-size:11px;color:var(--text-2);font-weight:600;text-align:right;max-width:60%;">${displayScorer}</div>
@@ -896,7 +896,7 @@ function betCard(m) {
       ptClass = pts>=3 ? 'color:var(--green);' : pts>=1 ? 'color:var(--accent-text);' : 'color:var(--text-2);';
       let scorerHtml='';
       
-      if (bet.is_goalless) {
+      if (bet.is_goalless === true) {
         // User wettete auf "kein Tor"
         scorerHtml = `<span style="font-weight:600;color:var(--red);">🚫 Kein Tor</span>`;
         // Finished game with NO scorer (is_goalless), and user picked "Kein Tor" -> Green
