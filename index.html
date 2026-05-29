@@ -1563,13 +1563,16 @@ async function saveBonus(qId) {
 // PROFILE
 // ──────────────────────────────────────────
 function renderProfile(main) {
-  const p=S.profile;
-  const initial=(p?.display_name||'?').charAt(0).toUpperCase();
-  const rank=(S.liveLeaderboard.findIndex(x=>x.id===S.user.id)+1)||'–';
-  const pts=S.liveLeaderboard.find(x=>x.id===S.user.id)?.total_points??0;
-  const total=S.liveLeaderboard.length;
+  const p = S.profile;
+  const initial = (p?.display_name || '?').charAt(0).toUpperCase();
+  const rank = (S.liveLeaderboard.findIndex(x => x.id === S.user.id) + 1) || '–';
+  const pts = S.liveLeaderboard.find(x => x.id === S.user.id)?.total_points ?? 0;
+  const total = S.liveLeaderboard.length;
+  
+  // Aktuellen Status auslesen (Fallback auf false)
+  const isReminderActive = p?.missing_tip_reminder === true;
 
-  main.innerHTML=`
+  main.innerHTML = `
     <div style="max-width:480px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px;" class="fade-up">
       <div class="syne" style="font-size:24px;font-weight:800;letter-spacing:-.02em;">Mein Profil</div>
 
@@ -1579,8 +1582,8 @@ function renderProfile(main) {
             <span class="syne" style="font-size:24px;font-weight:800;color:var(--accent);">${initial}</span>
           </div>
           <div>
-            <div class="syne" style="font-size:19px;font-weight:800;letter-spacing:-.01em;">${p?.display_name||'Spieler'}</div>
-            <div style="font-size:12px;color:var(--text-2);margin-top:2px;">${S.user?.email||''}</div>
+            <div class="syne" style="font-size:19px;font-weight:800;letter-spacing:-.01em;">${p?.display_name || 'Spieler'}</div>
+            <div style="font-size:12px;color:var(--text-2);margin-top:2px;">${S.user?.email || ''}</div>
           </div>
         </div>
 
@@ -1594,6 +1597,16 @@ function renderProfile(main) {
             <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);margin-top:6px;">Platz</div>
           </div>
         </div>
+        
+        <div style="display:flex;justify-content:space-between;align-items:center;background:#F4F0E8;border:1px solid var(--border-light);border-radius:12px;padding:14px 16px;margin-bottom:20px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);">Email Reminder</div>
+            <div style="font-size:11px;color:var(--text-2);margin-top:2px;">Erinnerung bei fehlenden Tipps</div>
+          </div>
+          <button id="toggle-reminder" onclick="toggleReminderBtn()" style="position:relative;width:44px;height:24px;background:${isReminderActive ? 'var(--green)' : 'var(--text-3)'};border-radius:100px;border:none;cursor:pointer;transition:background .2s;flex-shrink:0;">
+            <div style="position:absolute;top:2px;left:${isReminderActive ? '22px' : '2px'};width:20px;height:20px;background:#fff;border-radius:50%;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.15);"></div>
+          </button>
+        </div>
 
         <button onclick="db.auth.signOut()" style="width:100%;padding:13px;border-radius:10px;border:1.5px solid #FCA5A5;background:#FEF2F2;color:var(--red);font-size:14px;font-weight:700;cursor:pointer;transition:background .15s;">
           Abmelden
@@ -1601,6 +1614,40 @@ function renderProfile(main) {
       </div>
     </div>`;
 }
+
+window.toggleReminderBtn = async function() {
+  const btn = document.getElementById('toggle-reminder');
+  if (!btn || !S.profile) return;
+  
+  // Button sperren, um übermäßige Requests zu verhindern
+  btn.disabled = true;
+  
+  const newState = !S.profile.missing_tip_reminder;
+  const dot = btn.children[0];
+
+  // Optimistic UI Update (direktes visuelles Feedback)
+  btn.style.background = newState ? 'var(--green)' : 'var(--text-3)';
+  dot.style.left = newState ? '22px' : '2px';
+  
+  try {
+    const { error } = await db.from('profiles')
+      .update({ missing_tip_reminder: newState })
+      .eq('id', S.user.id);
+      
+    if (error) throw error;
+    
+    // Lokalen State dauerhaft aktualisieren
+    S.profile.missing_tip_reminder = newState;
+    showToast(newState ? 'Reminder aktiviert' : 'Reminder deaktiviert');
+  } catch (err) {
+    // Sicheres Rollback der UI im Fehlerfall
+    btn.style.background = !newState ? 'var(--green)' : 'var(--text-3)';
+    dot.style.left = !newState ? '22px' : '2px';
+    showToast('Fehler beim Speichern', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+};
 
 // ──────────────────────────────────────────
 // BOOT
