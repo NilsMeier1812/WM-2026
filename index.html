@@ -1108,19 +1108,40 @@ async function openScorer(matchId) {
   const m=S.matches.find(x=>x.id===matchId);
   if (!m) return;
 
-  const {data:lineups}=await db.from('match_lineups').select('player_id').eq('match_id',matchId);
-  const lineupIds=new Set((lineups||[]).map(l=>l.player_id));
+  const {data:lineups}=await db.from('match_lineups').select('player_id,is_starter').eq('match_id',matchId);
+  const lineupMap=new Map((lineups||[]).map(l=>[l.player_id, Boolean(l.is_starter)]));
 
-  const {data:players,error}=await db.from('players').select('id,name,position,tournament_goals,team_id').in('team_id',[m.home_team_id,m.away_team_id]);
+  const {data:players,error}=await db.from('players').select('id,name,position,team_id').in('team_id',[m.home_team_id,m.away_team_id]);
   if (error) { list.innerHTML=`<p style="color:var(--red);font-size:13px;text-align:center;">${error.message}</p>`; return; }
 
   const posMap={Goalkeeper:'TW',Defender:'ABW',Midfielder:'MF',Attacker:'ST'};
   const posWeight={Attacker:1,Midfielder:2,Defender:3,Goalkeeper:4};
   (players||[]).forEach(p=>{S.playerCache[p.id]=p;});
+  // Berechne Tore aus match_events (echte Tore, keine Eigentore)
+  try {
+    const playerIds = (players||[]).map(p=>p.id);
+    if (playerIds.length) {
+      const {data:events} = await db.from('match_events')
+        .select('player_id')
+        .eq('event_type','Goal')
+        .not('event_detail','eq','Own Goal')
+        .in('player_id', playerIds);
+      const goalsMap = {};
+      (events||[]).forEach(e => { goalsMap[e.player_id] = (goalsMap[e.player_id]||0) + 1; });
+      (players||[]).forEach(p => { p.tournament_goals = goalsMap[p.id] || 0; });
+    } else {
+      (players||[]).forEach(p => { p.tournament_goals = 0; });
+    }
+  } catch(e) {
+    (players||[]).forEach(p => { p.tournament_goals = 0; });
+  }
+
+  // Sortierung: Starter (is_starter=true) zuerst, dann Nicht-Starter (is_starter=false), dann Spieler ohne Eintrag
   (players||[]).sort((a,b)=>{
-    const as=lineupIds.has(a.id), bs=lineupIds.has(b.id);
-    if (as!==bs) return as?-1:1;
-    if ((b.tournament_goals||0)!==(a.tournament_goals||0)) return (b.tournament_goals||0)-(a.tournament_goals||0);
+    const aFlag = lineupMap.has(a.id) ? (lineupMap.get(a.id) ? 0 : 1) : 2;
+    const bFlag = lineupMap.has(b.id) ? (lineupMap.get(b.id) ? 0 : 1) : 2;
+    if (aFlag !== bFlag) return aFlag - bFlag;
+    if ((b.tournament_goals||0)!=(a.tournament_goals||0)) return (b.tournament_goals||0)-(a.tournament_goals||0);
     const wa=posWeight[a.position]||99, wb=posWeight[b.position]||99;
     if (wa!==wb) return wa-wb;
     return a.name.localeCompare(b.name);
@@ -1130,7 +1151,7 @@ async function openScorer(matchId) {
   const awayPlayers=(players||[]).filter(p=>p.team_id===m.away_team_id);
 
   const renderP=p=>{
-    const starter=lineupIds.has(p.id);
+    const starter = lineupMap.get(p.id) === true;
     const pos=posMap[p.position]||p.position||'?';
     const goals=p.tournament_goals>0 ? `<span style="font-size:9px;font-weight:700;background:var(--blue-bg);color:var(--blue);padding:2px 6px;border-radius:4px;margin-left:auto;">${p.tournament_goals}⚽</span>` : '';
     const dot=starter ? `<div style="position:absolute;top:-3px;right:-3px;width:10px;height:10px;background:var(--green);border-radius:50%;border:2px solid #fff;"></div>` : '';
