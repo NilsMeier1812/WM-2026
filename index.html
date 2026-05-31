@@ -1114,8 +1114,8 @@ async function openScorer(matchId) {
   const {data:players,error}=await db.from('players').select('id,name,position,team_id').in('team_id',[m.home_team_id,m.away_team_id]);
   if (error) { list.innerHTML=`<p style="color:var(--red);font-size:13px;text-align:center;">${error.message}</p>`; return; }
 
-  const posMap={Goalkeeper:'TW',Defender:'ABW',Midfielder:'MF',Attacker:'ST'};
-  const posWeight={Attacker:1,Midfielder:2,Defender:3,Goalkeeper:4};
+  const posMap={Goalkeeper:'TW',Defender:'ABW',Midfielder:'MF',Attacker:'ST',G:'TW',D:'ABW',M:'MF',F:'ST'};
+  const posWeight={Attacker:1,Midfielder:2,Defender:3,Goalkeeper:4,F:1,M:2,D:3,G:4};
   (players||[]).forEach(p=>{S.playerCache[p.id]=p;});
   // Berechne Tore aus match_events (echte Tore, keine Eigentore)
   try {
