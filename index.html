@@ -698,7 +698,7 @@ async function fetchData(showLoadingState=true) {
     const liveMatches = S.matches.filter(m=>isLocked(m)&&!isFinished(m.status));
     if (liveMatches.length>0) {
       const {data:liveBets} = await db.from('bets')
-        .select('user_id,match_id,home_score,away_score,first_goalscorer_id,is_goalless,points_awarded')
+        .select('user_id,match_id,home_score,away_score,first_goalscorer_id,is_goalless,is_boosted,points_awarded')
         .in('match_id', liveMatches.map(m=>m.id));
       (liveBets||[]).forEach(b => {
         const m = S.matches.find(x=>x.id===b.match_id);
@@ -1475,7 +1475,7 @@ async function loadTabelleData(filterType) {
 
   if (!S.allBetsCache && filterType!=='total') {
     const {data,error}=await db.from('bets')
-      .select('user_id,home_score,away_score,first_goalscorer_id,points_awarded,match:matches!inner(id,phase,home_score,away_score,home_score_extratime,away_score_extratime,status,kickoff_time,first_goalscorer_id)')
+      .select('user_id,home_score,away_score,first_goalscorer_id,is_goalless,is_boosted,points_awarded,match:matches!inner(id,phase,home_score,away_score,home_score_extratime,away_score_extratime,status,kickoff_time,first_goalscorer_id)')
       .lte('match.kickoff_time', new Date().toISOString());
     if (error) { c.innerHTML=`<p style="color:var(--red);font-size:13px;">${error.message}</p>`; return; }
     S.allBetsCache=data||[];
