@@ -555,7 +555,11 @@ function getFinalScore(m, type) {
 function calcBetPoints(m, b) {
   if (!m || !b) return 0;
   if (!isLocked(m)) return 0;
-  if (isFinished(m.status) && b.points_awarded!==null && b.points_awarded!==undefined) return b.points_awarded;
+  if (isFinished(m.status) && b.points_awarded!==null && b.points_awarded!==undefined) {
+    let pts = b.points_awarded;
+    if (b.is_boosted) pts *= 2;
+    return pts;
+  }
   const mh = getFinalScore(m,'home'), ma = getFinalScore(m,'away');
   if (mh===null || ma===null) return 0;
   const bh=b.home_score, ba=b.away_score;
