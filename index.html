@@ -1142,26 +1142,23 @@ async function openScorer(matchId) {
   const posMap={Goalkeeper:'TW',Defender:'ABW',Midfielder:'MF',Attacker:'ST',G:'TW',D:'ABW',M:'MF',F:'ST'};
   const posWeight={Attacker:1,Midfielder:2,Defender:3,Goalkeeper:4,F:1,M:2,D:3,G:4};
   (players||[]).forEach(p=>{S.playerCache[p.id]=p;});
-  // Berechne Tore aus match_events (echte Tore, keine Eigentore)
+
+  // Tore aus der neuen Datenbank-View abrufen anstatt Roh-Events auf dem Client zu summieren
   try {
-    const playerIds = (players||[]).map(p=>p.id);
-    if (playerIds.length) {
-      const {data:events} = await db.from('match_events')
-        .select('player_id')
-        .eq('event_type','Goal')
-        .not('event_detail','eq','Own Goal')
-        .in('player_id', playerIds);
+    if (players && players.length > 0) {
+      const {data:goalData} = await db.from('vw_player_tournament_goals')
+        .select('player_id, total_goals')
+        .in('team_id', [m.home_team_id, m.away_team_id]);
+      
       const goalsMap = {};
-      (events||[]).forEach(e => { goalsMap[e.player_id] = (goalsMap[e.player_id]||0) + 1; });
+      (goalData||[]).forEach(g => { goalsMap[g.player_id] = Number(g.total_goals); });
       (players||[]).forEach(p => { p.tournament_goals = goalsMap[p.id] || 0; });
-    } else {
-      (players||[]).forEach(p => { p.tournament_goals = 0; });
     }
   } catch(e) {
     (players||[]).forEach(p => { p.tournament_goals = 0; });
   }
 
-  // Sortierung: Starter (is_starter=true) zuerst, dann Nicht-Starter (is_starter=false), dann Spieler ohne Eintrag
+  // Sortierung: Starter (is_starter=true) zuerst, dann Nicht-Starter, dann Spieler ohne Eintrag
   (players||[]).sort((a,b)=>{
     const aFlag = lineupMap.has(a.id) ? (lineupMap.get(a.id) ? 0 : 1) : 2;
     const bFlag = lineupMap.has(b.id) ? (lineupMap.get(b.id) ? 0 : 1) : 2;
