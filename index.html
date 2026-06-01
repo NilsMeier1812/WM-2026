@@ -1236,34 +1236,29 @@ window.pickScorer = function(matchId, playerId) {
 
 function closeScorer() { $('modal-scorer').classList.add('hidden'); }
 
-// // ──────────────────────────────────────────
-// // OVERVIEW
-// // ──────────────────────────────────────────
-// function renderOverviewShell(main) {
-//   main.innerHTML=`
-//     <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;">
-//       ${renderPhaseTabsContainer(S.overviewPhase, 'setOverviewPhase')}
-      
-//       <div style="padding:12px 16px 0;">
-//         <button onclick="toggleOverviewMode()" id="ov-mode-btn" 
-//           style="width:100%; padding:8px; background:#F1F0EC; border-radius:8px; font-size:11px; font-weight:700; color:var(--text-2); border:none; cursor:pointer;">
-//           Ansicht: Alles anzeigen
-//         </button>
-//       </div>
+// ──────────────────────────────────────────
+// OVERVIEW
+// ──────────────────────────────────────────
+// ──────────────────────────────────────────
+// OVERVIEW
+// ──────────────────────────────────────────
+function renderOverviewShell(main) {
+  main.innerHTML=`
+    <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;">
+      ${renderPhaseTabsContainer(S.overviewPhase, 'setOverviewPhase')}
+      <div id="ov-cards" style="padding:16px;padding-bottom:32px;display:flex;flex-direction:column;gap:14px;" class="fade-up"></div>
+    </div>`;
+}
 
-//       <div id="ov-cards" style="padding:16px;padding-bottom:32px;display:flex;flex-direction:column;gap:14px;" class="fade-up"></div>
-//     </div>`;
-// }
+// Globaler State für den Modus
+let overviewMode = 'full'; // 'full' oder 'points'
 
-// // Globaler State für den Modus
-// let overviewMode = 'full'; // 'full' oder 'points'
-
-// function toggleOverviewMode() {
-//   S.overviewMode = S.overviewMode === 'full' ? 'points' : 'full';
-//   const btn = document.getElementById('ov-mode-btn');
-//   btn.textContent = S.overviewMode === 'full' ? 'Ansicht: Alles anzeigen' : 'Ansicht: Nur Punkte';
-//   loadOverviewData();
-// }
+function toggleOverviewMode() {
+  S.overviewMode = S.overviewMode === 'full' ? 'points' : 'full';
+  const btn = document.getElementById('ov-mode-btn');
+  btn.textContent = S.overviewMode === 'full' ? 'Ansicht: Alles anzeigen' : 'Ansicht: Nur Punkte';
+  loadOverviewData();
+}
 
 window.setOverviewPhase = async function(p) {
   S.overviewPhase=p;
