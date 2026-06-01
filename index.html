@@ -1617,40 +1617,48 @@ async function toggleBoost(matchId) {
   const match = S.matches.find(m => m.id === matchId);
   const bet = S.bets[matchId];
 
-  // Kritische Prüfung: Der Nutzer kann nur ein Spiel boosten, das er auch getippt hat.
   if (!bet || bet.home_score === null || bet.away_score === null) {
     showToast('Bitte tippe das Spiel zuerst, bevor du es boostest.', 'error');
     return;
   }
 
-  // Optional: Wenn er auf den bereits aktiven Boost klickt, machen wir nichts (oder entfernen ihn - je nach Wunsch)
   if (bet.is_boosted) return;
 
-  // 1. Lokalen State optimistisch updaten (für sofortiges UI Feedback)
-  // Alle anderen Wetten dieser Phase finden und Boost entfernen
+  // NEU: Prüfen, ob das Zielspiel bereits läuft
+  if (isLocked(match)) {
+    showToast('Dieses Spiel hat bereits begonnen. Boost nicht mehr möglich.', 'error');
+    return;
+  }
+
+  // NEU: Prüfen, ob in dieser Phase bereits ein anderes Spiel läuft, das den Boost blockiert
+  const hasLockedBoost = Object.values(S.bets).some(b => {
+    const m = S.matches.find(x => x.id === b.match_id);
+    return m && m.phase === match.phase && b.is_boosted && isLocked(m);
+  });
+
+  if (hasLockedBoost) {
+    showToast('Der Boost dieser Phase ist bereits durch ein laufendes/beendetes Spiel fixiert.', 'error');
+    return;
+  }
+
+  // Ab hier folgt dein optimistisches UI-Update und der RPC-Aufruf...
   Object.values(S.bets).forEach(b => {
     const m = S.matches.find(x => x.id === b.match_id);
-    if (m && m.phase === match.phase) {
-      b.is_boosted = false;
-    }
+    if (m && m.phase === match.phase) b.is_boosted = false;
   });
   
-  // Neues Spiel boosten
   S.bets[matchId].is_boosted = true;
-  renderBettingContent(); // UI sofort aktualisieren
+  renderBettingContent();
 
-  // 2. Sicheres Update über die Datenbank-Funktion
   try {
     const { error } = await db.rpc('swap_bet_boost', {
       p_user_id: S.user.id,
       p_new_match_id: matchId,
       p_phase: match.phase
     });
-
     if (error) throw error;
     showToast('Boost erfolgreich aktiviert!');
   } catch (err) {
-    // Fehlerfall: State neu laden, da optimistisch gesetzter Wert falsch sein könnte
     showToast('Fehler beim Boosten', 'error');
     await triggerSoftRefresh(); 
   }
