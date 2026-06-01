@@ -434,7 +434,8 @@ const S = {
   teams: [], view: 'dashboard',
   bettingPhase: null, overviewPhase: null,
   pendingScorer: {}, playerCache: {},
-  authMode: 'login', allBetsCache: null
+  authMode: 'login', allBetsCache: null,
+  overviewMode: 'full' // <--- HIER EINFÜGEN
 };
 
 // ──────────────────────────────────────────
@@ -891,9 +892,11 @@ function renderDashboard(main) {
 // BETTING VIEW
 // ──────────────────────────────────────────
 function renderBetting(main) {
+  // Stelle sicher, dass die Phase beim Neu-Rendern nicht auf den ersten Tab zurückfällt
+  const currentPhase = S.bettingPhase || allPhases()[0];
   main.innerHTML=`
     <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;">
-      ${renderPhaseTabsContainer(S.bettingPhase, 'setBettingPhase')}
+      ${renderPhaseTabsContainer(currentPhase, 'setBettingPhase')}
       <div id="betting-content" style="padding:16px;padding-bottom:32px;display:flex;flex-direction:column;gap:14px;" class="fade-up"></div>
     </div>`;
   renderBettingContent();
@@ -1240,8 +1243,26 @@ function renderOverviewShell(main) {
   main.innerHTML=`
     <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;">
       ${renderPhaseTabsContainer(S.overviewPhase, 'setOverviewPhase')}
+      
+      <div style="padding:12px 16px 0;">
+        <button onclick="toggleOverviewMode()" id="ov-mode-btn" 
+          style="width:100%; padding:8px; background:#F1F0EC; border-radius:8px; font-size:11px; font-weight:700; color:var(--text-2); border:none; cursor:pointer;">
+          Ansicht: Alles anzeigen
+        </button>
+      </div>
+
       <div id="ov-cards" style="padding:16px;padding-bottom:32px;display:flex;flex-direction:column;gap:14px;" class="fade-up"></div>
     </div>`;
+}
+
+// Globaler State für den Modus
+let overviewMode = 'full'; // 'full' oder 'points'
+
+function toggleOverviewMode() {
+  S.overviewMode = S.overviewMode === 'full' ? 'points' : 'full';
+  const btn = document.getElementById('ov-mode-btn');
+  btn.textContent = S.overviewMode === 'full' ? 'Ansicht: Alles anzeigen' : 'Ansicht: Nur Punkte';
+  loadOverviewData();
 }
 
 window.setOverviewPhase = async function(p) {
@@ -1365,63 +1386,69 @@ async function loadOverviewData() {
       });
     }
 
-    const rows=displayRows.map(({player,bet,pts})=>{
+    const rows = displayRows.map(({ player, bet, pts }) => {
       const isMe = player.id === S.user.id;
-      let bh='-', ba='-', scorerHtml='', ptHtml='';
-      
+
+      // MODUS: NUR PUNKTE
+      if (S.overviewMode === 'points') {
+        return `
+          <div class="ov-row ${isMe ? 'me' : ''}" style="justify-content: space-between;">
+            <span style="font-weight:${isMe ? 700 : 600}; color:${isMe ? 'var(--blue)' : 'var(--text)'};">
+              ${player.display_name || '?'}
+            </span>
+            <span class="syne" style="font-weight:800; font-size: 13px; color:${pts > 0 ? 'var(--green)' : 'var(--text-3)'};">
+              ${pts} Pkt
+            </span>
+          </div>`;
+      }
+
+      // MODUS: AUSFÜHRLICH (Full)
       const hasBet = !!bet;
       const hasHome = hasBet && bet.home_score !== null && bet.away_score !== null;
       const hasScorer = hasBet && bet.first_goalscorer_id !== null && bet.first_goalscorer_id !== undefined;
       const betIsGoalless = hasBet && bet.is_goalless === true;
 
+      let bh = '-', ba = '-', scorerHtml = '', ptHtml = '';
+
       if (locked || isMe) {
-        if (hasHome) {
-          bh = bet.home_score;
-          ba = bet.away_score;
-        }
+        bh = hasHome ? bet.home_score : '-';
+        ba = hasHome ? bet.away_score : '-';
+        
         if (hasBet) {
           if (betIsGoalless) {
             scorerHtml = `<span style="color:var(--red);font-weight:600;">🚫 Kein Tor</span>`;
             if (locked && isFinished(m.status) && m.is_goalless === true) {
-               scorerHtml = `<span style="color:var(--green);font-weight:700;">🚫 Kein Tor</span>`;
+              scorerHtml = `<span style="color:var(--green);font-weight:700;">🚫 Kein Tor</span>`;
             }
           } else if (hasScorer) {
             const t = S.teams.find(x => x.id === bet.goalscorer?.team_id);
             const tAcr = t ? t.name.substring(0,3).toUpperCase() : '';
             const sName = tAcr ? `${bet.goalscorer.name} (${tAcr})` : (bet.goalscorer?.name || '–');
-
-            if (m.first_goalscorer_id && locked) {
-              scorerHtml = bet.first_goalscorer_id === m.first_goalscorer_id
-                ? `<span style="color:var(--green);font-weight:700;">⚽ ${sName}</span>`
-                : `<span style="color:var(--red);">⚽ ${sName}</span>`;
-            } else {
-              scorerHtml = `<span style="color:var(--text-2);">⚽ ${sName}</span>`;
-            }
+            scorerHtml = (m.first_goalscorer_id && locked && bet.first_goalscorer_id === m.first_goalscorer_id)
+              ? `<span style="color:var(--green);font-weight:700;">⚽ ${sName}</span>`
+              : `<span style="color:var(--text-2);font-weight:600;">⚽ ${sName}</span>`;
           } else {
             scorerHtml = '<span style="color:var(--text-3);">–</span>';
           }
-        } else {
-          scorerHtml = '<span style="color:var(--text-3);">–</span>';
+          ptHtml = locked ? `<span style="font-weight:700;color:${isLive?'var(--blue)':'var(--text-2)'};">${pts}</span>` : '';
         }
-        ptHtml = locked ? `<span style="font-weight:700;color:${isLive?'var(--blue)':'var(--text-2)'};">${pts}</span>` : '';
       } else {
-        if (hasHome) { bh = '?'; ba = '?'; }
-        if (hasBet) { scorerHtml = `<span style="color:var(--text-2);font-weight:600;">???</span>`; }
-        else { scorerHtml = `<span style="color:var(--text-3);">---</span>`; }
+        bh = hasHome ? '?' : '-';
+        ba = hasHome ? '?' : '-';
+        scorerHtml = hasBet ? `<span style="color:var(--text-2);font-weight:600;">???</span>` : `<span style="color:var(--text-3);">---</span>`;
       }
 
-      // Boost-Indikator für die Übersicht (wird nur angezeigt, wenn das Spiel gesperrt/freigegeben ist)
-      let boostBadge = '';
-      if (locked && bet && bet.is_boosted === true) {
-        boostBadge = `<span style="font-size:9px; background:var(--accent); color:var(--accent-text); padding:1px 4px; border-radius:4px; font-weight:800; margin-left:5px; vertical-align:middle; display:inline-block;">2x</span>`;
-      }
+      let boostBadge = (locked && bet && bet.is_boosted === true) 
+        ? `<span style="font-size:9px; background:var(--accent); color:var(--accent-text); padding:1px 4px; border-radius:4px; font-weight:800; margin-left:5px; vertical-align:middle;">2x</span>` 
+        : '';
 
-      return `<div class="ov-row ${isMe?'me':''}">
-        <span style="width:28%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isMe?700:600};color:${isMe?'var(--blue)':'var(--text)'};">${player.display_name||'?'}</span>
-        <span class="mono" style="width:16%;text-align:center;font-weight:800;font-size:12px;">${bh}:${ba}</span>
-        <span style="width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;">${scorerHtml}</span>
-        <span style="width:12%;text-align:right;font-size:12px;display:flex;align-items:center;justify-content:flex-end;">${ptHtml}${boostBadge}</span>
-      </div>`;
+      return `
+        <div class="ov-row ${isMe ? 'me' : ''}">
+          <span style="width:28%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isMe?700:600};color:${isMe?'var(--blue)':'var(--text)'};">${player.display_name||'?'}</span>
+          <span class="mono" style="width:16%;text-align:center;font-weight:800;font-size:12px;">${bh}:${ba}</span>
+          <span style="width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;">${scorerHtml}</span>
+          <span style="width:12%;text-align:right;font-size:12px;">${ptHtml}${boostBadge}</span>
+        </div>`;
     }).join('');
 
     const hn=(m.home_team?.name||'HM').substring(0,3).toUpperCase();
