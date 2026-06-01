@@ -555,11 +555,14 @@ function getFinalScore(m, type) {
 function calcBetPoints(m, b) {
   if (!m || !b) return 0;
   if (!isLocked(m)) return 0;
-  if (isFinished(m.status) && b.points_awarded!==null && b.points_awarded!==undefined) {
-    let pts = b.points_awarded;
-    if (b.is_boosted) pts *= 2;
-    return pts;
+  
+  // Wenn das Backend die Punkte bereits final berechnet und eingetragen hat,
+  // nimm diesen Wert unverändert an. Der Boost ist hier bereits eingerechnet.
+  if (isFinished(m.status) && b.points_awarded !== null && b.points_awarded !== undefined) {
+    return Number(b.points_awarded);
   }
+  
+  // Ab hier: Live-Berechnung während des Spiels (solange points_awarded noch NULL ist)
   const mh = getFinalScore(m,'home'), ma = getFinalScore(m,'away');
   if (mh===null || ma===null) return 0;
   const bh=b.home_score, ba=b.away_score;
@@ -568,21 +571,19 @@ function calcBetPoints(m, b) {
   else if (mh-ma===bh-ba) pts+=2;
   else if ((mh>ma&&bh>ba)||(mh<ma&&bh<ba)) pts+=1;
   
-  // Torschützen-Bonus berücksichtigt is_goalless
   if (m.is_goalless === false && m.first_goalscorer_id && b.first_goalscorer_id===m.first_goalscorer_id) {
-    // Ein Tor ist gefallen und IDs stimmen
     pts+=1;
   } else if (m.is_goalless === true && b.is_goalless === true) {
-    // Kein Tor gefallen und User wettete auch auf "kein Tor"
     pts+=1;
   }
+  
+  // Multiplikator nur auf die temporäre Live-Berechnung anwenden
   if (b.is_boosted) {
     pts *= 2;
   }
   
   return pts;
 }
-
 function jumpToMatch(phase, matchId) {
   goTo('tippen');
   if (S.bettingPhase!==phase) setBettingPhase(phase);
