@@ -89,6 +89,54 @@
     .nav-item.active { color:var(--accent); }
 
     /* ═══════════════════════════════════
+       SMART ACTION BAR (Toast Alternative)
+    ═══════════════════════════════════ */
+    #smart-action-bar {
+      position: fixed;
+      bottom: calc(4rem + env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--navy);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 100px;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.1);
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      z-index: 15;
+      white-space: nowrap;
+    }
+    #smart-action-bar.visible {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* ═══════════════════════════════════
+       DATE GROUP HEADERS
+    ═══════════════════════════════════ */
+    .date-header {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:10px 14px; margin: 16px 0 8px 0;
+      background: var(--border-light);
+      border-radius: 10px;
+      font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.04em;
+      color:var(--text); cursor:pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .date-header:active { background: var(--border); }
+    .date-header:first-child { margin-top: 0; }
+    .date-header svg { transition: transform 0.2s; }
+
+    /* ═══════════════════════════════════
        PHASE TABS & SCROLL BUTTONS
     ═══════════════════════════════════ */
     .phase-tab {
@@ -377,6 +425,9 @@
 
   <main id="main" class="flex-1 overflow-y-auto no-scrollbar" style="padding-bottom:5.5rem;"></main>
 
+  <!-- SMART ACTION BAR -->
+  <div id="smart-action-bar" onclick="executeSmartAction()"></div>
+
   <nav style="position:fixed; bottom:0; left:0; right:0; background:var(--navy); border-top:1px solid rgba(255,255,255,.08); display:flex; height:calc(3.75rem + env(safe-area-inset-bottom)); padding-bottom:env(safe-area-inset-bottom); z-index:20;">
     <button class="nav-item" data-view="dashboard"  onclick="goTo('dashboard')">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
@@ -435,7 +486,9 @@ const S = {
   bettingPhase: null, overviewPhase: null,
   pendingScorer: {}, playerCache: {},
   authMode: 'login', allBetsCache: null,
-  overviewMode: 'full' // <--- HIER EINFÜGEN
+  overviewMode: 'full',
+  collapsedDates: {}, // Speichert Einklapp-Zustand für Daten
+  smartActionMatch: null // Aktuelles Ziel für Smart Action Bar
 };
 
 // ──────────────────────────────────────────
@@ -509,32 +562,29 @@ function formatRelativeDate(ts) {
   return `${fmtDate(ts)}, ${time}`;
 }
 
+function getDateLabel(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+window.toggleDateGroup = function(dateLabel) {
+  S.collapsedDates[dateLabel] = !S.collapsedDates[dateLabel];
+  if (S.view === 'tippen') renderBettingContent();
+  if (S.view === 'uebersicht') loadOverviewData();
+}
+
 function formatMatchStatus(status) {
   const statusMap = {
-    '1H': '1.HZ',
-    '2H': '2.HZ',
-    'HT': 'HZ',
-    'ET': 'Verl.',
-    'P': 'ELF',
-    'FT': 'Beendet',
-    'BT': 'Verl.',
-    'PST': 'Abg.',
-    'SUSP': 'Unterb.',
-    'INT': 'Unterb.',
-    'CANC': 'Abg.',
-    'ABD': 'Abg.',
-    'AWD': 'Abg.',
-    'TBD': 'TBD',
-    'NOT_STARTED': 'Startet'
+    '1H': '1.HZ', '2H': '2.HZ', 'HT': 'HZ', 'ET': 'Verl.', 'P': 'ELF', 'FT': 'Beendet',
+    'BT': 'Verl.', 'PST': 'Abg.', 'SUSP': 'Unterb.', 'INT': 'Unterb.', 'CANC': 'Abg.',
+    'ABD': 'Abg.', 'AWD': 'Abg.', 'TBD': 'TBD', 'NOT_STARTED': 'Startet'
   };
   return statusMap[status] || status;
 }
 
 function isLocked(m) { return new Date(m.kickoff_time) <= new Date(); }
 
-function matchPhases() {
-  return [...new Set(S.matches.map(m => m.phase).filter(Boolean))];
-}
+function matchPhases() { return [...new Set(S.matches.map(m => m.phase).filter(Boolean))]; }
 function allPhases() {
   const p = matchPhases();
   p.push('Bonusfragen');
@@ -557,13 +607,10 @@ function calcBetPoints(m, b) {
   if (!m || !b) return 0;
   if (!isLocked(m)) return 0;
   
-  // Wenn das Backend die Punkte bereits final berechnet und eingetragen hat,
-  // nimm diesen Wert unverändert an. Der Boost ist hier bereits eingerechnet.
   if (isFinished(m.status) && b.points_awarded !== null && b.points_awarded !== undefined) {
     return Number(b.points_awarded);
   }
   
-  // Ab hier: Live-Berechnung während des Spiels (solange points_awarded noch NULL ist)
   const mh = getFinalScore(m,'home'), ma = getFinalScore(m,'away');
   if (mh===null || ma===null) return 0;
   const bh=b.home_score, ba=b.away_score;
@@ -578,16 +625,24 @@ function calcBetPoints(m, b) {
     pts+=1;
   }
   
-  // Multiplikator nur auf die temporäre Live-Berechnung anwenden
-  if (b.is_boosted) {
-    pts *= 2;
-  }
-  
+  if (b.is_boosted) pts *= 2;
   return pts;
 }
+
 function jumpToMatch(phase, matchId) {
   goTo('tippen');
   if (S.bettingPhase!==phase) setBettingPhase(phase);
+
+  // Stelle sicher, dass die Datumsgruppe ausgeklappt ist
+  const m = S.matches.find(x => x.id === matchId);
+  if (m) {
+    const dLabel = getDateLabel(m.kickoff_time);
+    if (S.collapsedDates[dLabel]) {
+      S.collapsedDates[dLabel] = false;
+      renderBettingContent(); // Sofort re-rendern damit das Element im DOM ist
+    }
+  }
+
   setTimeout(() => {
     const el = $(`match-card-${matchId}`);
     if (el) el.scrollIntoView({behavior:'smooth',block:'start'});
@@ -720,9 +775,13 @@ async function fetchData(showLoadingState=true) {
       total_points: (p.total_points||0) + (livePointsMap[p.id]||0)
     })).sort((a,b)=>b.total_points-a.total_points);
 
+    // AUTOMATISCHER SPIELTAG (Phase) FINDEN
+    const nextActiveMatch = S.matches.find(m => new Date(m.kickoff_time) > new Date() || (!isFinished(m.status) && isLocked(m)));
     const ph = allPhases();
-    if (!S.bettingPhase  || !ph.includes(S.bettingPhase))  S.bettingPhase  = ph[0];
-    if (!S.overviewPhase || !ph.includes(S.overviewPhase)) S.overviewPhase = ph[0];
+    const defaultPhase = nextActiveMatch ? nextActiveMatch.phase : ph[ph.length - 1];
+    
+    if (!S.bettingPhase  || !ph.includes(S.bettingPhase))  S.bettingPhase  = defaultPhase;
+    if (!S.overviewPhase || !ph.includes(S.overviewPhase)) S.overviewPhase = defaultPhase;
 
     renderView();
   } catch(err) {
@@ -732,7 +791,7 @@ async function fetchData(showLoadingState=true) {
 }
 
 // ──────────────────────────────────────────
-// NAVIGATION
+// NAVIGATION & SMART ACTION BAR
 // ──────────────────────────────────────────
 function goTo(view) {
   S.view=view;
@@ -748,6 +807,43 @@ function renderView() {
     case 'uebersicht': renderOverviewShell(main); loadOverviewData(); break;
     case 'tabelle':    renderTabelleShell(main); loadTabelleData('total'); break;
     case 'profil':     renderProfile(main);    break;
+  }
+  updateSmartActionBar();
+}
+
+function updateSmartActionBar() {
+  const bar = $('smart-action-bar');
+  if (!bar) return;
+
+  let targetMatch = S.matches.find(m => isLocked(m) && !isFinished(m.status));
+  let isLive = true;
+
+  if (!targetMatch) {
+    targetMatch = S.matches.find(m => !isLocked(m));
+    isLive = false;
+  }
+
+  // Verstecken wenn Dashboard, oder kein Spiel mehr da ist, oder wir schon in der richtigen Phase & im Tippen Tab sind
+  if (!targetMatch || S.view === 'dashboard' || (S.view === 'tippen' && S.bettingPhase === targetMatch.phase)) {
+    bar.classList.remove('visible');
+    S.smartActionMatch = null;
+    return;
+  }
+
+  S.smartActionMatch = targetMatch;
+  if (isLive) {
+    bar.innerHTML = `<span class="live-dot" style="animation:blink 1.5s infinite;"></span> <span style="color:#FCA5A5;">Live:</span> ${targetMatch.home_team?.name} vs ${targetMatch.away_team?.name} ›`;
+    bar.style.border = '1px solid #991B1B';
+  } else {
+    bar.innerHTML = `⏱ <span style="color:var(--text-3);">Next:</span> ${targetMatch.home_team?.name} vs ${targetMatch.away_team?.name} ›`;
+    bar.style.border = '1px solid rgba(255,255,255,0.1)';
+  }
+  bar.classList.add('visible');
+}
+
+window.executeSmartAction = function() {
+  if (S.smartActionMatch) {
+    jumpToMatch(S.smartActionMatch.phase, S.smartActionMatch.id);
   }
 }
 
@@ -892,7 +988,6 @@ function renderDashboard(main) {
 // BETTING VIEW
 // ──────────────────────────────────────────
 function renderBetting(main) {
-  // Stelle sicher, dass die Phase beim Neu-Rendern nicht auf den ersten Tab zurückfällt
   const currentPhase = S.bettingPhase || allPhases()[0];
   main.innerHTML=`
     <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;">
@@ -907,8 +1002,33 @@ window.setBettingPhase = function(p) { S.bettingPhase=p; renderBetting($('main')
 function renderBettingContent() {
   const c=$('betting-content');
   if (S.bettingPhase==='Bonusfragen') { renderBonusInsideBetting(c); return; }
-  const cards=S.matches.filter(m=>m.phase===S.bettingPhase).map(betCard).join('');
-  c.innerHTML=cards||'<p style="text-align:center;color:var(--text-3);padding:40px 0;font-size:13px;font-weight:500;">Keine Spiele in dieser Phase.</p>';
+  const phaseMatches = S.matches.filter(m=>m.phase===S.bettingPhase);
+  if (!phaseMatches.length) { c.innerHTML='<p style="text-align:center;color:var(--text-3);padding:40px 0;font-size:13px;font-weight:500;">Keine Spiele in dieser Phase.</p>'; return; }
+
+  const groups = {};
+  phaseMatches.forEach(m => {
+    const dLabel = getDateLabel(m.kickoff_time);
+    if (!groups[dLabel]) groups[dLabel] = [];
+    groups[dLabel].push(m);
+  });
+
+  const html = Object.keys(groups).map(dateLabel => {
+    const matches = groups[dateLabel];
+    const isCollapsed = S.collapsedDates[dateLabel];
+    const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+    
+    let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
+      <span>📅 ${dateLabel}</span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:${iconRot}"><polyline points="6 9 12 15 18 9"></polyline></svg>
+    </div>`;
+    
+    if (!isCollapsed) {
+      groupHtml += `<div style="display:flex;flex-direction:column;gap:14px; animation:fadeIn 0.2s;">` + matches.map(betCard).join('') + `</div>`;
+    }
+    return groupHtml;
+  }).join('');
+
+  c.innerHTML = html;
 }
 
 function betCard(m) {
@@ -959,7 +1079,7 @@ function betCard(m) {
     return `
       <div id="match-card-${m.id}" class="mc ${isLive ? 'mc-live' : ''}" style="scroll-margin-top:140px;">
         <div class="mc-header">
-          <span class="mono" style="color:var(--text-2);font-size:11px;">${fmtDate(m.kickoff_time)}</span>
+          <span class="mono" style="color:var(--text-2);font-size:11px;">${fmtTime(m.kickoff_time)} Uhr</span>
           ${headerBadge}
         </div>
         <div class="mc-body">
@@ -1019,7 +1139,7 @@ function betCard(m) {
   return `
     <div id="match-card-${m.id}" class="mc" style="scroll-margin-top:140px;">
       <div class="mc-header">
-        <span class="mono" style="color:var(--text-2);font-size:11px;">${formatRelativeDate(m.kickoff_time)}</span>
+        <span class="mono" style="color:var(--text-2);font-size:11px;">${fmtTime(m.kickoff_time)} Uhr</span>
         ${headerBadge}
       </div>
       <div class="mc-body">
@@ -1063,7 +1183,6 @@ function betCard(m) {
       </div>
     </div>`;
 }
-
 
 async function triggerAutoSave(matchId, forceScorer=false) {
   const hVal=$(`h-${matchId}`)?.value;
@@ -1115,7 +1234,6 @@ async function performSave(matchId, h, a) {
     delete S.pendingScorer[matchId];
     if (btn) btn.style.opacity='1';
     
-    // Auto-Save Refresh Cards visually
     renderBettingContent();
     showToast('Tipp gespeichert');
   } catch(e) {
@@ -1146,7 +1264,6 @@ async function openScorer(matchId) {
   const posWeight={Attacker:1,Midfielder:2,Defender:3,Goalkeeper:4,F:1,M:2,D:3,G:4};
   (players||[]).forEach(p=>{S.playerCache[p.id]=p;});
 
-  // Tore aus der neuen Datenbank-View abrufen anstatt Roh-Events auf dem Client zu summieren
   try {
     if (players && players.length > 0) {
       const {data:goalData} = await db.from('vw_player_tournament_goals')
@@ -1161,7 +1278,6 @@ async function openScorer(matchId) {
     (players||[]).forEach(p => { p.tournament_goals = 0; });
   }
 
-  // Sortierung: Starter (is_starter=true) zuerst, dann Nicht-Starter, dann Spieler ohne Eintrag
   (players||[]).sort((a,b)=>{
     const aFlag = lineupMap.has(a.id) ? (lineupMap.get(a.id) ? 0 : 1) : 2;
     const bFlag = lineupMap.has(b.id) ? (lineupMap.get(b.id) ? 0 : 1) : 2;
@@ -1239,25 +1355,12 @@ function closeScorer() { $('modal-scorer').classList.add('hidden'); }
 // ──────────────────────────────────────────
 // OVERVIEW
 // ──────────────────────────────────────────
-// ──────────────────────────────────────────
-// OVERVIEW
-// ──────────────────────────────────────────
 function renderOverviewShell(main) {
   main.innerHTML=`
     <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;">
       ${renderPhaseTabsContainer(S.overviewPhase, 'setOverviewPhase')}
       <div id="ov-cards" style="padding:16px;padding-bottom:32px;display:flex;flex-direction:column;gap:14px;" class="fade-up"></div>
     </div>`;
-}
-
-// Globaler State für den Modus
-let overviewMode = 'full'; // 'full' oder 'points'
-
-function toggleOverviewMode() {
-  S.overviewMode = S.overviewMode === 'full' ? 'points' : 'full';
-  const btn = document.getElementById('ov-mode-btn');
-  btn.textContent = S.overviewMode === 'full' ? 'Ansicht: Alles anzeigen' : 'Ansicht: Nur Punkte';
-  loadOverviewData();
 }
 
 window.setOverviewPhase = async function(p) {
@@ -1369,174 +1472,178 @@ async function loadOverviewData() {
   const byMatch = {};
   (allBets || []).forEach(b => { (byMatch[b.match_id] ??= []).push(b); });
 
-  cards.innerHTML = phaseMatches.map(m => {
-    const locked = isLocked(m), isLive = locked && !isFinished(m.status);
-    const fnH = getFinalScore(m, 'home'), fnA = getFinalScore(m, 'away');
-    const ext = m.home_score_extratime !== null ? ' n.V.' : '';
+  const groups = {};
+  phaseMatches.forEach(m => {
+    const dLabel = getDateLabel(m.kickoff_time);
+    if (!groups[dLabel]) groups[dLabel] = [];
+    groups[dLabel].push(m);
+  });
 
-    let statusHtml = '';
-    if (isFinished(m.status)) statusHtml = `<span class="mono">${fnH}:${fnA}${ext}</span>`;
-    else if (isLive) statusHtml = `<span style="color:#FCA5A5;font-weight:800;" class="live-pulse">LIVE ${fnH ?? 0}:${fnA ?? 0}</span>`;
-    else statusHtml = formatRelativeDate(m.kickoff_time);
+  cards.innerHTML = Object.keys(groups).map(dateLabel => {
+    const matches = groups[dateLabel];
+    const isCollapsed = S.collapsedDates[dateLabel];
+    const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+    
+    let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
+      <span>📅 ${dateLabel}</span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:${iconRot}"><polyline points="6 9 12 15 18 9"></polyline></svg>
+    </div>`;
 
-    let actualScorer = '';
-    if (locked && m.first_goalscorer) {
-      const scorerTeam = S.teams.find(x => x.id === m.first_goalscorer.team_id);
-      const teamAcr = scorerTeam ? scorerTeam.name.substring(0,3).toUpperCase() : '';
-      const sName = teamAcr ? `${m.first_goalscorer.name} (${teamAcr})` : m.first_goalscorer.name;
-      actualScorer = `<span style="font-size:10px;color:#6EE7B7;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">⚽ ${sName}</span>`;
-    }
-    else if (locked && isFinished(m.status) && m.is_goalless === true) {
-      actualScorer = `<span style="font-size:10px;color:rgba(255,255,255,.4);">🚫 Kein Tor</span>`;
-    }
+    if (!isCollapsed) {
+      groupHtml += `<div style="display:flex;flex-direction:column;gap:14px; animation:fadeIn 0.2s;">` + matches.map(m => {
+        const locked = isLocked(m), isLive = locked && !isFinished(m.status);
+        const fnH = getFinalScore(m, 'home'), fnA = getFinalScore(m, 'away');
+        const ext = m.home_score_extratime !== null ? ' n.V.' : '';
 
-    const matchBets = byMatch[m.id] || [];
-    matchBets.forEach(b => b._pts = calcBetPoints(m, b));
+        let statusHtml = '';
+        if (isFinished(m.status)) statusHtml = `<span class="mono">${fnH}:${fnA}${ext}</span>`;
+        else if (isLive) statusHtml = `<span style="color:#FCA5A5;font-weight:800;" class="live-pulse">LIVE ${fnH ?? 0}:${fnA ?? 0}</span>`;
+        else statusHtml = formatRelativeDate(m.kickoff_time);
 
-    let displayRows = S.leaderboard.map(player => {
-      const b = matchBets.find(x => x.user_id === player.id);
-      return { player, bet: b, pts: b ? b._pts : 0 };
-    });
-
-    if (locked) {
-      displayRows.sort((a, b) => b.pts - a.pts);
-    } else {
-      displayRows.sort((a, b) => {
-        if (a.player.id === S.user.id) return -1;
-        if (b.player.id === S.user.id) return 1;
-        const ah = !!a.bet, bh = !!b.bet;
-        if (ah && !bh) return -1; if (!ah && bh) return 1;
-        return (a.player.display_name || '').localeCompare(b.player.display_name || '');
-      });
-    }
-
-    // --- DETAILLIERTE ZEILEN (Die alte Ansicht) ---
-    const rows = displayRows.map(({ player, bet, pts }) => {
-      const isMe = player.id === S.user.id;
-      let bh = '-', ba = '-', scorerHtml = '', ptHtml = '';
-      
-      const hasBet = !!bet;
-      const hasHome = hasBet && bet.home_score !== null && bet.away_score !== null;
-      const hasScorer = hasBet && bet.first_goalscorer_id !== null && bet.first_goalscorer_id !== undefined;
-      const betIsGoalless = hasBet && bet.is_goalless === true;
-
-      if (locked || isMe) {
-        if (hasHome) {
-          bh = bet.home_score;
-          ba = bet.away_score;
+        let actualScorer = '';
+        if (locked && m.first_goalscorer) {
+          const scorerTeam = S.teams.find(x => x.id === m.first_goalscorer.team_id);
+          const teamAcr = scorerTeam ? scorerTeam.name.substring(0,3).toUpperCase() : '';
+          const sName = teamAcr ? `${m.first_goalscorer.name} (${teamAcr})` : m.first_goalscorer.name;
+          actualScorer = `<span style="font-size:10px;color:#6EE7B7;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">⚽ ${sName}</span>`;
         }
-        if (hasBet) {
-          if (betIsGoalless) {
-            scorerHtml = `<span style="color:var(--red);font-weight:600;">🚫 Kein Tor</span>`;
-            if (locked && isFinished(m.status) && m.is_goalless === true) {
-               scorerHtml = `<span style="color:var(--green);font-weight:700;">🚫 Kein Tor</span>`;
-            }
-          } else if (hasScorer) {
-            const t = S.teams.find(x => x.id === bet.goalscorer?.team_id);
-            const tAcr = t ? t.name.substring(0,3).toUpperCase() : '';
-            const sName = tAcr ? `${bet.goalscorer.name} (${tAcr})` : (bet.goalscorer?.name || '–');
+        else if (locked && isFinished(m.status) && m.is_goalless === true) {
+          actualScorer = `<span style="font-size:10px;color:rgba(255,255,255,.4);">🚫 Kein Tor</span>`;
+        }
 
-            if (m.first_goalscorer_id && locked) {
-              scorerHtml = bet.first_goalscorer_id === m.first_goalscorer_id
-                ? `<span style="color:var(--green);font-weight:700;">⚽ ${sName}</span>`
-                : `<span style="color:var(--red);">⚽ ${sName}</span>`;
-            } else {
-              scorerHtml = `<span style="color:var(--text-2);">⚽ ${sName}</span>`;
+        const matchBets = byMatch[m.id] || [];
+        matchBets.forEach(b => b._pts = calcBetPoints(m, b));
+
+        let displayRows = S.leaderboard.map(player => {
+          const b = matchBets.find(x => x.user_id === player.id);
+          return { player, bet: b, pts: b ? b._pts : 0 };
+        });
+
+        if (locked) {
+          displayRows.sort((a, b) => b.pts - a.pts);
+        } else {
+          displayRows.sort((a, b) => {
+            if (a.player.id === S.user.id) return -1;
+            if (b.player.id === S.user.id) return 1;
+            const ah = !!a.bet, bh = !!b.bet;
+            if (ah && !bh) return -1; if (!ah && bh) return 1;
+            return (a.player.display_name || '').localeCompare(b.player.display_name || '');
+          });
+        }
+
+        const rows = displayRows.map(({ player, bet, pts }) => {
+          const isMe = player.id === S.user.id;
+          let scoreBadge = `<span style="color:var(--text-3);">–:–</span>`;
+          let scorerBadge = `<span style="color:var(--text-3);">–</span>`;
+          const hasBet = !!bet;
+          const hasHome = hasBet && bet.home_score !== null && bet.away_score !== null;
+          let boostBadge = '';
+
+          if (locked || isMe) {
+            if (hasHome) {
+              let bh = bet.home_score, ba = bet.away_score;
+              let scoreStyle = 'font-weight:800; font-family:"DM Mono", monospace; font-size:12px; display:inline-block; text-align:center; min-width:32px;';
+              
+              if (locked && fnH !== null) {
+                const isExact = (bh === fnH && ba === fnA);
+                const isTrend = !isExact && ((bh>ba && fnH>fnA) || (bh<ba && fnH<fnA) || (bh===ba && fnH===fnA));
+                
+                if (isExact) scoreStyle += 'background:var(--green-bg); color:var(--green); padding:2px 6px; border-radius:6px;';
+                else if (isTrend) scoreStyle += 'background:#FEF3C7; color:var(--accent-text); padding:2px 6px; border-radius:6px;';
+                else scoreStyle += 'color:var(--text-3); text-decoration:line-through; font-weight:500;';
+              }
+              scoreBadge = `<span style="${scoreStyle}">${bh}:${ba}</span>`;
+            }
+
+            if (hasBet) {
+              let sName = bet.is_goalless ? '🚫 Kein Tor' : (bet.goalscorer?.name || '–');
+              let scorerStyle = 'font-size:11px; font-weight:600; padding:2px 6px; border-radius:4px; display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+              
+              if (locked && isFinished(m.status)) {
+                let isCorrect = false;
+                if (bet.is_goalless && m.is_goalless) isCorrect = true;
+                if (bet.first_goalscorer_id && bet.first_goalscorer_id === m.first_goalscorer_id) isCorrect = true;
+
+                if (isCorrect) {
+                  scorerStyle += 'background:var(--green-bg); color:var(--green); font-weight:700;';
+                  sName = '✓ ' + sName;
+                } else {
+                  scorerStyle += 'background:var(--red-bg); color:var(--red); opacity:0.8;';
+                  sName = '✗ ' + sName;
+                }
+              } else {
+                scorerStyle += 'background:#F1F0EC; color:var(--text-2);';
+              }
+              scorerBadge = `<span style="${scorerStyle}">${sName}</span>`;
+            }
+
+            if (locked && bet && bet.is_boosted) {
+              boostBadge = `<span style="font-size:9px; background:var(--accent); color:var(--accent-text); padding:1px 4px; border-radius:4px; font-weight:800; margin-left:5px; vertical-align:middle; display:inline-block;">2x</span>`;
             }
           } else {
-            scorerHtml = '<span style="color:var(--text-3);">–</span>';
+            if (hasHome) scoreBadge = `<span style="font-weight:800; font-family:'DM Mono', monospace; font-size:12px;">?:?</span>`;
+            if (hasBet) scorerBadge = `<span style="background:#F1F0EC;color:var(--text-3);padding:2px 6px;border-radius:4px;font-size:11px;">Verdeckt</span>`;
           }
+
+          return `<div class="ov-row ${isMe ? 'me' : ''}">
+            <span style="width:28%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isMe?700:600};color:${isMe?'var(--blue)':'var(--text)'};">${player.display_name||'?'}</span>
+            <span style="width:20%;text-align:center;">${scoreBadge}</span>
+            <span style="width:40%;text-align:left;">${scorerBadge}</span>
+            <span style="width:12%;text-align:right;font-size:12px;display:flex;align-items:center;justify-content:flex-end;font-weight:700;color:${locked?'var(--text)':'var(--text-3)'};">${locked?pts:'-'}${boostBadge}</span>
+          </div>`;
+        }).join('');
+
+        let summaryHtml = '';
+        if (locked) {
+          const groups = {};
+          displayRows.forEach(({player, pts}) => {
+            if (!groups[pts]) groups[pts] = [];
+            groups[pts].push((player.display_name || '?').split(' ')[0]);
+          });
+          summaryHtml = Object.keys(groups).sort((a,b)=>b-a).map(p => 
+            `<span><strong style="color:${p > 0 ? 'var(--blue)' : 'var(--text-2)'};">${p} Pkt:</strong> <span style="color:var(--text-2);">${groups[p].join(', ')}</span></span>`
+          ).join(' <span style="color:var(--border);margin:0 6px;">|</span> ');
         } else {
-          scorerHtml = '<span style="color:var(--text-3);">–</span>';
+          const tipped = displayRows.filter(r=>r.bet).map(r=>(r.player.display_name || '?').split(' ')[0]);
+          const untipped = displayRows.filter(r=>!r.bet).map(r=>(r.player.display_name || '?').split(' ')[0]);
+          
+          let parts = [];
+          if (tipped.length) parts.push(`<span><strong style="color:var(--green);">Getippt (${tipped.length}):</strong> <span style="color:var(--text-2);">${tipped.join(', ')}</span></span>`);
+          if (untipped.length) parts.push(`<span><strong style="color:var(--text-3);">Offen (${untipped.length}):</strong> <span style="color:var(--text-2);">${untipped.join(', ')}</span></span>`);
+          summaryHtml = parts.join(' <span style="color:var(--border);margin:0 6px;">|</span> ');
+          if (!summaryHtml) summaryHtml = '<span style="color:var(--text-3);">Noch keine Tipps</span>';
         }
-        ptHtml = locked ? `<span style="font-weight:700;color:${isLive?'var(--blue)':'var(--text-2)'};">${pts}</span>` : '';
-      } else {
-        if (hasHome) { bh = '?'; ba = '?'; }
-        if (hasBet) { scorerHtml = `<span style="color:var(--text-2);font-weight:600;">???</span>`; }
-        else { scorerHtml = `<span style="color:var(--text-3);">---</span>`; }
-      }
 
-      let boostBadge = '';
-      if (locked && bet && bet.is_boosted === true) {
-        boostBadge = `<span style="font-size:9px; background:var(--accent); color:var(--accent-text); padding:1px 4px; border-radius:4px; font-weight:800; margin-left:5px; vertical-align:middle; display:inline-block;">2x</span>`;
-      }
+        const hn = (m.home_team?.name || 'HM').substring(0,3).toUpperCase();
+        const an = (m.away_team?.name || 'GS').substring(0,3).toUpperCase();
 
-      return `<div class="ov-row ${isMe ? 'me' : ''}">
-        <span style="width:28%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isMe?700:600};color:${isMe?'var(--blue)':'var(--text)'};">${player.display_name||'?'}</span>
-        <span class="mono" style="width:16%;text-align:center;font-weight:800;font-size:12px;">${bh}:${ba}</span>
-        <span style="width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;">${scorerHtml}</span>
-        <span style="width:12%;text-align:right;font-size:12px;display:flex;align-items:center;justify-content:flex-end;">${ptHtml}${boostBadge}</span>
-      </div>`;
-    }).join('');
-
-    // --- KOMPAKTE ZUSAMMENFASSUNG GENERIEREN ---
-    let summaryHtml = '';
-    if (locked) {
-      const groups = {};
-      displayRows.forEach(({player, pts}) => {
-        if (!groups[pts]) groups[pts] = [];
-        groups[pts].push((player.display_name || '?').split(' ')[0]);
-      });
-      
-      summaryHtml = Object.keys(groups).sort((a,b)=>b-a).map(p => 
-        `<span><strong style="color:${p > 0 ? 'var(--blue)' : 'var(--text-2)'};">${p} Pkt:</strong> <span style="color:var(--text-2);">${groups[p].join(', ')}</span></span>`
-      ).join(' <span style="color:var(--border);margin:0 6px;">|</span> ');
-    } else {
-      const tipped = displayRows.filter(r=>r.bet).map(r=>(r.player.display_name || '?').split(' ')[0]);
-      const untipped = displayRows.filter(r=>!r.bet).map(r=>(r.player.display_name || '?').split(' ')[0]);
-      
-      let parts = [];
-      if (tipped.length) parts.push(`<span><strong style="color:var(--green);">Getippt (${tipped.length}):</strong> <span style="color:var(--text-2);">${tipped.join(', ')}</span></span>`);
-      if (untipped.length) parts.push(`<span><strong style="color:var(--text-3);">Offen (${untipped.length}):</strong> <span style="color:var(--text-2);">${untipped.join(', ')}</span></span>`);
-      summaryHtml = parts.join(' <span style="color:var(--border);margin:0 6px;">|</span> ');
-      
-      if (!summaryHtml) summaryHtml = '<span style="color:var(--text-3);">Noch keine Tipps</span>';
+        return `<div class="card" style="overflow:hidden;">
+          <div onclick="toggleMatchOverview(${m.id})" style="background:var(--navy);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;">
+            <div style="font-weight:800;font-size:12px;display:flex;align-items:center;gap:6px;flex-shrink:0;">
+              ${flag(m.home_team,'w-4 h-3')}<span>${hn}–${an}</span>${flag(m.away_team,'w-4 h-3')}
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;overflow:hidden;justify-content:flex-end;">
+              ${actualScorer}
+              <span class="mono" style="font-size:10px;font-weight:700;background:rgba(255,255,255,.1);padding:3px 8px;border-radius:6px;white-space:nowrap;flex-shrink:0;">${statusHtml}</span>
+              <svg id="match-ov-icon-${m.id}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </div>
+          </div>
+          
+          <div id="match-ov-summary-${m.id}" style="padding:12px 14px; font-size:11px; line-height:1.6;">
+            ${summaryHtml}
+          </div>
+          
+          <div id="match-ov-body-${m.id}" style="display:none;">
+            ${rows}
+          </div>
+        </div>`;
+      }).join('') + `</div>`;
     }
-
-    const hn = (m.home_team?.name || 'HM').substring(0,3).toUpperCase();
-    const an = (m.away_team?.name || 'GS').substring(0,3).toUpperCase();
-
-    // --- HTML FÜR DIE KARTE ---
-    return `<div class="card" style="overflow:hidden;">
-      <div onclick="toggleMatchOverview(${m.id})" style="background:var(--navy);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;">
-        <div style="font-weight:800;font-size:12px;display:flex;align-items:center;gap:6px;flex-shrink:0;">
-          ${flag(m.home_team,'w-4 h-3')}<span>${hn}–${an}</span>${flag(m.away_team,'w-4 h-3')}
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;overflow:hidden;justify-content:flex-end;">
-          ${actualScorer}
-          <span class="mono" style="font-size:10px;font-weight:700;background:rgba(255,255,255,.1);padding:3px 8px;border-radius:6px;white-space:nowrap;flex-shrink:0;">${statusHtml}</span>
-          <svg id="match-ov-icon-${m.id}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </div>
-      </div>
-      
-      <div id="match-ov-summary-${m.id}" style="padding:12px 14px; font-size:11px; line-height:1.6;">
-        ${summaryHtml}
-      </div>
-      
-      <div id="match-ov-body-${m.id}" style="display:none;">
-        ${rows}
-      </div>
-    </div>`;
+    return groupHtml;
   }).join('');
 }
-
-window.toggleMatchOverview = function(matchId) {
-  const body = document.getElementById(`match-ov-body-${matchId}`);
-  const summary = document.getElementById(`match-ov-summary-${matchId}`);
-  const icon = document.getElementById(`match-ov-icon-${matchId}`);
-  
-  if (body.style.display === 'none') {
-    body.style.display = 'block';
-    summary.style.display = 'none';
-    icon.style.transform = 'rotate(180deg)';
-  } else {
-    body.style.display = 'none';
-    summary.style.display = 'block';
-    icon.style.transform = 'rotate(0deg)';
-  }
-};
 
 // ──────────────────────────────────────────
 // TABELLE
@@ -1718,13 +1825,11 @@ async function toggleBoost(matchId) {
 
   if (bet.is_boosted) return;
 
-  // NEU: Prüfen, ob das Zielspiel bereits läuft
   if (isLocked(match)) {
     showToast('Dieses Spiel hat bereits begonnen. Boost nicht mehr möglich.', 'error');
     return;
   }
 
-  // NEU: Prüfen, ob in dieser Phase bereits ein anderes Spiel läuft, das den Boost blockiert
   const hasLockedBoost = Object.values(S.bets).some(b => {
     const m = S.matches.find(x => x.id === b.match_id);
     return m && m.phase === match.phase && b.is_boosted && isLocked(m);
@@ -1735,7 +1840,6 @@ async function toggleBoost(matchId) {
     return;
   }
 
-  // Ab hier folgt dein optimistisches UI-Update und der RPC-Aufruf...
   Object.values(S.bets).forEach(b => {
     const m = S.matches.find(x => x.id === b.match_id);
     if (m && m.phase === match.phase) b.is_boosted = false;
@@ -1768,7 +1872,6 @@ function renderProfile(main) {
   const pts = S.liveLeaderboard.find(x => x.id === S.user.id)?.total_points ?? 0;
   const total = S.liveLeaderboard.length;
   
-  // Aktuellen Status auslesen (Fallback auf false)
   const isReminderActive = p?.missing_tip_reminder === true;
 
   main.innerHTML = `
@@ -1818,13 +1921,11 @@ window.toggleReminderBtn = async function() {
   const btn = document.getElementById('toggle-reminder');
   if (!btn || !S.profile) return;
   
-  // Button sperren, um übermäßige Requests zu verhindern
   btn.disabled = true;
   
   const newState = !S.profile.missing_tip_reminder;
   const dot = btn.children[0];
 
-  // Optimistic UI Update (direktes visuelles Feedback)
   btn.style.background = newState ? 'var(--green)' : 'var(--text-3)';
   dot.style.left = newState ? '22px' : '2px';
   
@@ -1835,11 +1936,9 @@ window.toggleReminderBtn = async function() {
       
     if (error) throw error;
     
-    // Lokalen State dauerhaft aktualisieren
     S.profile.missing_tip_reminder = newState;
     showToast(newState ? 'Reminder aktiviert' : 'Reminder deaktiviert');
   } catch (err) {
-    // Sicheres Rollback der UI im Fehlerfall
     btn.style.background = !newState ? 'var(--green)' : 'var(--text-3)';
     dot.style.left = !newState ? '22px' : '2px';
     showToast('Fehler beim Speichern', 'error');
