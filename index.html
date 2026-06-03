@@ -322,6 +322,7 @@
       font-family:'Syne', sans-serif;
       font-size:44px; font-weight:800;
       letter-spacing:-0.03em; line-height:1;
+      white-space:nowrap;
     }
     .hero-stat .lbl {
       font-size:10px; font-weight:700; text-transform:uppercase;
@@ -519,18 +520,26 @@ function showToast(msg, type = 'success') {
 }
 
 function skeletonCards(n = 3) {
-  return Array.from({length:n}).map(() => `
-    <div class="mc" style="animation:fadeIn .2s ease both;">
-      <div class="mc-header"><div class="skel" style="width:90px;height:12px;"></div><div class="skel" style="width:50px;height:18px;border-radius:100px;"></div></div>
+  const card = `
+    <div class="mc">
+      <div class="mc-header"><div class="skel" style="width:90px;height:12px;"></div><div class="skel" style="width:60px;height:18px;border-radius:100px;"></div></div>
       <div class="mc-body">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:72px;"><div class="skel" style="width:40px;height:28px;border-radius:4px;"></div><div class="skel" style="width:60px;height:10px;"></div></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:80px;"><div class="skel" style="width:40px;height:28px;border-radius:4px;"></div><div class="skel" style="width:60px;height:10px;"></div></div>
           <div style="display:flex;gap:6px;"><div class="skel" style="width:58px;height:70px;border-radius:12px;"></div><div style="width:18px;"></div><div class="skel" style="width:58px;height:70px;border-radius:12px;"></div></div>
-          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:72px;"><div class="skel" style="width:40px;height:28px;border-radius:4px;"></div><div class="skel" style="width:60px;height:10px;"></div></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:80px;"><div class="skel" style="width:40px;height:28px;border-radius:4px;"></div><div class="skel" style="width:60px;height:10px;"></div></div>
         </div>
-        <div class="skel" style="width:100%;height:44px;border-radius:10px;"></div>
+        <div style="display:flex;gap:12px;">
+          <div class="skel" style="flex:1;height:44px;border-radius:10px;"></div>
+          <div class="skel" style="width:100px;height:44px;border-radius:10px;"></div>
+        </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  const half = Math.ceil(n / 2), rest = n - half;
+  return `
+    <div class="skel" style="height:38px;border-radius:10px;"></div>
+    <div style="display:flex;flex-direction:column;gap:14px;">${Array.from({length:half}).map(()=>card).join('')}</div>
+    ${rest > 0 ? `<div class="skel" style="height:38px;border-radius:10px;margin-top:2px;"></div><div style="display:flex;flex-direction:column;gap:14px;">${Array.from({length:rest}).map(()=>card).join('')}</div>` : ''}`;
 }
 
 function flag(team, imgCls = 'w-8 h-6') {
@@ -864,7 +873,19 @@ window.executeSmartAction = async function() {
   setTimeout(() => {
     const elId = targetView === 'uebersicht' ? `match-ov-card-${m.id}` : `match-card-${m.id}`;
     const el = $(elId);
-    if (el) el.scrollIntoView({behavior:'smooth',block:'start'});
+    if (el) {
+      el.scrollIntoView({behavior:'smooth',block:'start'});
+      setTimeout(() => {
+        el.style.transition = 'box-shadow 0.4s ease, border-color 0.4s ease';
+        el.style.boxShadow = '0 0 0 2px var(--accent), 0 4px 20px rgba(240,188,44,0.18)';
+        el.style.borderColor = 'var(--accent)';
+        setTimeout(() => {
+          el.style.boxShadow = '';
+          el.style.borderColor = '';
+          setTimeout(() => { el.style.transition = ''; }, 400);
+        }, 1200);
+      }, 700);
+    }
   }, 150);
 }
 
@@ -1033,18 +1054,25 @@ function renderBettingContent() {
     groups[dLabel].push(m);
   });
 
+  // Auto-collapse date groups where all matches are finished (only on first visit)
+  Object.keys(groups).forEach(dateLabel => {
+    if (S.collapsedDates[dateLabel] === undefined) {
+      if (groups[dateLabel].every(m => isFinished(m.status))) S.collapsedDates[dateLabel] = true;
+    }
+  });
+
   const html = Object.keys(groups).map(dateLabel => {
     const matches = groups[dateLabel];
     const isCollapsed = S.collapsedDates[dateLabel];
     const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
-    
+
     let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
       <span>${dateLabel}</span>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:${iconRot}"><polyline points="6 9 12 15 18 9"></polyline></svg>
     </div>`;
-    
+
     if (!isCollapsed) {
-      groupHtml += `<div style="display:flex;flex-direction:column;gap:14px; animation:fadeIn 0.2s;">` + matches.map(betCard).join('') + `</div>`;
+      groupHtml += `<div style="display:flex;flex-direction:column;gap:14px;">` + matches.map(betCard).join('') + `</div>`;
     }
     return groupHtml;
   }).join('');
@@ -1132,7 +1160,8 @@ function betCard(m) {
   // Offen / Tippbar
   const curHome = bet?.home_score ?? '', curAway = bet?.away_score ?? '';
   const pending = S.pendingScorer[m.id];
-  const isGetippt = bet && bet.home_score !== null && bet.away_score !== null;
+  const isGetippt = bet && bet.home_score !== null && bet.away_score !== null &&
+    (bet.first_goalscorer_id !== null || bet.is_goalless === true);
 
   let sHint = '';
   if (pending !== undefined) {
@@ -1324,12 +1353,15 @@ async function openScorer(matchId) {
   const homePlayers=(players||[]).filter(p=>p.team_id===m.home_team_id);
   const awayPlayers=(players||[]).filter(p=>p.team_id===m.away_team_id);
 
-  const renderP = (p) => {
+  const renderP = (p, isStarter = false) => {
     const pos = posMap[p.position] || p.position || '?';
     const goals = p.tournament_goals > 0 ? `<span style="font-size:9px;font-weight:700;background:var(--blue-bg);color:var(--blue);padding:2px 6px;border-radius:4px;margin-left:auto;">${p.tournament_goals}⚽</span>` : '';
+    const bg = isStarter ? '#EEF3FF' : '#fff';
+    const border = isStarter ? '1.5px solid var(--navy)' : '1.5px solid var(--border-light)';
+    const fw = isStarter ? 700 : 600;
     return `
-      <button onclick="pickScorer(${matchId},${p.id})" style="width:100%;text-align:left;padding:9px 10px;border-radius:10px;border:1.5px solid var(--border-light);background:#fff;cursor:pointer;display:flex;flex-direction:column;gap:4px;transition:background .12s;min-width:0;">
-        <span style="font-size:11px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">${p.name}</span>
+      <button onclick="pickScorer(${matchId},${p.id})" style="width:100%;text-align:left;padding:9px 10px;border-radius:10px;border:${border};background:${bg};cursor:pointer;display:flex;flex-direction:column;gap:4px;transition:background .12s;min-width:0;">
+        <span style="font-size:11px;font-weight:${fw};color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">${p.name}</span>
         <div style="display:flex;align-items:center;gap:4px;width:100%;">
           <span style="font-size:9px;font-weight:700;color:var(--text-3);">${pos}</span>
           ${goals}
@@ -1358,7 +1390,7 @@ async function openScorer(matchId) {
       html += `
         <div style="font-size:10px; font-weight:800; color:var(--text-3); text-transform:uppercase; margin:8px 0 4px 4px; letter-spacing:0.05em;">Startelf</div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">
-          ${starters.map(p => renderP(p)).join('')}
+          ${starters.map(p => renderP(p, true)).join('')}
         </div>`;
     }
     if (bench.length > 0) {
@@ -1539,18 +1571,25 @@ async function loadOverviewData() {
     groups[dLabel].push(m);
   });
 
+  // Auto-collapse date groups where all matches are finished (only on first visit)
+  Object.keys(groups).forEach(dateLabel => {
+    if (S.collapsedDates[dateLabel] === undefined) {
+      if (groups[dateLabel].every(m => isFinished(m.status))) S.collapsedDates[dateLabel] = true;
+    }
+  });
+
   cards.innerHTML = Object.keys(groups).map(dateLabel => {
     const matches = groups[dateLabel];
     const isCollapsed = S.collapsedDates[dateLabel];
     const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
-    
+
     let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
       <span>${dateLabel}</span>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:${iconRot}"><polyline points="6 9 12 15 18 9"></polyline></svg>
     </div>`;
 
     if (!isCollapsed) {
-      groupHtml += `<div style="display:flex;flex-direction:column;gap:14px; animation:fadeIn 0.2s;">` + matches.map(m => {
+      groupHtml += `<div style="display:flex;flex-direction:column;gap:14px;">` + matches.map(m => {
         const locked = isLocked(m), isLive = locked && !isFinished(m.status);
         const fnH = getFinalScore(m, 'home'), fnA = getFinalScore(m, 'away');
         const ext = m.home_score_extratime !== null ? ' n.V.' : '';
@@ -1656,7 +1695,7 @@ async function loadOverviewData() {
                 sName = bet.goalscorer.name + acr;
               }
 
-              let scorerStyle = 'font-size:11px; font-weight:600; display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+              let scorerStyle = 'font-size:11px; font-weight:600; min-width:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
               
               if (locked && isFinished(m.status)) {
                 let isCorrect = false;
@@ -1687,7 +1726,7 @@ async function loadOverviewData() {
           return `<div class="ov-row ${isMe ? 'me' : ''}">
             <span style="width:28%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isMe?700:600};color:${isMe?'var(--blue)':'var(--text)'};">${player.display_name||'?'}</span>
             <span style="width:20%;text-align:center;">${scoreBadge}</span>
-            <span style="width:40%;text-align:left;">${scorerBadge}</span>
+            <span style="width:40%;text-align:left;display:flex;align-items:center;min-width:0;">${scorerBadge}</span>
             <span style="width:12%;text-align:right;font-size:12px;display:flex;align-items:center;justify-content:flex-end;font-weight:700;color:${locked?'var(--text)':'var(--text-3)'};">${locked?pts:'-'}${boostBadge}</span>
           </div>`;
         }).join('');
@@ -1703,8 +1742,9 @@ async function loadOverviewData() {
             `<span><strong style="color:${p > 0 ? 'var(--blue)' : 'var(--text-2)'};">${p} Pkt:</strong> <span style="color:var(--text-2);">${groups[p].join(', ')}</span></span>`
           ).join(' <span style="color:var(--border);margin:0 6px;">|</span> ');
         } else {
-          const tipped = displayRows.filter(r=>r.bet).map(r=>(r.player.display_name || '?').split(' ')[0]);
-          const untipped = displayRows.filter(r=>!r.bet).map(r=>(r.player.display_name || '?').split(' ')[0]);
+          const isFullBet = r => r.bet && r.bet.home_score !== null && r.bet.away_score !== null && (r.bet.first_goalscorer_id !== null || r.bet.is_goalless === true);
+          const tipped = displayRows.filter(r => isFullBet(r)).map(r=>(r.player.display_name || '?').split(' ')[0]);
+          const untipped = displayRows.filter(r => !isFullBet(r)).map(r=>(r.player.display_name || '?').split(' ')[0]);
           
           let parts = [];
           if (tipped.length) parts.push(`<span><strong style="color:var(--green);">Getippt (${tipped.length}):</strong> <span style="color:var(--text-2);">${tipped.join(', ')}</span></span>`);
@@ -1759,6 +1799,7 @@ function renderTabelleShell(main) {
             <option value="total">Gesamtwertung</option>
             <option value="exact">Anzahl Exakte Treffer</option>
             <option value="trend">Anzahl Richtige Tendenz</option>
+            <option value="first_scorer">Erster Torschütze (korrekt)</option>
             <optgroup label="Stand nach Spielphase">${phaseOpts}</optgroup>
           </select>
           <div style="pointer-events:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--text-2);">
@@ -1804,6 +1845,14 @@ async function loadTabelleData(filterType) {
           if (finalH!==null) {
             const bd=b.home_score-b.away_score, md=finalH-finalA;
             if ((bd>0&&md>0)||(bd<0&&md<0)||(bd===0&&md===0)) scores[b.user_id].val++;
+          }
+        }
+      } else if (filterType === 'first_scorer') {
+        const fullMatch = S.matches.find(x => x.id === m.id);
+        if (fullMatch && isFinished(fullMatch.status)) {
+          if ((m.first_goalscorer_id && b.first_goalscorer_id === m.first_goalscorer_id) ||
+              (fullMatch.is_goalless === true && b.is_goalless === true)) {
+            scores[b.user_id].val++;
           }
         }
       } else if (filterType.startsWith('phase_')) {
@@ -2088,6 +2137,7 @@ async function handleSession(session) {
   $('header-user').textContent=`${(prof?.display_name||'Du').split(' ')[0]}`;
   goTo('dashboard');
   await fetchData();
+  _scheduleAutoReload();
 }
 
 function handleSignOut() {
@@ -2105,6 +2155,24 @@ async function initApp() {
     else if (event==='SIGNED_OUT') handleSignOut();
   });
 }
+
+// Auto-reload: alle 5 Min wenn Tab sichtbar, sofort bei Tab-Rückkehr
+let _autoReloadTimer;
+function _scheduleAutoReload() {
+  clearTimeout(_autoReloadTimer);
+  _autoReloadTimer = setTimeout(async () => {
+    if (S.user) await fetchData(false);
+    _scheduleAutoReload();
+  }, 5 * 60 * 1000);
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && S.user) {
+    fetchData(false);
+    _scheduleAutoReload();
+  } else {
+    clearTimeout(_autoReloadTimer);
+  }
+});
 
 initApp();
 </script>
