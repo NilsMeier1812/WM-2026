@@ -398,6 +398,25 @@
 </div>
 
 <!-- ═══════════════════════════════════════════
+     LOGOUT CONFIRMATION MODAL
+════════════════════════════════════════════ -->
+<div id="modal-logout" class="hidden fixed inset-0 z-60 flex items-center justify-center" style="background:rgba(12,24,40,.5); backdrop-filter:blur(6px);">
+  <div style="background:var(--surface); border-radius:12px; width:92%; max-width:420px; padding:18px; box-shadow:0 12px 40px rgba(0,0,0,.28);">
+    <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;">
+      <div style="width:44px;height:44px;background:var(--accent);color:var(--accent-text);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;">⚠️</div>
+      <div>
+        <div style="font-weight:800;font-size:16px;">Abmelden bestätigen</div>
+        <div style="font-size:13px;color:var(--text-2);margin-top:6px;">Möchtest du dich wirklich abmelden? Du kannst auch zweimal schnell auf "Abmelden" klicken, um direkt abzumelden.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px;">
+      <button id="cancel-logout" style="background:transparent;border:1px solid var(--border);padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:700;">Abbrechen</button>
+      <button id="confirm-logout" style="background:var(--red);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:800;">Abmelden</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
      APP SHELL
 ════════════════════════════════════════════ -->
 <div id="app-screen" class="hidden flex-col" style="height:100dvh;">
@@ -409,6 +428,10 @@
       <span id="header-user" style="font-size:12px; background:rgba(255,255,255,.07); padding:5px 12px; border-radius:100px; border:1px solid rgba(255,255,255,.1); font-weight:600; color:rgba(255,255,255,.7);"></span>
       <button onclick="triggerSoftRefresh()" id="btn-refresh" style="color:rgba(255,255,255,.4); background:none; border:none; cursor:pointer; padding:6px; border-radius:8px; transition:color .15s; display:flex; align-items:center;">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+      </button>
+      <!-- Logout with confirmation options -->
+      <button id="btn-logout" style="color:var(--accent); background:none; border:1px solid rgba(255,255,255,.06); padding:6px 10px; border-radius:8px; cursor:pointer; font-weight:700;" title="Abmelden">
+        Abmelden
       </button>
     </div>
   </header>
@@ -800,6 +823,52 @@ function renderView() {
   updateSmartActionBar();
 }
 
+// ──────────────────────────────────────────
+// LOGOUT CONFIRMATION (Modal + Double-Click Quick Confirm)
+// ──────────────────────────────────────────
+let __logoutLastClick = 0;
+const __logoutDoubleClickWindow = 2500; // ms
+
+function showLogoutModal() {
+  const m = $('modal-logout'); if (!m) return; m.classList.remove('hidden');
+}
+function hideLogoutModal() { const m = $('modal-logout'); if (!m) return; m.classList.add('hidden'); }
+
+async function doLogout() {
+  try {
+    await db.auth.signOut();
+    showToast('Abgemeldet');
+    hideLogoutModal();
+  } catch (err) {
+    showToast('Fehler beim Abmelden','error');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  const btn = $('btn-logout');
+  if (!btn) return;
+  btn.addEventListener('click', (e)=>{
+    const now = Date.now();
+    if (now - __logoutLastClick <= __logoutDoubleClickWindow) {
+      // quick double-click => immediate logout
+      doLogout();
+      __logoutLastClick = 0;
+      return;
+    }
+    __logoutLastClick = now;
+    // show modal and hint for quick double-click
+    showLogoutModal();
+    showToast('Nochmal klicken zum schnellen Abmelden', 'success');
+    // reset after window
+    setTimeout(()=>{ __logoutLastClick = 0; }, __logoutDoubleClickWindow + 100);
+  });
+
+  const confirmBtn = $('confirm-logout');
+  const cancelBtn  = $('cancel-logout');
+  if (confirmBtn) confirmBtn.addEventListener('click', doLogout);
+  if (cancelBtn)  cancelBtn.addEventListener('click', hideLogoutModal);
+});
+
 function updateSmartActionBar() {
   const bar = $('smart-action-bar');
   if (!bar) return;
@@ -1039,7 +1108,7 @@ function renderBettingContent() {
     const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
     
     let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
-      <span>📅 ${dateLabel}</span>
+      <span>${dateLabel}</span>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:${iconRot}"><polyline points="6 9 12 15 18 9"></polyline></svg>
     </div>`;
     
@@ -1531,7 +1600,7 @@ async function loadOverviewData() {
     const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
     
     let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
-      <span>📅 ${dateLabel}</span>
+      <span>${dateLabel}</span>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:${iconRot}"><polyline points="6 9 12 15 18 9"></polyline></svg>
     </div>`;
 
