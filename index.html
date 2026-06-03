@@ -1039,7 +1039,7 @@ function renderBettingContent() {
     const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
     
     let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
-      <span>📅 ${dateLabel}</span>
+      <span>${dateLabel}</span>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:${iconRot}"><polyline points="6 9 12 15 18 9"></polyline></svg>
     </div>`;
     
@@ -1545,7 +1545,7 @@ async function loadOverviewData() {
     const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
     
     let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
-      <span>📅 ${dateLabel}</span>
+      <span>${dateLabel}</span>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:${iconRot}"><polyline points="6 9 12 15 18 9"></polyline></svg>
     </div>`;
 
