@@ -1995,12 +1995,36 @@ function renderProfile(main) {
           </button>
         </div>
 
-        <button onclick="db.auth.signOut()" style="width:100%;padding:13px;border-radius:10px;border:1.5px solid #FCA5A5;background:#FEF2F2;color:var(--red);font-size:14px;font-weight:700;cursor:pointer;transition:background .15s;">
+        <button id="logout-btn" onclick="handleLogoutClick()" style="width:100%;padding:13px;border-radius:10px;border:1.5px solid #FCA5A5;background:#FEF2F2;color:var(--red);font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;">
           Abmelden
         </button>
       </div>
     </div>`;
 }
+
+let logoutConfirmPending = false;
+
+window.handleLogoutClick = function() {
+  const btn = document.getElementById('logout-btn');
+  if (!btn) return;
+  
+  if (!logoutConfirmPending) {
+    logoutConfirmPending = true;
+    btn.textContent = 'Wirklich abmelden?';
+    btn.style.borderColor = 'var(--red)';
+    btn.style.background = '#FFCCCC';
+    
+    setTimeout(() => {
+      logoutConfirmPending = false;
+      btn.textContent = 'Abmelden';
+      btn.style.borderColor = '#FCA5A5';
+      btn.style.background = '#FEF2F2';
+    }, 3000);
+  } else {
+    logoutConfirmPending = false;
+    db.auth.signOut();
+  }
+};
 
 window.toggleReminderBtn = async function() {
   const btn = document.getElementById('toggle-reminder');
