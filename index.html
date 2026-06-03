@@ -498,7 +498,7 @@ const S = {
   overviewMode: 'full',
   collapsedDates: {}, // Speichert Einklapp-Zustand für Daten
   smartActionMatch: null, // Aktuelles Ziel für Smart Action Bar
-  overviewBets: null, overviewBetsPhase: null // Cache für Übersicht-Wetten
+  overviewAllBets: null // Cache für ALLE Übersicht-Wetten (phasenübergreifend)
 };
 
 // ──────────────────────────────────────────
@@ -734,7 +734,7 @@ async function triggerSoftRefresh() {
 
 async function fetchData(showLoadingState=true) {
   S.allBetsCache = null;
-  S.overviewBets = null; S.overviewBetsPhase = null;
+  S.overviewAllBets = null;
 
   if (showLoadingState) {
     $('main').innerHTML = `<div style="max-width:480px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px;" class="fade-in">${skeletonCards(3)}</div>`;
@@ -1475,7 +1475,6 @@ function renderOverviewShell(main) {
 
 window.setOverviewPhase = async function(p) {
   S.overviewPhase=p;
-  S.overviewBets = null; S.overviewBetsPhase = null;
   document.querySelectorAll('[onclick^="setOverviewPhase"]').forEach(btn=>{
     const bp=btn.getAttribute('onclick').match(/'([^']+)'/)?.[1];
     btn.className=`phase-tab ${bp===p?'phase-tab-on':'phase-tab-off'}`;
@@ -1571,31 +1570,45 @@ async function loadOverviewData() {
     return;
   }
 
-  // Gecachte Daten → sofort rendern ohne Netzwerk/Spinner (z.B. beim Ein-/Ausklappen)
-  if (S.overviewBets !== null && S.overviewBetsPhase === S.overviewPhase) {
-    renderOverviewContent(cards, S.overviewBets, phaseMatches);
+  // Cache vorhanden → sofort rendern ohne Netzwerk/Spinner (Phasenwechsel & Ein-/Ausklappen)
+  if (S.overviewAllBets !== null) {
+    renderOverviewContent(cards, S.overviewAllBets, phaseMatches);
     return;
   }
 
-  cards.innerHTML = `<div class="card" style="height:200px;display:flex;align-items:center;justify-content:center;"><div class="spinner" style="width:24px;height:24px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
+  cards.innerHTML = overviewSkeleton();
 
+  // Einmalig ALLE Wetten (phasenübergreifend) laden und cachen
   const { data: allBets, error } = await db.from('bets')
     .select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)')
-    .in('match_id', phaseMatches.map(m => m.id));
+    .in('match_id', S.matches.map(m => m.id));
 
   if (error) {
     cards.innerHTML = `<p style="color:var(--red);font-size:13px;padding:16px;">${error.message}</p>`;
     return;
   }
 
-  S.overviewBets = allBets || [];
-  S.overviewBetsPhase = S.overviewPhase;
-  renderOverviewContent(cards, S.overviewBets, phaseMatches);
+  S.overviewAllBets = allBets || [];
+  renderOverviewContent(cards, S.overviewAllBets, phaseMatches);
+}
+
+function overviewSkeleton() {
+  const card = `<div class="card" style="overflow:hidden;">
+    <div style="background:var(--navy);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+      <div class="skel" style="width:90px;height:14px;opacity:.25;"></div>
+      <div class="skel" style="width:60px;height:14px;opacity:.25;"></div>
+    </div>
+    <div style="padding:12px 14px;"><div class="skel" style="width:100%;height:11px;"></div></div>
+  </div>`;
+  return `<div class="skel" style="height:38px;border-radius:10px;"></div>
+    <div style="display:flex;flex-direction:column;gap:14px;">${card}${card}${card}</div>`;
 }
 
 function renderOverviewContent(cards, allBets, phaseMatches) {
+  // Nur Wetten der aktuellen Phase verwenden
+  const phaseMatchIds = new Set(phaseMatches.map(m => m.id));
   const byMatch = {};
-  (allBets || []).forEach(b => { (byMatch[b.match_id] ??= []).push(b); });
+  (allBets || []).forEach(b => { if (phaseMatchIds.has(b.match_id)) (byMatch[b.match_id] ??= []).push(b); });
 
   const groups = {};
   phaseMatches.forEach(m => {
