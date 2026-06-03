@@ -317,17 +317,32 @@
       letter-spacing:.09em; color:var(--text-2); margin-bottom:6px;
     }
 
-    .hero-stat { text-align:center; flex:1; }
+    .hero-card {
+      display:flex; align-items:stretch; justify-content:space-between;
+      gap:8px;
+    }
+    .hero-stat {
+      flex:1 1 0; min-width:0;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      text-align:center;
+    }
     .hero-stat .num {
       font-family:'Syne', sans-serif;
-      font-size:38px; font-weight:800;
-      letter-spacing:-0.03em; line-height:1;
+      font-weight:800; letter-spacing:-0.03em; line-height:1;
+      font-size:clamp(30px, 11vw, 42px);
       white-space:nowrap;
+      display:flex; align-items:baseline; justify-content:center; gap:3px;
+    }
+    .hero-stat .num .suffix {
+      font-size:clamp(13px, 4.5vw, 17px);
+      font-weight:700; color:var(--text-3); letter-spacing:0;
     }
     .hero-stat .lbl {
       font-size:10px; font-weight:700; text-transform:uppercase;
-      letter-spacing:.08em; color:var(--text-2); margin-top:6px;
+      letter-spacing:.08em; margin-top:7px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;
     }
+    .hero-divider { width:1px; align-self:center; height:46px; background:rgba(255,255,255,.12); flex-shrink:0; }
 
     /* ═══════════════════════════════════
        SKELETON
@@ -1002,12 +1017,12 @@ function renderDashboard(main) {
   main.innerHTML=`
     <div style="max-width:480px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px;" class="fade-up">
 
-      <div class="card" style="padding:22px 20px;display:flex;justify-content:space-between;align-items:center;background:var(--navy);border-color:transparent;">
+      <div class="card hero-card" style="padding:22px 16px;background:var(--navy);border-color:transparent;">
         <div class="hero-stat">
-          <div class="num" style="color:#fff;">Platz ${rank}</div>
-          <div class="lbl" style="color:rgba(255,255,255,.4);">von ${total}</div>
+          <div class="num" style="color:#fff;">${rank}<span class="suffix">/ ${total}</span></div>
+          <div class="lbl" style="color:rgba(255,255,255,.4);">Platz</div>
         </div>
-        <div style="width:1px;height:48px;background:rgba(255,255,255,.12);"></div>
+        <div class="hero-divider"></div>
         <div class="hero-stat">
           <div class="num" style="color:var(--accent);">${pts}</div>
           <div class="lbl" style="color:rgba(255,255,255,.4);">Punkte</div>
