@@ -317,10 +317,10 @@
       letter-spacing:.09em; color:var(--text-2); margin-bottom:6px;
     }
 
-    .hero-stat { text-align:center; }
+    .hero-stat { text-align:center; flex:1; }
     .hero-stat .num {
       font-family:'Syne', sans-serif;
-      font-size:44px; font-weight:800;
+      font-size:38px; font-weight:800;
       letter-spacing:-0.03em; line-height:1;
       white-space:nowrap;
     }
@@ -479,7 +479,8 @@ const S = {
   authMode: 'login', allBetsCache: null,
   overviewMode: 'full',
   collapsedDates: {}, // Speichert Einklapp-Zustand für Daten
-  smartActionMatch: null // Aktuelles Ziel für Smart Action Bar
+  smartActionMatch: null, // Aktuelles Ziel für Smart Action Bar
+  overviewBets: null, overviewBetsPhase: null // Cache für Übersicht-Wetten
 };
 
 // ──────────────────────────────────────────
@@ -715,6 +716,7 @@ async function triggerSoftRefresh() {
 
 async function fetchData(showLoadingState=true) {
   S.allBetsCache = null;
+  S.overviewBets = null; S.overviewBetsPhase = null;
 
   if (showLoadingState) {
     $('main').innerHTML = `<div style="max-width:480px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px;" class="fade-in">${skeletonCards(3)}</div>`;
@@ -876,15 +878,13 @@ window.executeSmartAction = async function() {
     if (el) {
       el.scrollIntoView({behavior:'smooth',block:'start'});
       setTimeout(() => {
-        el.style.transition = 'box-shadow 0.4s ease, border-color 0.4s ease';
-        el.style.boxShadow = '0 0 0 2px var(--accent), 0 4px 20px rgba(240,188,44,0.18)';
-        el.style.borderColor = 'var(--accent)';
+        el.style.transition = 'transform 0.12s ease-out';
+        el.style.transform = 'scale(1.013)';
         setTimeout(() => {
-          el.style.boxShadow = '';
-          el.style.borderColor = '';
-          setTimeout(() => { el.style.transition = ''; }, 400);
-        }, 1200);
-      }, 700);
+          el.style.transform = '';
+          setTimeout(() => { el.style.transition = ''; }, 120);
+        }, 150);
+      }, 400);
     }
   }, 150);
 }
@@ -1457,6 +1457,7 @@ function renderOverviewShell(main) {
 
 window.setOverviewPhase = async function(p) {
   S.overviewPhase=p;
+  S.overviewBets = null; S.overviewBetsPhase = null;
   document.querySelectorAll('[onclick^="setOverviewPhase"]').forEach(btn=>{
     const bp=btn.getAttribute('onclick').match(/'([^']+)'/)?.[1];
     btn.className=`phase-tab ${bp===p?'phase-tab-on':'phase-tab-off'}`;
@@ -1539,28 +1540,42 @@ window.toggleMatchOverview = function(matchId) {
 async function loadOverviewData() {
   const cards = $('ov-cards');
   if (!cards) return;
-  cards.innerHTML = `<div class="card" style="height:200px;display:flex;align-items:center;justify-content:center;"><div class="spinner" style="width:24px;height:24px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
-  
-  if (S.overviewPhase === 'Bonusfragen') { 
-    renderBonusOverview(cards); 
-    return; 
+
+  if (S.overviewPhase === 'Bonusfragen') {
+    cards.innerHTML = `<div class="card" style="height:200px;display:flex;align-items:center;justify-content:center;"><div class="spinner" style="width:24px;height:24px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
+    renderBonusOverview(cards);
+    return;
   }
 
   const phaseMatches = S.matches.filter(m => m.phase === S.overviewPhase);
-  if (!phaseMatches.length) { 
-    cards.innerHTML = '<p style="text-align:center;color:var(--text-3);padding:40px 0;font-size:13px;">Keine Spiele in dieser Phase.</p>'; 
-    return; 
+  if (!phaseMatches.length) {
+    cards.innerHTML = '<p style="text-align:center;color:var(--text-3);padding:40px 0;font-size:13px;">Keine Spiele in dieser Phase.</p>';
+    return;
   }
+
+  // Gecachte Daten → sofort rendern ohne Netzwerk/Spinner (z.B. beim Ein-/Ausklappen)
+  if (S.overviewBets !== null && S.overviewBetsPhase === S.overviewPhase) {
+    renderOverviewContent(cards, S.overviewBets, phaseMatches);
+    return;
+  }
+
+  cards.innerHTML = `<div class="card" style="height:200px;display:flex;align-items:center;justify-content:center;"><div class="spinner" style="width:24px;height:24px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
 
   const { data: allBets, error } = await db.from('bets')
     .select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)')
     .in('match_id', phaseMatches.map(m => m.id));
-    
-  if (error) { 
-    cards.innerHTML = `<p style="color:var(--red);font-size:13px;padding:16px;">${error.message}</p>`; 
-    return; 
+
+  if (error) {
+    cards.innerHTML = `<p style="color:var(--red);font-size:13px;padding:16px;">${error.message}</p>`;
+    return;
   }
 
+  S.overviewBets = allBets || [];
+  S.overviewBetsPhase = S.overviewPhase;
+  renderOverviewContent(cards, S.overviewBets, phaseMatches);
+}
+
+function renderOverviewContent(cards, allBets, phaseMatches) {
   const byMatch = {};
   (allBets || []).forEach(b => { (byMatch[b.match_id] ??= []).push(b); });
 
