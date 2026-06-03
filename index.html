@@ -1152,9 +1152,23 @@ function betCard(m) {
 
   let headerBadge = isGetippt ? `<span class="pill pill-getippt">✓ Getippt</span>` : `<span class="pill pill-offen">Offen</span>`;
 
-  const boostBtnStyle = isBoosted
-    ? 'background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:800;'
-    : 'background:#F4F0E8; color:var(--text-2); border-color:var(--border); font-weight:700;';
+  // Prüfen, ob in der Phase dieses Spiels bereits ein Boost in einem gestarteten Spiel fixiert ist
+  const hasLockedBoost = Object.values(S.bets).some(b => {
+    const checkMatch = S.matches.find(x => x.id === b.match_id);
+    return checkMatch && checkMatch.phase === m.phase && b.is_boosted && isLocked(checkMatch);
+  });
+
+  const isBoostDisabled = hasLockedBoost && !isBoosted;
+
+  let boostBtnStyle = '';
+  if (isBoosted) {
+    boostBtnStyle = 'background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:800; cursor:pointer;';
+  } else if (isBoostDisabled) {
+    boostBtnStyle = 'background:#F1F0EC; color:var(--text-3); border-color:transparent; font-weight:700; opacity:0.6; cursor:not-allowed;';
+  } else {
+    boostBtnStyle = 'background:#F4F0E8; color:var(--text-2); border-color:var(--border); font-weight:700; cursor:pointer;';
+  }
+  
   const boostText = '2x Punkte';
 
   return `
@@ -1196,8 +1210,8 @@ function betCard(m) {
           </div>
           <div style="width:115px; flex-shrink:0;">
             <div class="section-label" style="text-align:right;">Boost</div>
-            <button id="bb-${m.id}" onclick="toggleBoost(${m.id})" style="width:100%; padding:11px 14px; border-radius:10px; border:1.5px solid transparent; font-size:13px; transition:all .15s; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px; ${boostBtnStyle}">
-              ${boostText}
+            <button id="bb-${m.id}" ${isBoostDisabled ? 'disabled' : `onclick="toggleBoost(${m.id})"`} style="width:100%; padding:11px 14px; border-radius:10px; border:1.5px solid transparent; font-size:13px; transition:all .15s; display:flex; align-items:center; justify-content:center; gap:4px; ${boostBtnStyle}">
+            ${boostText}
             </button>
           </div>
         </div>
