@@ -58,7 +58,6 @@
     @keyframes fadeUp   { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
     @keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
     @keyframes blink    { 0%,100% { opacity:1; } 50% { opacity:.35; } }
-    @keyframes popIn    { from { transform:scale(.92); opacity:0; } to { transform:scale(1); opacity:1; } }
 
     .spinner { display:inline-block; border-radius:50%; border:2.5px solid rgba(255,255,255,.2); border-top-color:currentColor; animation:spin .7s linear infinite; }
     .fade-up { animation:fadeUp .22s ease both; }
@@ -89,7 +88,7 @@
     .nav-item.active { color:var(--accent); }
 
     /* ═══════════════════════════════════
-       SMART ACTION BAR (Toast Alternative)
+       SMART ACTION BAR (Context Aware)
     ═══════════════════════════════════ */
     #smart-action-bar {
       position: fixed;
@@ -199,15 +198,6 @@
     .mc-teams {
       display:flex; align-items:center; justify-content:space-between;
       margin-bottom:14px;
-    }
-    .mc-team {
-      display:flex; flex-direction:column; align-items:center;
-      text-align:center; gap:6px; width:80px;
-    }
-    .mc-team-name {
-      font-size:11px; font-weight:700; color:var(--text);
-      line-height:1.2; max-width:80px; overflow:hidden;
-      text-overflow:ellipsis; white-space:nowrap;
     }
 
     /* Score inputs */
@@ -425,7 +415,7 @@
 
   <main id="main" class="flex-1 overflow-y-auto no-scrollbar" style="padding-bottom:5.5rem;"></main>
 
-  <!-- SMART ACTION BAR -->
+  <!-- SMART ACTION BAR (Context Aware & Persistent) -->
   <div id="smart-action-bar" onclick="executeSmartAction()"></div>
 
   <nav style="position:fixed; bottom:0; left:0; right:0; background:var(--navy); border-top:1px solid rgba(255,255,255,.08); display:flex; height:calc(3.75rem + env(safe-area-inset-bottom)); padding-bottom:env(safe-area-inset-bottom); z-index:20;">
@@ -633,7 +623,6 @@ function jumpToMatch(phase, matchId) {
   goTo('tippen');
   if (S.bettingPhase!==phase) setBettingPhase(phase);
 
-  // Stelle sicher, dass die Datumsgruppe ausgeklappt ist
   const m = S.matches.find(x => x.id === matchId);
   if (m) {
     const dLabel = getDateLabel(m.kickoff_time);
@@ -823,8 +812,9 @@ function updateSmartActionBar() {
     isLive = false;
   }
 
-  // Verstecken wenn Dashboard, oder kein Spiel mehr da ist, oder wir schon in der richtigen Phase & im Tippen Tab sind
-  if (!targetMatch || S.view === 'dashboard' || (S.view === 'tippen' && S.bettingPhase === targetMatch.phase)) {
+  // Verstecken wenn wir auf dem Dashboard sind (dort gibt es das Top-Widget) oder kein Spiel mehr existiert.
+  // In Tippen und Übersicht soll er IMMER da sein, um als Quick-Jump zu dienen (auch wenn man schon in der Phase ist).
+  if (!targetMatch || S.view === 'dashboard') {
     bar.classList.remove('visible');
     S.smartActionMatch = null;
     return;
@@ -841,10 +831,41 @@ function updateSmartActionBar() {
   bar.classList.add('visible');
 }
 
-window.executeSmartAction = function() {
-  if (S.smartActionMatch) {
-    jumpToMatch(S.smartActionMatch.phase, S.smartActionMatch.id);
+window.executeSmartAction = async function() {
+  if (!S.smartActionMatch) return;
+  const m = S.smartActionMatch;
+  
+  // Wenn wir in der Übersicht sind, bleiben wir dort. Ansonsten (z.B. aus Tabelle, Profil) gehen wir zu Tippen
+  const targetView = (S.view === 'uebersicht') ? 'uebersicht' : 'tippen';
+  
+  if (S.view !== targetView) {
+    goTo(targetView);
   }
+
+  // Datumsgruppe sicherstellen
+  const dLabel = getDateLabel(m.kickoff_time);
+  S.collapsedDates[dLabel] = false;
+
+  // Phase wechseln und neu rendern
+  if (targetView === 'uebersicht') {
+    if (S.overviewPhase !== m.phase) {
+      await setOverviewPhase(m.phase); // Setzt Phase und lädt Daten
+    } else {
+      await loadOverviewData(); // Re-render falls es nur eingeklappt war
+    }
+  } else {
+    if (S.bettingPhase !== m.phase) {
+      S.bettingPhase = m.phase;
+    }
+    renderBettingContent(); // Synchrons re-render
+  }
+
+  // Leicht verzögert zum Element scrollen
+  setTimeout(() => {
+    const elId = targetView === 'uebersicht' ? `match-ov-card-${m.id}` : `match-card-${m.id}`;
+    const el = $(elId);
+    if (el) el.scrollIntoView({behavior:'smooth',block:'start'});
+  }, 150);
 }
 
 // ──────────────────────────────────────────
@@ -945,7 +966,7 @@ function renderDashboard(main) {
     </div>`;
   }
 
-  const lbRows = S.liveLeaderboard.map((p,i) => {
+  const lbRows = S.liveLeaderboard.slice(0,5).map((p,i) => {
     const isMe=p.id===S.user.id;
     const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span style="font-weight:800;font-size:13px;color:var(--text-3);">${i+1}</span>`;
     return `<div class="lb-row ${isMe?'me':''}">
@@ -976,7 +997,7 @@ function renderDashboard(main) {
       ${nextHtml}
 
       <div class="card" style="padding:18px 16px;">
-        <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin-bottom:12px;">Rangliste</div>
+        <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin-bottom:12px;">Top Platzierungen</div>
         <div style="display:flex;flex-direction:column;gap:2px;">
           ${lbRows||'<p style="text-align:center;color:var(--text-3);font-size:13px;padding:16px 0;">Noch keine Spieler.</p>'}
         </div>
@@ -1018,7 +1039,7 @@ function renderBettingContent() {
     const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
     
     let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
-      <span>${dateLabel}</span>
+      <span>📅 ${dateLabel}</span>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:${iconRot}"><polyline points="6 9 12 15 18 9"></polyline></svg>
     </div>`;
     
@@ -1244,7 +1265,7 @@ async function performSave(matchId, h, a) {
 }
 
 // ──────────────────────────────────────────
-// GOALSCORER MODAL
+// GOALSCORER MODAL 
 // ──────────────────────────────────────────
 async function openScorer(matchId) {
   $('modal-scorer').classList.remove('hidden');
@@ -1278,10 +1299,8 @@ async function openScorer(matchId) {
     (players||[]).forEach(p => { p.tournament_goals = 0; });
   }
 
+  // Grundsortierung nach Toren, Position, Name
   (players||[]).sort((a,b)=>{
-    const aFlag = lineupMap.has(a.id) ? (lineupMap.get(a.id) ? 0 : 1) : 2;
-    const bFlag = lineupMap.has(b.id) ? (lineupMap.get(b.id) ? 0 : 1) : 2;
-    if (aFlag !== bFlag) return aFlag - bFlag;
     if ((b.tournament_goals||0)!=(a.tournament_goals||0)) return (b.tournament_goals||0)-(a.tournament_goals||0);
     const wa=posWeight[a.position]||99, wb=posWeight[b.position]||99;
     if (wa!==wb) return wa-wb;
@@ -1291,20 +1310,51 @@ async function openScorer(matchId) {
   const homePlayers=(players||[]).filter(p=>p.team_id===m.home_team_id);
   const awayPlayers=(players||[]).filter(p=>p.team_id===m.away_team_id);
 
-  const renderP=p=>{
-    const starter = lineupMap.get(p.id) === true;
-    const pos=posMap[p.position]||p.position||'?';
-    const goals=p.tournament_goals>0 ? `<span style="font-size:9px;font-weight:700;background:var(--blue-bg);color:var(--blue);padding:2px 6px;border-radius:4px;margin-left:auto;">${p.tournament_goals}⚽</span>` : '';
-    const dot=starter ? `<div style="position:absolute;top:-3px;right:-3px;width:10px;height:10px;background:var(--green);border-radius:50%;border:2px solid #fff;"></div>` : '';
+  const renderP = (p) => {
+    const pos = posMap[p.position] || p.position || '?';
+    const goals = p.tournament_goals > 0 ? `<span style="font-size:9px;font-weight:700;background:var(--blue-bg);color:var(--blue);padding:2px 6px;border-radius:4px;margin-left:auto;">${p.tournament_goals}⚽</span>` : '';
     return `
-      <button onclick="pickScorer(${matchId},${p.id})" style="position:relative;width:100%;text-align:left;padding:9px 10px;border-radius:10px;border:1.5px solid ${starter?'var(--border)':'var(--border-light)'};background:${starter?'#fff':'#FAFAF7'};cursor:pointer;display:flex;flex-direction:column;gap:4px;transition:background .12s;min-width:0;">
-        ${dot}
-        <span style="font-size:11px;font-weight:${starter?700:600};color:${starter?'var(--text)':'var(--text-2)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">${p.name}</span>
+      <button onclick="pickScorer(${matchId},${p.id})" style="width:100%;text-align:left;padding:9px 10px;border-radius:10px;border:1.5px solid var(--border-light);background:#fff;cursor:pointer;display:flex;flex-direction:column;gap:4px;transition:background .12s;min-width:0;">
+        <span style="font-size:11px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">${p.name}</span>
         <div style="display:flex;align-items:center;gap:4px;width:100%;">
           <span style="font-size:9px;font-weight:700;color:var(--text-3);">${pos}</span>
           ${goals}
         </div>
       </button>`;
+  };
+
+  const renderPlayerGroup = (teamPlayers) => {
+    if (!teamPlayers.length) return '<p style="font-size:11px;color:var(--text-3);text-align:center;padding:8px 0;">Keine Spieler</p>';
+
+    const teamHasLineup = teamPlayers.some(p => lineupMap.has(p.id));
+
+    if (!teamHasLineup) {
+      return `
+        <div style="font-size:10px; font-weight:800; color:var(--text-3); text-transform:uppercase; margin:8px 0 4px 4px; letter-spacing:0.05em;">Kader</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${teamPlayers.map(p => renderP(p)).join('')}
+        </div>`;
+    }
+
+    const starters = teamPlayers.filter(p => lineupMap.get(p.id) === true);
+    const bench = teamPlayers.filter(p => lineupMap.get(p.id) !== true);
+
+    let html = '';
+    if (starters.length > 0) {
+      html += `
+        <div style="font-size:10px; font-weight:800; color:var(--text-3); text-transform:uppercase; margin:8px 0 4px 4px; letter-spacing:0.05em;">Startelf</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">
+          ${starters.map(p => renderP(p)).join('')}
+        </div>`;
+    }
+    if (bench.length > 0) {
+      html += `
+        <div style="font-size:10px; font-weight:800; color:var(--text-3); text-transform:uppercase; margin:8px 0 4px 4px; letter-spacing:0.05em;">Bank</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${bench.map(p => renderP(p)).join('')}
+        </div>`;
+    }
+    return html;
   };
 
   list.innerHTML=`
@@ -1313,22 +1363,18 @@ async function openScorer(matchId) {
     </button>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;">
       <div>
-        <div style="display:flex;align-items:center;gap:6px;padding-bottom:10px;margin-bottom:10px;border-bottom:2px solid var(--border-light);">
+        <div style="display:flex;align-items:center;gap:6px;padding-bottom:10px;border-bottom:2px solid var(--border-light);">
           ${flag(m.home_team,'w-5 h-3')}
           <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.home_team?.name||'Heim'}</span>
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px;">
-          ${homePlayers.length ? homePlayers.map(renderP).join('') : '<p style="font-size:11px;color:var(--text-3);text-align:center;padding:8px 0;">Keine Spieler</p>'}
-        </div>
+        ${renderPlayerGroup(homePlayers)}
       </div>
       <div>
-        <div style="display:flex;align-items:center;gap:6px;padding-bottom:10px;margin-bottom:10px;border-bottom:2px solid var(--border-light);">
+        <div style="display:flex;align-items:center;gap:6px;padding-bottom:10px;border-bottom:2px solid var(--border-light);">
           ${flag(m.away_team,'w-5 h-3')}
           <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.away_team?.name||'Gast'}</span>
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px;">
-          ${awayPlayers.length ? awayPlayers.map(renderP).join('') : '<p style="font-size:11px;color:var(--text-3);text-align:center;padding:8px 0;">Keine Spieler</p>'}
-        </div>
+        ${renderPlayerGroup(awayPlayers)}
       </div>
     </div>`;
 }
@@ -1485,7 +1531,7 @@ async function loadOverviewData() {
     const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
     
     let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
-      <span>${dateLabel}</span>
+      <span>📅 ${dateLabel}</span>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:${iconRot}"><polyline points="6 9 12 15 18 9"></polyline></svg>
     </div>`;
 
@@ -1495,25 +1541,55 @@ async function loadOverviewData() {
         const fnH = getFinalScore(m, 'home'), fnA = getFinalScore(m, 'away');
         const ext = m.home_score_extratime !== null ? ' n.V.' : '';
 
+        // 1. Wetten auswerten
+        const matchBets = byMatch[m.id] || [];
+        matchBets.forEach(b => b._pts = calcBetPoints(m, b));
+
+        // 2. Torschützen-Status analysieren
+        let iGotScorer = false;
+        let someoneGotScorer = false;
+        let hasScorerResult = (locked && m.first_goalscorer) || (locked && isFinished(m.status) && m.is_goalless === true);
+
+        if (hasScorerResult) {
+          matchBets.forEach(b => {
+            let isCorrect = false;
+            if (m.is_goalless && b.is_goalless) isCorrect = true;
+            if (m.first_goalscorer_id && b.first_goalscorer_id === m.first_goalscorer_id) isCorrect = true;
+
+            if (isCorrect) {
+              someoneGotScorer = true;
+              if (b.user_id === S.user.id) iGotScorer = true;
+            }
+          });
+        }
+
+        // 3. Header Actual Scorer bauen
+        let actualScorer = '';
+        if (hasScorerResult) {
+          let sName = '';
+          if (m.first_goalscorer) {
+            const scorerTeam = S.teams.find(x => x.id === m.first_goalscorer.team_id);
+            const teamAcr = scorerTeam ? scorerTeam.name.substring(0,3).toUpperCase() : '';
+            sName = teamAcr ? `⚽ ${m.first_goalscorer.name} (${teamAcr})` : `⚽ ${m.first_goalscorer.name}`;
+          } else if (m.is_goalless) {
+            sName = '🚫 Kein Tor';
+          }
+
+          // Pastell-Farben für gute Lesbarkeit auf dunkelblauem Header
+          let headerColor = '#FCA5A5'; // Rot (Niemand hat es)
+          if (iGotScorer) headerColor = '#4ADE80'; // Grün (Ich hab's)
+          else if (someoneGotScorer) headerColor = '#FBBF24'; // Gelb (Jemand anderes)
+
+          actualScorer = `<span style="font-size:10px;color:${headerColor};font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sName}</span>`;
+        }
+
+        // 4. Spielstatus Label
         let statusHtml = '';
         if (isFinished(m.status)) statusHtml = `<span class="mono">${fnH}:${fnA}${ext}</span>`;
         else if (isLive) statusHtml = `<span style="color:#FCA5A5;font-weight:800;" class="live-pulse">LIVE ${fnH ?? 0}:${fnA ?? 0}</span>`;
         else statusHtml = formatRelativeDate(m.kickoff_time);
 
-        let actualScorer = '';
-        if (locked && m.first_goalscorer) {
-          const scorerTeam = S.teams.find(x => x.id === m.first_goalscorer.team_id);
-          const teamAcr = scorerTeam ? scorerTeam.name.substring(0,3).toUpperCase() : '';
-          const sName = teamAcr ? `${m.first_goalscorer.name} (${teamAcr})` : m.first_goalscorer.name;
-          actualScorer = `<span style="font-size:10px;color:#6EE7B7;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">⚽ ${sName}</span>`;
-        }
-        else if (locked && isFinished(m.status) && m.is_goalless === true) {
-          actualScorer = `<span style="font-size:10px;color:rgba(255,255,255,.4);">🚫 Kein Tor</span>`;
-        }
-
-        const matchBets = byMatch[m.id] || [];
-        matchBets.forEach(b => b._pts = calcBetPoints(m, b));
-
+        // 5. Reihen sortieren
         let displayRows = S.leaderboard.map(player => {
           const b = matchBets.find(x => x.user_id === player.id);
           return { player, bet: b, pts: b ? b._pts : 0 };
@@ -1556,8 +1632,17 @@ async function loadOverviewData() {
             }
 
             if (hasBet) {
-              let sName = bet.is_goalless ? '🚫 Kein Tor' : (bet.goalscorer?.name || '–');
-              let scorerStyle = 'font-size:11px; font-weight:600; padding:2px 6px; border-radius:4px; display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+              let sName = '–';
+              let acr = '';
+              if (bet.is_goalless) {
+                sName = '🚫 Kein Tor';
+              } else if (bet.goalscorer) {
+                const scorerTeam = S.teams.find(x => x.id === bet.goalscorer.team_id);
+                acr = scorerTeam ? ` (${scorerTeam.name.substring(0,3).toUpperCase()})` : '';
+                sName = bet.goalscorer.name + acr;
+              }
+
+              let scorerStyle = 'font-size:11px; font-weight:600; display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
               
               if (locked && isFinished(m.status)) {
                 let isCorrect = false;
@@ -1565,14 +1650,14 @@ async function loadOverviewData() {
                 if (bet.first_goalscorer_id && bet.first_goalscorer_id === m.first_goalscorer_id) isCorrect = true;
 
                 if (isCorrect) {
-                  scorerStyle += 'background:var(--green-bg); color:var(--green); font-weight:700;';
+                  scorerStyle += 'color:var(--green); font-weight:700;';
                   sName = '✓ ' + sName;
                 } else {
-                  scorerStyle += 'background:var(--red-bg); color:var(--red); opacity:0.8;';
+                  scorerStyle += 'color:var(--red); opacity:0.8;';
                   sName = '✗ ' + sName;
                 }
               } else {
-                scorerStyle += 'background:#F1F0EC; color:var(--text-2);';
+                scorerStyle += 'color:var(--text-2);';
               }
               scorerBadge = `<span style="${scorerStyle}">${sName}</span>`;
             }
@@ -1617,7 +1702,7 @@ async function loadOverviewData() {
         const hn = (m.home_team?.name || 'HM').substring(0,3).toUpperCase();
         const an = (m.away_team?.name || 'GS').substring(0,3).toUpperCase();
 
-        return `<div class="card" style="overflow:hidden;">
+        return `<div id="match-ov-card-${m.id}" class="card" style="overflow:hidden; scroll-margin-top:140px;">
           <div onclick="toggleMatchOverview(${m.id})" style="background:var(--navy);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;">
             <div style="font-weight:800;font-size:12px;display:flex;align-items:center;gap:6px;flex-shrink:0;">
               ${flag(m.home_team,'w-4 h-3')}<span>${hn}–${an}</span>${flag(m.away_team,'w-4 h-3')}
