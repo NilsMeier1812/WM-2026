@@ -480,8 +480,19 @@ if ('serviceWorker' in navigator) {
 // ──────────────────────────────────────────
 // CONFIG
 // ──────────────────────────────────────────
-const SUPABASE_URL      = 'https://kuzxrwzydddykliunhvg.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1enhyd3p5ZGRkeWtsaXVuaHZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NDE0OTMsImV4cCI6MjA5NTQxNzQ5M30.dnIGUpCh2DvPbVi8r-iCdHXKaIIBz_6lbSGTR_ys57U';
+
+// NEU:
+const IS_DEV = window.location.hostname === 'wm-nils-test.vercel.app';
+
+const SUPABASE_URL = IS_DEV
+  ? 'https://kuzxrwzydddykliunhvg.supabase.co'
+  : 'https://hinedxiclumqsvludqsl.supabase.co';
+
+const SUPABASE_ANON_KEY = IS_DEV
+  ? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1enhyd3p5ZGRkeWtsaXVuaHZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NDE0OTMsImV4cCI6MjA5NTQxNzQ5M30.dnIGUpCh2DvPbVi8r-iCdHXKaIIBz_6lbSGTR_ys57U'
+  : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpbmVkeGljbHVtcXN2bHVkcXNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NTkzNjIsImV4cCI6MjA5NjEzNTM2Mn0.QGETFrPgGft2X-1YJlaueE4is0vXUHQ9PYt_n6tWlq4';
+
+
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
