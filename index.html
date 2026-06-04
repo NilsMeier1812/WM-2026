@@ -820,6 +820,21 @@ async function fetchData(showLoadingState=true) {
 }
 
 // ──────────────────────────────────────────
+// HELPER: Calculate rank with ties
+// ──────────────────────────────────────────
+function calculateRank(leaderboard, playerIndex) {
+  if (playerIndex < 0 || playerIndex >= leaderboard.length) return '–';
+  const playerScore = leaderboard[playerIndex].total_points;
+  let rank = 1;
+  for (let i = 0; i < playerIndex; i++) {
+    if (leaderboard[i].total_points !== playerScore) {
+      rank = i + 1;
+    }
+  }
+  return rank;
+}
+
+// ──────────────────────────────────────────
 // NAVIGATION & SMART ACTION BAR
 // ──────────────────────────────────────────
 function goTo(view) {
@@ -923,7 +938,8 @@ window.executeSmartAction = async function() {
 // ──────────────────────────────────────────
 function renderDashboard(main) {
   const me    = S.liveLeaderboard.find(p=>p.id===S.user.id);
-  const rank  = (S.liveLeaderboard.findIndex(p=>p.id===S.user.id)+1) || '–';
+  const myIndex = S.liveLeaderboard.findIndex(p=>p.id===S.user.id);
+  const rank  = myIndex >= 0 ? calculateRank(S.liveLeaderboard, myIndex) : '–';
   const pts   = me?.total_points ?? 0;
   const total = S.liveLeaderboard.length;
   const now   = new Date();
@@ -1018,7 +1034,8 @@ function renderDashboard(main) {
 
   const lbRows = S.liveLeaderboard.slice(0,5).map((p,i) => {
     const isMe=p.id===S.user.id;
-    const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span style="font-weight:800;font-size:13px;color:var(--text-3);">${i+1}</span>`;
+    const rank=calculateRank(S.liveLeaderboard, i);
+    const medal=rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':`<span style="font-weight:800;font-size:13px;color:var(--text-3);">${rank}</span>`;
     return `<div class="lb-row ${isMe?'me':''}">
       <div style="display:flex;align-items:center;gap:10px;">
         <div style="width:22px;text-align:center;font-size:15px;line-height:1;">${medal}</div>
@@ -1923,7 +1940,7 @@ async function loadTabelleData(filterType) {
   const unit=filterType==='total'||filterType.startsWith('phase_')?'Pkt':'×';
 
   c.innerHTML=`<div style="display:flex;flex-direction:column;gap:2px;">`+ranked.map((p,i)=>{
-    const isMe=p.id===S.user.id, rn=i+1;
+    const isMe=p.id===S.user.id, rn=calculateRank(ranked, i);
     const medal=rn===1?'🥇':rn===2?'🥈':rn===3?'🥉':`<span style="font-weight:800;font-size:13px;color:var(--text-3);">${rn}</span>`;
     return `<div class="lb-row ${isMe?'me':''}">
       <div style="display:flex;align-items:center;gap:10px;">
