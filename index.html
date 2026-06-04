@@ -824,11 +824,13 @@ async function fetchData(showLoadingState=true) {
 // ──────────────────────────────────────────
 function calculateRank(leaderboard, playerIndex) {
   if (playerIndex < 0 || playerIndex >= leaderboard.length) return '–';
-  const playerScore = leaderboard[playerIndex].total_points;
+  const playerObj = leaderboard[playerIndex];
+  const playerScore = playerObj.total_points !== undefined ? playerObj.total_points : playerObj.value;
   let rank = 1;
   // Zähle alle Spieler mit MEHR Punkten
   for (let i = 0; i < leaderboard.length; i++) {
-    if (i !== playerIndex && leaderboard[i].total_points > playerScore) {
+    const otherScore = leaderboard[i].total_points !== undefined ? leaderboard[i].total_points : leaderboard[i].value;
+    if (i !== playerIndex && otherScore > playerScore) {
       rank++;
     }
   }
@@ -1065,7 +1067,7 @@ function renderDashboard(main) {
 
       <div class="card hero-card" style="padding:22px 16px;background:var(--navy);border-color:transparent;">
         <div class="hero-stat hero-stat-platz">
-          <div class="num" style="color:#fff;"><span class="pre">Platz</span>${displayRank}</div>
+          <div class="num" style="color:#fff;"><span class="pre">Platz</span>${rank}</div>
           <div class="lbl" style="color:rgba(255,255,255,.4);">von ${total}</div>
         </div>
         <div class="hero-divider"></div>
