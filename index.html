@@ -1050,10 +1050,10 @@ function renderDashboard(main) {
     const isMe=p.id===S.user.id;
     const rank=calculateRank(S.liveLeaderboard, i);
     const displayRank=getDisplayRank(S.liveLeaderboard, i);
-    const medal=rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':(displayRank==='°'?`<span style="font-weight:800;font-size:13px;color:var(--text-3);">°</span>`:`<span style="font-weight:800;font-size:13px;color:var(--text-3);">${displayRank}</span>`);
+    const rankDisplay=displayRank==='°'?`<span style="font-weight:800;font-size:16px;color:var(--text-3);line-height:1;display:flex;align-items:center;justify-content:center;">•</span>`:`<span style="font-weight:800;font-size:13px;color:var(--text-3);">${displayRank}</span>`;
     return `<div class="lb-row ${isMe?'me':''}">
       <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:22px;text-align:center;font-size:15px;line-height:1;">${medal}</div>
+        <div style="width:22px;text-align:center;font-size:15px;line-height:1;">${rankDisplay}</div>
         <div style="font-weight:${isMe?700:600};font-size:14px;color:${isMe?'var(--blue)':'var(--text)'};">${p.display_name||'?'}</div>
       </div>
       <div class="syne mono" style="font-size:16px;font-weight:800;color:${isMe?'var(--blue)':'var(--text)'};">${p.total_points??0} <span style="font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:var(--text-3);">Pkt</span></div>
@@ -1956,10 +1956,10 @@ async function loadTabelleData(filterType) {
 
   c.innerHTML=`<div style="display:flex;flex-direction:column;gap:2px;">`+ranked.map((p,i)=>{
     const isMe=p.id===S.user.id, rn=calculateRank(ranked, i), displayRn=getDisplayRank(ranked, i);
-    const medal=rn===1?'🥇':rn===2?'🥈':rn===3?'🥉':(displayRn==='°'?`<span style="font-weight:800;font-size:13px;color:var(--text-3);">°</span>`:`<span style="font-weight:800;font-size:13px;color:var(--text-3);">${displayRn}</span>`);
+    const rankDisplay=displayRn==='°'?`<span style="font-weight:800;font-size:16px;color:var(--text-3);line-height:1;display:flex;align-items:center;justify-content:center;">•</span>`:`<span style="font-weight:800;font-size:13px;color:var(--text-3);">${displayRn}</span>`;
     return `<div class="lb-row ${isMe?'me':''}">
       <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:22px;text-align:center;font-size:16px;line-height:1;">${medal}</div>
+        <div style="width:22px;text-align:center;font-size:16px;line-height:1;">${rankDisplay}</div>
         <div style="font-weight:${isMe?700:600};font-size:14px;color:${isMe?'var(--blue)':'var(--text)'};">${p.display_name||'?'}</div>
       </div>
       <div class="syne" style="font-size:16px;font-weight:800;color:${isMe?'var(--blue)':'var(--text)'};">${p.value} <span style="font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:var(--text-3);">${unit}</span></div>
