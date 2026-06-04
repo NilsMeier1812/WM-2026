@@ -2107,7 +2107,8 @@ async function toggleBoost(matchId) {
 function renderProfile(main) {
   const p = S.profile;
   const initial = (p?.display_name || '?').charAt(0).toUpperCase();
-  const rank = (S.liveLeaderboard.findIndex(x => x.id === S.user.id) + 1) || '–';
+  const myIndex = S.liveLeaderboard.findIndex(x => x.id === S.user.id);
+  const rank = myIndex >= 0 ? calculateRank(S.liveLeaderboard, myIndex) : '–';
   const pts = S.liveLeaderboard.find(x => x.id === S.user.id)?.total_points ?? 0;
   const total = S.liveLeaderboard.length;
   
