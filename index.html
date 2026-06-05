@@ -1150,7 +1150,13 @@ function betCard(m) {
   if (locked) {
     const pts = calcBetPoints(m, bet);
     const finalH = getFinalScore(m, 'home') ?? 0, finalA = getFinalScore(m, 'away') ?? 0;
-    const extInfo = m.home_score_extratime !== null ? `<div style="font-size:10px;color:var(--text-3);font-weight:700;margin-top:4px;">n.V.</div>` : '';
+    
+    let extInfo = '';
+    if (m.home_score_penalty !== null && m.home_score_penalty !== undefined) {
+      extInfo = `<div style="font-size:10px;color:var(--text-3);font-weight:700;margin-top:4px;">(${m.home_score_penalty}:${m.away_score_penalty} n.E.)</div>`;
+    } else if (m.home_score_extratime !== null && m.home_score_extratime !== undefined) {
+      extInfo = `<div style="font-size:10px;color:var(--text-3);font-weight:700;margin-top:4px;">n.V.</div>`;
+    }
 
     let headerBadge = '';
     if (isLive) headerBadge = `<span class="pill pill-live"><span class="live-dot"></span>Live</span>`;
@@ -1683,7 +1689,13 @@ function renderOverviewContent(cards, allBets, phaseMatches) {
       groupHtml += `<div style="display:flex;flex-direction:column;gap:14px;">` + matches.map(m => {
         const locked = isLocked(m), isLive = locked && !isFinished(m.status);
         const fnH = getFinalScore(m, 'home'), fnA = getFinalScore(m, 'away');
-        const ext = m.home_score_extratime !== null ? ' n.V.' : '';
+        
+        let ext = '';
+        if (m.home_score_penalty !== null && m.home_score_penalty !== undefined) {
+          ext = ` (${m.home_score_penalty}:${m.away_score_penalty} n.E.)`;
+        } else if (m.home_score_extratime !== null && m.home_score_extratime !== undefined) {
+          ext = ' n.V.';
+        }
 
         // 1. Wetten auswerten
         const matchBets = byMatch[m.id] || [];
