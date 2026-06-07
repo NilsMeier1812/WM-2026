@@ -1422,6 +1422,49 @@ async function openScorer(matchId) {
   const homePlayers=(players||[]).filter(p=>p.team_id===m.home_team_id);
   const awayPlayers=(players||[]).filter(p=>p.team_id===m.away_team_id);
 
+  // Fallback: letzte Startelf aus dem vorherigen Spiel des Teams laden,
+  // falls für dieses Spiel noch keine Aufstellung vorhanden ist.
+  async function getLastLineup(teamId, teamPlayerIds, beforeKickoff) {
+    const candidates = S.matches
+      .filter(x => (x.home_team_id === teamId || x.away_team_id === teamId)
+        && new Date(x.kickoff_time) < new Date(beforeKickoff))
+      .sort((a, b) => new Date(b.kickoff_time) - new Date(a.kickoff_time));
+    if (!candidates.length) return null;
+    const ids = candidates.map(c => c.id);
+    const {data} = await db.from('match_lineups').select('match_id,player_id,is_starter').in('match_id', ids);
+    if (!data || !data.length) return null;
+    const teamSet = new Set(teamPlayerIds);
+    const byMatch = new Map();
+    data.forEach(r => {
+      if (!teamSet.has(r.player_id)) return;
+      if (!byMatch.has(r.match_id)) byMatch.set(r.match_id, []);
+      byMatch.get(r.match_id).push(r);
+    });
+    for (const c of candidates) {
+      const rows = byMatch.get(c.id);
+      if (rows && rows.some(r => Boolean(r.is_starter))) {
+        return new Map(rows.map(r => [r.player_id, Boolean(r.is_starter)]));
+      }
+    }
+    return null;
+  }
+
+  const homeHasLineup = homePlayers.some(p => lineupMap.has(p.id));
+  const awayHasLineup = awayPlayers.some(p => lineupMap.has(p.id));
+
+  let homeMode = homeHasLineup ? 'current' : 'none';
+  let awayMode = awayHasLineup ? 'current' : 'none';
+  let homeMap = lineupMap, awayMap = lineupMap;
+
+  if (!homeHasLineup) {
+    const last = await getLastLineup(m.home_team_id, homePlayers.map(p => p.id), m.kickoff_time);
+    if (last) { homeMap = last; homeMode = 'last'; }
+  }
+  if (!awayHasLineup) {
+    const last = await getLastLineup(m.away_team_id, awayPlayers.map(p => p.id), m.kickoff_time);
+    if (last) { awayMap = last; awayMode = 'last'; }
+  }
+
   const renderP = (p, isStarter = false) => {
     const pos = posMap[p.position] || p.position || '?';
     const goals = p.tournament_goals > 0 ? `<span style="font-size:9px;font-weight:700;background:var(--blue-bg);color:var(--blue);padding:2px 6px;border-radius:4px;margin-left:auto;">${p.tournament_goals}⚽</span>` : '';
@@ -1438,12 +1481,10 @@ async function openScorer(matchId) {
       </button>`;
   };
 
-  const renderPlayerGroup = (teamPlayers) => {
+  const renderPlayerGroup = (teamPlayers, map, mode) => {
     if (!teamPlayers.length) return '<p style="font-size:11px;color:var(--text-3);text-align:center;padding:8px 0;">Keine Spieler</p>';
 
-    const teamHasLineup = teamPlayers.some(p => lineupMap.has(p.id));
-
-    if (!teamHasLineup) {
+    if (mode === 'none') {
       return `
         <div style="font-size:10px; font-weight:800; color:var(--text-3); text-transform:uppercase; margin:8px 0 4px 4px; letter-spacing:0.05em;">Kader</div>
         <div style="display:flex;flex-direction:column;gap:6px;">
@@ -1451,20 +1492,24 @@ async function openScorer(matchId) {
         </div>`;
     }
 
-    const starters = teamPlayers.filter(p => lineupMap.get(p.id) === true);
-    const bench = teamPlayers.filter(p => lineupMap.get(p.id) !== true);
+    const starters = teamPlayers.filter(p => map.get(p.id) === true);
+    const bench = teamPlayers.filter(p => map.get(p.id) !== true);
+    const starterLabel = mode === 'last' ? 'Letzte Startelf' : 'Startelf';
+    // Bei aktueller Aufstellung: Rest = "Bank". Bei letzter Startelf ist die
+    // damalige Bank für dieses Spiel nicht aussagekräftig → restlicher Kader.
+    const benchLabel = mode === 'last' ? 'Kader' : 'Bank';
 
     let html = '';
     if (starters.length > 0) {
       html += `
-        <div style="font-size:10px; font-weight:800; color:var(--text-3); text-transform:uppercase; margin:8px 0 4px 4px; letter-spacing:0.05em;">Startelf</div>
+        <div style="font-size:10px; font-weight:800; color:var(--text-3); text-transform:uppercase; margin:8px 0 4px 4px; letter-spacing:0.05em;">${starterLabel}</div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">
           ${starters.map(p => renderP(p, true)).join('')}
         </div>`;
     }
     if (bench.length > 0) {
       html += `
-        <div style="font-size:10px; font-weight:800; color:var(--text-3); text-transform:uppercase; margin:8px 0 4px 4px; letter-spacing:0.05em;">Bank</div>
+        <div style="font-size:10px; font-weight:800; color:var(--text-3); text-transform:uppercase; margin:8px 0 4px 4px; letter-spacing:0.05em;">${benchLabel}</div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${bench.map(p => renderP(p)).join('')}
         </div>`;
@@ -1482,14 +1527,14 @@ async function openScorer(matchId) {
           ${flag(m.home_team,'w-5 h-3')}
           <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.home_team?.name||'Heim'}</span>
         </div>
-        ${renderPlayerGroup(homePlayers)}
+        ${renderPlayerGroup(homePlayers, homeMap, homeMode)}
       </div>
       <div>
         <div style="display:flex;align-items:center;gap:6px;padding-bottom:10px;border-bottom:2px solid var(--border-light);">
           ${flag(m.away_team,'w-5 h-3')}
           <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.away_team?.name||'Gast'}</span>
         </div>
-        ${renderPlayerGroup(awayPlayers)}
+        ${renderPlayerGroup(awayPlayers, awayMap, awayMode)}
       </div>
     </div>`;
 }
