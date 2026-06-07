@@ -1999,10 +1999,17 @@ async function renderBonusInsideBetting(container) {
   const betsMap={};
   (bRes.data||[]).forEach(b=>betsMap[b.question_id]=b);
 
-  // Spieler vorladen, falls es eine "players"-Frage gibt
+  // Spieler vorladen, falls es eine "players"-Frage gibt.
+  // Paginiert laden, da Supabase pro Request serverseitig max. 1000 Zeilen liefert.
   if (questions.some(q=>q.answer_type==='players') && !S.allPlayers) {
-    const {data:pl}=await db.from('players').select('id,name,team_id').order('name',{ascending:true}).range(0,99999);
-    S.allPlayers=pl||[];
+    const all=[]; const PAGE=1000;
+    for (let from=0;;from+=PAGE) {
+      const {data:pl,error}=await db.from('players').select('id,name,team_id').order('name',{ascending:true}).range(from,from+PAGE-1);
+      if (error) break;
+      all.push(...(pl||[]));
+      if (!pl || pl.length<PAGE) break;
+    }
+    S.allPlayers=all;
   }
 
   const selectStyle=locked=>`width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;background:var(--surface);font-size:14px;font-weight:600;outline:none;appearance:none;${locked?'opacity:.6;background:#F4F0E8;':''}cursor:${locked?'default':'pointer'};`;
