@@ -2132,7 +2132,7 @@ async function saveBonus(qId) {
     }
     showToast('Bonustipp gespeichert');
     btn.textContent='✓ Gespeichert'; btn.style.background='var(--green)';
-    setTimeout(()=>{btn.textContent='Speichern';btn.style.background='';btn.disabled=false;},2200);
+    setTimeout(()=>{btn.textContent='Speichern';btn.style.background='var(--navy)';btn.disabled=false;},2200);
   } catch(e) {
     showToast(e.message,'error');
     btn.textContent='Speichern'; btn.disabled=false;
