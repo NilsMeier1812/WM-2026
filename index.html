@@ -2038,15 +2038,14 @@ async function renderBonusInsideBetting(container) {
         <option value="" disabled${!myBet?' selected':''}>Bitte wählen …</option>${opts}
       </select>`;
     } else if (q.answer_type==='players') {
-      // Team des bereits getippten Spielers ermitteln (für Vorauswahl)
-      const savedPlayer=(S.allPlayers||[]).find(p=>p.name===myBet);
-      const savedTeamId=savedPlayer?.team_id||'';
-      const teamOpts=S.teams.map(t=>`<option value="${t.id}"${savedTeamId===t.id?' selected':''}>${(!t.flag_url||t.flag_url.startsWith('http')||t.flag_url.startsWith('/'))?'':t.flag_url+' '}${t.name}</option>`).join('');
-      const playerOpts=savedTeamId
-        ? (S.allPlayers||[]).filter(p=>p.team_id===savedTeamId).map(p=>`<option value="${p.name}"${myBet===p.name?' selected':''}>${p.name}</option>`).join('')
-        : '';
+      // Gespeichert wird nur der Spielername. Die Nation lässt sich daraus nicht
+      // eindeutig rekonstruieren (Namensdopplungen über mehrere Teams), daher bleibt
+      // das Team-Dropdown bei bereits getipptem Spieler bewusst leer. Der getippte
+      // Spieler bleibt unten sichtbar und ausgewählt.
+      const teamOpts=S.teams.map(t=>`<option value="${t.id}">${(!t.flag_url||t.flag_url.startsWith('http')||t.flag_url.startsWith('/'))?'':t.flag_url+' '}${t.name}</option>`).join('');
+      const playerOpts=myBet?`<option value="${myBet}" selected>${myBet}</option>`:'';
       inputHtml=`<select id="q-team-${q.id}" ${locked?'disabled':''} onchange="onBonusTeamChange(${q.id},this.value)" style="${selectStyle(locked)}margin-bottom:8px;">
-        <option value="" disabled${!savedTeamId?' selected':''}>Team wählen …</option>${teamOpts}
+        <option value="" disabled selected>Team wählen …</option>${teamOpts}
       </select>
       <select id="q-${q.id}" ${locked?'disabled':''} style="${selectStyle(locked)}">
         <option value="" disabled${!myBet?' selected':''}>Spieler wählen …</option>${playerOpts}
