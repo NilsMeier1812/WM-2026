@@ -1564,7 +1564,7 @@ async function renderBonusOverview(cards) {
         if (!show) ans='<span style="color:var(--text-3);">verdeckt</span>';
         else {
           ans=bet.bet_value||'-';
-          if (q.answer_type==='teams') { const t=S.teams.find(x=>x.name===bet.bet_value); if (t?.flag_url&&!t.flag_url.startsWith('http')&&!t.flag_url.startsWith('/')) ans=`${t.flag_url} ${bet.bet_value}`; }
+          if (q.answer_type==='teams'||/^group\s+/i.test(q.answer_type||'')) { const t=S.teams.find(x=>x.name===bet.bet_value); if (t?.flag_url&&!t.flag_url.startsWith('http')&&!t.flag_url.startsWith('/')) ans=`${t.flag_url} ${bet.bet_value}`; }
           ptHtml=locked?`<span style="font-weight:700;color:${(bet.points_awarded||0)>0?'var(--blue)':'var(--text-2)'};">${bet.points_awarded??0}</span>`:'';
         }
       } else { ans='<span style="color:var(--text-3);">–</span>'; if (locked) ptHtml='<span style="color:var(--text-3);">0</span>'; }
@@ -1999,19 +1999,50 @@ async function renderBonusInsideBetting(container) {
   const betsMap={};
   (bRes.data||[]).forEach(b=>betsMap[b.question_id]=b);
 
+  // Spieler vorladen, falls es eine "players"-Frage gibt
+  if (questions.some(q=>q.answer_type==='players') && !S.allPlayers) {
+    const {data:pl}=await db.from('players').select('id,name,team_id').order('name',{ascending:true});
+    S.allPlayers=pl||[];
+  }
+
+  const selectStyle=locked=>`width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;background:var(--surface);font-size:14px;font-weight:600;outline:none;appearance:none;${locked?'opacity:.6;background:#F4F0E8;':''}cursor:${locked?'default':'pointer'};`;
+  const teamOption=(t,sel)=>{
+    const flag=(!t.flag_url||t.flag_url.startsWith('http')||t.flag_url.startsWith('/'))?'':t.flag_url+' ';
+    return `<option value="${t.name}"${sel===t.name?' selected':''}>${flag}${t.name}</option>`;
+  };
+
   container.innerHTML=questions.map(q=>{
     const locked=new Date(q.deadline)<=new Date();
     const myBet=betsMap[q.id]?.bet_value||'';
     const ptsAw=betsMap[q.id]?.points_awarded;
 
+    const groupMatch=(q.answer_type||'').match(/^group\s+(.+)$/i);
+
     let inputHtml='';
     if (q.answer_type==='teams') {
-      const opts=S.teams.map(t=>{
-        const flag=(!t.flag_url||t.flag_url.startsWith('http')||t.flag_url.startsWith('/'))?'':t.flag_url+' ';
-        return `<option value="${t.name}"${myBet===t.name?' selected':''}>${flag}${t.name}</option>`;
-      }).join('');
-      inputHtml=`<select id="q-${q.id}" ${locked?'disabled':''} style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;background:var(--surface);font-size:14px;font-weight:600;outline:none;appearance:none;${locked?'opacity:.6;background:#F4F0E8;':''}cursor:${locked?'default':'pointer'};">
+      const opts=S.teams.map(t=>teamOption(t,myBet)).join('');
+      inputHtml=`<select id="q-${q.id}" ${locked?'disabled':''} style="${selectStyle(locked)}">
         <option value="" disabled${!myBet?' selected':''}>Bitte wählen …</option>${opts}
+      </select>`;
+    } else if (groupMatch) {
+      const grp=groupMatch[1].trim();
+      const opts=S.teams.filter(t=>String(t.group||'').trim().toLowerCase()===grp.toLowerCase()).map(t=>teamOption(t,myBet)).join('');
+      inputHtml=`<select id="q-${q.id}" ${locked?'disabled':''} style="${selectStyle(locked)}">
+        <option value="" disabled${!myBet?' selected':''}>Bitte wählen …</option>${opts}
+      </select>`;
+    } else if (q.answer_type==='players') {
+      // Team des bereits getippten Spielers ermitteln (für Vorauswahl)
+      const savedPlayer=(S.allPlayers||[]).find(p=>p.name===myBet);
+      const savedTeamId=savedPlayer?.team_id||'';
+      const teamOpts=S.teams.map(t=>`<option value="${t.id}"${savedTeamId===t.id?' selected':''}>${(!t.flag_url||t.flag_url.startsWith('http')||t.flag_url.startsWith('/'))?'':t.flag_url+' '}${t.name}</option>`).join('');
+      const playerOpts=savedTeamId
+        ? (S.allPlayers||[]).filter(p=>p.team_id===savedTeamId).map(p=>`<option value="${p.name}"${myBet===p.name?' selected':''}>${p.name}</option>`).join('')
+        : '';
+      inputHtml=`<select id="q-team-${q.id}" ${locked?'disabled':''} onchange="onBonusTeamChange(${q.id},this.value)" style="${selectStyle(locked)}margin-bottom:8px;">
+        <option value="" disabled${!savedTeamId?' selected':''}>Team wählen …</option>${teamOpts}
+      </select>
+      <select id="q-${q.id}" ${locked?'disabled':''} style="${selectStyle(locked)}">
+        <option value="" disabled${!myBet?' selected':''}>Spieler wählen …</option>${playerOpts}
       </select>`;
     } else {
       inputHtml=`<input id="q-${q.id}" type="text" value="${myBet}" placeholder="Deine Antwort …" ${locked?'disabled':''}
@@ -2036,6 +2067,14 @@ async function renderBonusInsideBetting(container) {
       ${!locked?`<button id="btn-q-${q.id}" onclick="saveBonus(${q.id})" style="width:100%;background:var(--navy);color:#fff;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;padding:13px;border-radius:10px;border:none;cursor:pointer;margin-top:12px;letter-spacing:.02em;">Speichern</button>`:''}
     </div>`;
   }).join('');
+}
+
+function onBonusTeamChange(qId, teamId) {
+  const playerSel=$(`q-${qId}`);
+  if (!playerSel) return;
+  const players=(S.allPlayers||[]).filter(p=>String(p.team_id)===String(teamId));
+  playerSel.innerHTML=`<option value="" disabled selected>Spieler wählen …</option>`+
+    players.map(p=>`<option value="${p.name}">${p.name}</option>`).join('');
 }
 
 async function saveBonus(qId) {
