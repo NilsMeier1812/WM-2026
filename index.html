@@ -2001,7 +2001,7 @@ async function renderBonusInsideBetting(container) {
 
   // Spieler vorladen, falls es eine "players"-Frage gibt
   if (questions.some(q=>q.answer_type==='players') && !S.allPlayers) {
-    const {data:pl}=await db.from('players').select('id,name,team_id').order('name',{ascending:true});
+    const {data:pl}=await db.from('players').select('id,name,team_id').order('name',{ascending:true}).range(0,99999);
     S.allPlayers=pl||[];
   }
 
