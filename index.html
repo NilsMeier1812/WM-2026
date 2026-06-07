@@ -1564,7 +1564,11 @@ async function renderBonusOverview(cards) {
         if (!show) ans='<span style="color:var(--text-3);">verdeckt</span>';
         else {
           ans=bet.bet_value||'-';
-          if (q.answer_type==='teams'||/^group\s+/i.test(q.answer_type||'')) { const t=S.teams.find(x=>x.name===bet.bet_value); if (t?.flag_url&&!t.flag_url.startsWith('http')&&!t.flag_url.startsWith('/')) ans=`${t.flag_url} ${bet.bet_value}`; }
+          // Flagge anzeigen für teams/group/players (Nation über bet_team_id, Fallback Name)
+          if (q.answer_type==='teams'||q.answer_type==='players'||/^group\s+/i.test(q.answer_type||'')) {
+            const t=S.teams.find(x=>String(x.id)===String(bet.bet_team_id))||S.teams.find(x=>x.name===bet.bet_value);
+            if (t?.flag_url&&!t.flag_url.startsWith('http')&&!t.flag_url.startsWith('/')&&bet.bet_value) ans=`${t.flag_url} ${bet.bet_value}`;
+          }
           ptHtml=locked?`<span style="font-weight:700;color:${(bet.points_awarded||0)>0?'var(--blue)':'var(--text-2)'};">${bet.points_awarded??0}</span>`:'';
         }
       } else { ans='<span style="color:var(--text-3);">–</span>'; if (locked) ptHtml='<span style="color:var(--text-3);">0</span>'; }
@@ -2012,43 +2016,49 @@ async function renderBonusInsideBetting(container) {
     S.allPlayers=all;
   }
 
+  // Fragen für saveBonus zwischenspeichern (zum Ermitteln des answer_type)
+  S.bonusQuestions=questions;
+
   const selectStyle=locked=>`width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;background:var(--surface);font-size:14px;font-weight:600;outline:none;appearance:none;${locked?'opacity:.6;background:#F4F0E8;':''}cursor:${locked?'default':'pointer'};`;
-  const teamOption=(t,sel)=>{
-    const flag=(!t.flag_url||t.flag_url.startsWith('http')||t.flag_url.startsWith('/'))?'':t.flag_url+' ';
-    return `<option value="${t.name}"${sel===t.name?' selected':''}>${flag}${t.name}</option>`;
-  };
+  const teamFlag=t=>(!t.flag_url||t.flag_url.startsWith('http')||t.flag_url.startsWith('/'))?'':t.flag_url+' ';
+  const teamOption=(t,selId)=>`<option value="${t.id}"${String(selId)===String(t.id)?' selected':''}>${teamFlag(t)}${t.name}</option>`;
 
   container.innerHTML=questions.map(q=>{
     const locked=new Date(q.deadline)<=new Date();
-    const myBet=betsMap[q.id]?.bet_value||'';
-    const ptsAw=betsMap[q.id]?.points_awarded;
+    const bet=betsMap[q.id];
+    const myBet=bet?.bet_value||'';
+    const ptsAw=bet?.points_awarded;
+
+    // Team-Vorauswahl: bevorzugt bet_team_id, sonst Fallback über bet_value (Altdaten)
+    const savedTeamRow=bet?(S.teams.find(t=>String(t.id)===String(bet.bet_team_id))||S.teams.find(t=>t.name===bet.bet_value)):null;
+    const myTeamId=savedTeamRow?.id||'';
+    const myPlayerId=bet?.bet_player_id||'';
 
     const groupMatch=(q.answer_type||'').match(/^group\s+(.+)$/i);
 
     let inputHtml='';
     if (q.answer_type==='teams') {
-      const opts=S.teams.map(t=>teamOption(t,myBet)).join('');
+      const opts=S.teams.map(t=>teamOption(t,myTeamId)).join('');
       inputHtml=`<select id="q-${q.id}" ${locked?'disabled':''} style="${selectStyle(locked)}">
-        <option value="" disabled${!myBet?' selected':''}>Bitte wählen …</option>${opts}
+        <option value="" disabled${!myTeamId?' selected':''}>Bitte wählen …</option>${opts}
       </select>`;
     } else if (groupMatch) {
       const grp=groupMatch[1].trim();
-      const opts=S.teams.filter(t=>String(t.group||'').trim().toLowerCase()===grp.toLowerCase()).map(t=>teamOption(t,myBet)).join('');
+      const opts=S.teams.filter(t=>String(t.group||'').trim().toLowerCase()===grp.toLowerCase()).map(t=>teamOption(t,myTeamId)).join('');
       inputHtml=`<select id="q-${q.id}" ${locked?'disabled':''} style="${selectStyle(locked)}">
-        <option value="" disabled${!myBet?' selected':''}>Bitte wählen …</option>${opts}
+        <option value="" disabled${!myTeamId?' selected':''}>Bitte wählen …</option>${opts}
       </select>`;
     } else if (q.answer_type==='players') {
-      // Gespeichert wird nur der Spielername. Die Nation lässt sich daraus nicht
-      // eindeutig rekonstruieren (Namensdopplungen über mehrere Teams), daher bleibt
-      // das Team-Dropdown bei bereits getipptem Spieler bewusst leer. Der getippte
-      // Spieler bleibt unten sichtbar und ausgewählt.
-      const teamOpts=S.teams.map(t=>`<option value="${t.id}">${(!t.flag_url||t.flag_url.startsWith('http')||t.flag_url.startsWith('/'))?'':t.flag_url+' '}${t.name}</option>`).join('');
-      const playerOpts=myBet?`<option value="${myBet}" selected>${myBet}</option>`:'';
+      // Team & Spieler werden als IDs gespeichert -> zuverlässige Vorauswahl möglich.
+      const teamOpts=S.teams.map(t=>teamOption(t,myTeamId)).join('');
+      const playerOpts=myTeamId
+        ? (S.allPlayers||[]).filter(p=>String(p.team_id)===String(myTeamId)).map(p=>`<option value="${p.id}"${String(myPlayerId)===String(p.id)?' selected':''}>${p.name}</option>`).join('')
+        : '';
       inputHtml=`<select id="q-team-${q.id}" ${locked?'disabled':''} onchange="onBonusTeamChange(${q.id},this.value)" style="${selectStyle(locked)}margin-bottom:8px;">
-        <option value="" disabled selected>Team wählen …</option>${teamOpts}
+        <option value="" disabled${!myTeamId?' selected':''}>Team wählen …</option>${teamOpts}
       </select>
       <select id="q-${q.id}" ${locked?'disabled':''} style="${selectStyle(locked)}">
-        <option value="" disabled${!myBet?' selected':''}>Spieler wählen …</option>${playerOpts}
+        <option value="" disabled${!myPlayerId?' selected':''}>Spieler wählen …</option>${playerOpts}
       </select>`;
     } else {
       inputHtml=`<input id="q-${q.id}" type="text" value="${myBet}" placeholder="Deine Antwort …" ${locked?'disabled':''}
@@ -2080,21 +2090,44 @@ function onBonusTeamChange(qId, teamId) {
   if (!playerSel) return;
   const players=(S.allPlayers||[]).filter(p=>String(p.team_id)===String(teamId));
   playerSel.innerHTML=`<option value="" disabled selected>Spieler wählen …</option>`+
-    players.map(p=>`<option value="${p.name}">${p.name}</option>`).join('');
+    players.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
 }
 
 async function saveBonus(qId) {
-  const val=$(`q-${qId}`).value.trim();
-  if (!val) { showToast('Bitte etwas eintragen!','error'); return; }
+  const q=(S.bonusQuestions||[]).find(x=>x.id===qId);
+  const atype=q?.answer_type||'';
+  const isGroup=/^group\s+/i.test(atype);
+
+  // payload je nach Fragetyp: bet_value (Anzeige/Wertung) + IDs
+  const payload={bet_value:'',bet_team_id:null,bet_player_id:null};
+  if (atype==='teams'||isGroup) {
+    const teamId=$(`q-${qId}`).value;
+    if (!teamId) { showToast('Bitte ein Team wählen!','error'); return; }
+    const team=S.teams.find(t=>String(t.id)===String(teamId));
+    payload.bet_team_id=Number(teamId);
+    payload.bet_value=team?.name||'';
+  } else if (atype==='players') {
+    const playerId=$(`q-${qId}`).value;
+    if (!playerId) { showToast('Bitte einen Spieler wählen!','error'); return; }
+    const player=(S.allPlayers||[]).find(p=>String(p.id)===String(playerId));
+    payload.bet_player_id=Number(playerId);
+    payload.bet_team_id=player?.team_id??(Number($(`q-team-${qId}`)?.value)||null);
+    payload.bet_value=player?.name||'';
+  } else {
+    const val=$(`q-${qId}`).value.trim();
+    if (!val) { showToast('Bitte etwas eintragen!','error'); return; }
+    payload.bet_value=val;
+  }
+
   const btn=$(`btn-q-${qId}`);
   btn.disabled=true; btn.innerHTML=`<div class="spinner" style="width:18px;height:18px;"></div>`;
   try {
     const {data:existing}=await db.from('extra_bets').select('id').eq('user_id',S.user.id).eq('question_id',qId).maybeSingle();
     if (existing) {
-      const {error}=await db.from('extra_bets').update({bet_value:val}).eq('id',existing.id);
+      const {error}=await db.from('extra_bets').update(payload).eq('id',existing.id);
       if (error) throw error;
     } else {
-      const {error}=await db.from('extra_bets').insert({user_id:S.user.id,question_id:qId,bet_value:val});
+      const {error}=await db.from('extra_bets').insert({user_id:S.user.id,question_id:qId,...payload});
       if (error) throw error;
     }
     showToast('Bonustipp gespeichert');
