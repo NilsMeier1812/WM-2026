@@ -1535,7 +1535,7 @@ window.setOverviewPhase = async function(p) {
 
 async function renderBonusOverview(cards) {
   const [qRes,bRes]=await Promise.all([
-    db.from('extra_questions').select('*').order('deadline',{ascending:true}),
+    db.from('extra_questions').select('*').order('id',{ascending:true}),
     db.from('extra_bets').select('*')
   ]);
   if (qRes.error) { cards.innerHTML=`<p style="color:var(--red);padding:16px;">${qRes.error.message}</p>`; return; }
@@ -1991,7 +1991,7 @@ async function loadTabelleData(filterType) {
 async function renderBonusInsideBetting(container) {
   container.innerHTML=`<div style="display:flex;justify-content:center;padding:40px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
   const [qRes,bRes]=await Promise.all([
-    db.from('extra_questions').select('*').order('deadline',{ascending:true}),
+    db.from('extra_questions').select('*').order('id',{ascending:true}),
     db.from('extra_bets').select('*').eq('user_id',S.user.id)
   ]);
   if (qRes.error) { container.innerHTML=`<p style="color:var(--red);padding:16px;">${qRes.error.message}</p>`; return; }
