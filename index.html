@@ -482,6 +482,23 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════
+     Head to Head Modal
+════════════════════════════════════════════ -->
+<div id="modal-h2h" class="hidden fixed inset-0 z-50 flex flex-col justify-end" style="background:rgba(12,24,40,.75); backdrop-filter:blur(8px);">
+  <div class="flex-1" onclick="closeH2H()"></div>
+  <div style="background:var(--surface); border-radius:24px 24px 0 0; max-height:88vh; display:flex; flex-direction:column; width:100%; max-width:480px; margin:0 auto; box-shadow:0 -8px 40px rgba(0,0,0,.25);" class="fade-up">
+    <div style="padding:14px 18px 12px; border-bottom:1px solid var(--border-light); display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+      <h3 class="syne" style="font-size:17px; font-weight:800; letter-spacing:-.01em;">Head-to-Head</h3>
+      <button onclick="closeH2H()" style="width:32px; height:32px; background:#F4F0E8; border-radius:100px; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-2);">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="h2h-content" class="overflow-y-auto no-scrollbar" style="padding-bottom:calc(20px + env(safe-area-inset-bottom));"></div>
+  </div>
+</div>
+
+
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
@@ -1962,23 +1979,6 @@ window.pickScorer = function(matchId, playerId) {
 }
 
 function closeScorer() { $('modal-scorer').classList.add('hidden'); }
-
-// ──────────────────────────────────────────
-// HEAD-TO-HEAD MODAL
-// ──────────────────────────────────────────
-<div id="modal-h2h" class="hidden fixed inset-0 z-50 flex flex-col justify-end" style="background:rgba(12,24,40,.75); backdrop-filter:blur(8px);">
-  <div class="flex-1" onclick="closeH2H()"></div>
-  <div style="background:var(--surface); border-radius:24px 24px 0 0; max-height:88vh; display:flex; flex-direction:column; width:100%; max-width:480px; margin:0 auto; box-shadow:0 -8px 40px rgba(0,0,0,.25);" class="fade-up">
-    <div style="padding:14px 18px 12px; border-bottom:1px solid var(--border-light); display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
-      <h3 class="syne" style="font-size:17px; font-weight:800; letter-spacing:-.01em;">Head-to-Head</h3>
-      <button onclick="closeH2H()" style="width:32px; height:32px; background:#F4F0E8; border-radius:100px; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-2);">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-      </button>
-    </div>
-    <div id="h2h-content" class="overflow-y-auto no-scrollbar" style="padding-bottom:calc(20px + env(safe-area-inset-bottom));"></div>
-  </div>
-</div>
-
 
 // ──────────────────────────────────────────
 // OVERVIEW
