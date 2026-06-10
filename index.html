@@ -621,6 +621,25 @@ function getDateLabel(ts) {
   return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+function getDayTipStatus(matches) {
+  let openCount = 0, tippedCount = 0, lockedCount = 0;
+  matches.forEach(m => {
+    if (isLocked(m)) { lockedCount++; return; }
+    const b = S.bets[m.id];
+    const isFullBet = b 
+      && b.home_score !== null && b.home_score !== undefined
+      && b.away_score !== null && b.away_score !== undefined
+      && (b.first_goalscorer_id !== null && b.first_goalscorer_id !== undefined || b.is_goalless === true);
+    if (isFullBet) tippedCount++;
+    else openCount++;
+  });
+  const unlocked = matches.length - lockedCount;
+  if (unlocked === 0)         return { color: 'var(--text-3)', label: 'Alle Spiele beendet' };
+  if (openCount === 0)        return { color: 'var(--green)',  label: `Alle ${tippedCount} getippt` };
+  if (tippedCount > 0)        return { color: 'var(--accent)', label: `${tippedCount}/${unlocked} getippt` };
+                              return { color: 'var(--red)',    label: `${unlocked} Spiele offen` };
+}
+
 window.toggleDateGroup = function(dateLabel) {
   S.collapsedDates[dateLabel] = !S.collapsedDates[dateLabel];
   if (S.view === 'tippen') renderBettingContent();
@@ -1170,9 +1189,13 @@ function renderBettingContent() {
     const matches = groups[dateLabel];
     const isCollapsed = S.collapsedDates[dateLabel];
     const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+    const status = getDayTipStatus(matches); // ← NEU
 
     let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
-      <span>${dateLabel}</span>
+      <span style="display:flex; align-items:center; gap:10px;">
+        <span title="${status.label}" style="width:9px; height:9px; border-radius:50%; background:${status.color}; flex-shrink:0; box-shadow:0 0 0 2px ${status.color}22;"></span>
+        <span>${dateLabel}</span>
+      </span>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:${iconRot}"><polyline points="6 9 12 15 18 9"></polyline></svg>
     </div>`;
 
@@ -1797,9 +1820,13 @@ function renderOverviewContent(cards, allBets, phaseMatches) {
     const matches = groups[dateLabel];
     const isCollapsed = S.collapsedDates[dateLabel];
     const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+    const status = getDayTipStatus(matches); // ← NEU
 
     let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
-      <span>${dateLabel}</span>
+      <span style="display:flex; align-items:center; gap:10px;">
+        <span title="${status.label}" style="width:9px; height:9px; border-radius:50%; background:${status.color}; flex-shrink:0; box-shadow:0 0 0 2px ${status.color}22;"></span>
+        <span>${dateLabel}</span>
+      </span>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:${iconRot}"><polyline points="6 9 12 15 18 9"></polyline></svg>
     </div>`;
 
