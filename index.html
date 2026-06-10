@@ -1253,24 +1253,20 @@ function setText(el, value) {
 function silentRender() {
   const main = $('main');
   if (!main) { renderView(); return; }
-  
-  // Scroll-Position merken
+
   const scrollTop = main.scrollTop;
-  
-  // Animationen für dieses Re-Render unterdrücken
   main.classList.add('no-anim');
   renderView();
-  
-  // Scroll-Position wiederherstellen
   main.scrollTop = scrollTop;
-  
-  // Klasse nach einem Frame wieder entfernen,
-  // damit zukünftige absichtliche Animationen (Tab-Wechsel) wieder laufen
+
+  // Ein rAF reicht – WICHTIG: Animation-Klassen entfernen BEVOR no-anim fällt,
+  // sonst starten die Animationen beim Entfernen von no-anim neu von from-State
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => main.classList.remove('no-anim'));
+    main.querySelectorAll('.fade-up').forEach(el => el.classList.remove('fade-up'));
+    main.querySelectorAll('.fade-in').forEach(el => el.classList.remove('fade-in'));
+    main.classList.remove('no-anim');
   });
 }
-
 // ──────────────────────────────────────────
 // NAVIGATION & SMART ACTION BAR
 // ──────────────────────────────────────────
@@ -1519,10 +1515,17 @@ function renderDashboard(main) {
 function patchDashboardLive(matchId) {
   const el = document.getElementById(`dash-live-${matchId}`);
   if (!el) return false;
-  // Dashboard komplett mit aktuellen Daten neu rendern wäre nötig
-  // → da Dashboard nur Live-Karten zeigt, machen wir einen targeted refresh:
-  // Wir können nicht easy einzelne Felder updaten, also fallback auf silentRender
-  return false;
+  const m = S.matches.find(x => x.id === matchId);
+  if (!m || !isLocked(m) || isFinished(m.status)) return false;
+
+  // Nur Score + Status chirurgisch aktualisieren – keine Animation, kein Re-Render
+  const scoreEl = el.querySelector('.result-score');
+  setText(scoreEl, `${m.home_score ?? 0}:${m.away_score ?? 0}`);
+
+  const pulseEl = el.querySelector('.live-pulse');
+  if (pulseEl) setText(pulseEl, `Live · ${formatMatchStatus(m.status)}`);
+
+  return true; // Kein silentRender mehr nötig
 }
 
 function patchDashboardValues() {
