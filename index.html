@@ -64,6 +64,12 @@
     .fade-in { animation:fadeIn .2s ease both; }
     .live-pulse { animation:blink 1.6s ease-in-out infinite; }
 
+    /* Silent-Update: unterdrückt fade-up/in Animationen bei automatischen Updates */
+    #main.no-anim,
+    #main.no-anim * {
+      animation: none !important;
+    }
+
     /* ═══════════════════════════════════
        CARDS & SURFACES
     ═══════════════════════════════════ */
@@ -1094,7 +1100,7 @@ async function triggerSoftRefresh() {
   setTimeout(() => { if (btn) btn.style.transform=''; }, 500);
 }
 
-async function fetchData(showLoadingState=true) {
+async function fetchData(showLoadingState=true, silent = false) {
   S.allBetsCache = null;
   S.overviewAllBets = null;
 
@@ -1163,7 +1169,8 @@ async function fetchData(showLoadingState=true) {
     if (!S.bettingPhase  || !ph.includes(S.bettingPhase))  S.bettingPhase  = defaultPhase;
     if (!S.overviewPhase || !ph.includes(S.overviewPhase)) S.overviewPhase = defaultPhase;
 
-    renderView();
+    if (silent) silentRender();
+    else renderView();
   } catch(err) {
     if (showLoadingState) $('main').innerHTML = `<div style="padding:32px 20px; text-align:center;"><p style="color:var(--red);font-weight:700;margin-bottom:6px;">Fehler beim Laden</p><p style="font-size:13px;color:var(--text-2);">${err.message}</p></div>`;
     else showToast('Fehler beim Aktualisieren','error');
@@ -1201,8 +1208,33 @@ function getDisplayRank(leaderboard, playerIndex) {
 }
 
 // ──────────────────────────────────────────
+// SILENT RENDER (kein Wackeln bei Auto-Reload + Realtime)
+// ──────────────────────────────────────────
+function silentRender() {
+  const main = $('main');
+  if (!main) { renderView(); return; }
+  
+  // Scroll-Position merken
+  const scrollTop = main.scrollTop;
+  
+  // Animationen für dieses Re-Render unterdrücken
+  main.classList.add('no-anim');
+  renderView();
+  
+  // Scroll-Position wiederherstellen
+  main.scrollTop = scrollTop;
+  
+  // Klasse nach einem Frame wieder entfernen,
+  // damit zukünftige absichtliche Animationen (Tab-Wechsel) wieder laufen
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => main.classList.remove('no-anim'));
+  });
+}
+
+// ──────────────────────────────────────────
 // NAVIGATION & SMART ACTION BAR
 // ──────────────────────────────────────────
+
 function goTo(view) {
   S.view=view;
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active', el.dataset.view===view));
@@ -3220,7 +3252,7 @@ async function handleRealtimeMatchUpdate(updated) {
 
   // Bei finalisierten Spielen Daten komplett neu laden (Punkte sind dann vom Cron vergeben)
   if (justFinished) {
-    setTimeout(() => fetchData(false), 2500);
+    setTimeout(() => fetchData(false, true), 2500);
   }
 }
 
@@ -3259,14 +3291,14 @@ let _autoReloadTimer;
 function _scheduleAutoReload() {
   clearTimeout(_autoReloadTimer);
   _autoReloadTimer = setTimeout(async () => {
-    if (S.user) await fetchData(false);
+    if (S.user) await fetchData(false, true);
     _scheduleAutoReload();
   }, 5 * 60 * 1000);
 }
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && S.user) {
-    fetchData(false);
+    fetchData(false, true);
     _scheduleAutoReload();
   } else {
     clearTimeout(_autoReloadTimer);
