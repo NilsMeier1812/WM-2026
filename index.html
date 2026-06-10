@@ -146,6 +146,23 @@
     .phase-tab-on  { background:var(--navy); color:#fff; }
     .phase-tab-off { background:var(--surface); color:var(--text-2); border-color:var(--border); }
 
+    /* ═══════════════════════════════════
+       SUB-TABS (innerhalb Tabelle)
+    ═══════════════════════════════════ */
+    .sub-tab-container {
+      display:flex; background:var(--surface); border:1px solid var(--border-light); 
+      border-radius:12px; padding:3px; gap:2px;
+    }
+    .sub-tab {
+      flex:1; padding:9px 6px; border-radius:9px; border:none; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; gap:6px;
+      font-size:12px; font-weight:700; letter-spacing:.01em;
+      background:transparent; color:var(--text-2);
+      transition:background .15s, color .15s;
+    }
+    .sub-tab svg { width:14px; height:14px; stroke-width:2.2; }
+    .sub-tab.active { background:var(--navy); color:#fff; }
+
     .tab-scroll-btn {
       background: var(--surface); border: 1px solid var(--border); border-radius: 50%;
       width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
@@ -536,7 +553,11 @@ const S = {
   overviewMode: 'full',
   collapsedDates: {}, // Speichert Einklapp-Zustand für Daten
   smartActionMatch: null, // Aktuelles Ziel für Smart Action Bar
-  overviewAllBets: null // Cache für ALLE Übersicht-Wetten (phasenübergreifend)
+  overviewAllBets: null, // Cache für ALLE Übersicht-Wetten (phasenübergreifend)
+  tabelleSubView: 'tabelle',  // 'tabelle' | 'diagramm' | 'h2h'
+  tabelleFilter: 'total',     // gemerkter Filter
+  h2hOpponent: null,           // user_id für H2H-Vergleich
+  h2hCache: {}                 // bereits geladene Bets anderer Spieler
 };
 
 // ──────────────────────────────────────────
@@ -839,44 +860,15 @@ function renderStreaksCard(s) {
     </div>`;
 }
 
-async function openH2H(otherUserId) {
-  if (otherUserId === S.user.id) return; // Nicht gegen sich selbst
-
-  const modal = $('modal-h2h');
-  const content = $('h2h-content');
-  modal.classList.remove('hidden');
-
-  // Loading-State
-  content.innerHTML = `
-    <div style="padding:60px 16px; display:flex; justify-content:center;">
-      <div class="spinner" style="width:24px; height:24px; border-top-color:var(--navy); border-color:var(--border);"></div>
-    </div>`;
-
-  // Cache prüfen / Bets laden
-  if (!S.h2hCache) S.h2hCache = {};
-  let otherBets = S.h2hCache[otherUserId];
-
-  if (!otherBets) {
-    const { data, error } = await db.from('bets')
-      .select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)')
-      .eq('user_id', otherUserId);
-    if (error) {
-      content.innerHTML = `<p style="color:var(--red); padding:24px; text-align:center; font-size:13px;">${error.message}</p>`;
-      return;
-    }
-    otherBets = data || [];
-    S.h2hCache[otherUserId] = otherBets;
-  }
-
-  renderH2H(otherUserId, otherBets);
-}
-
-function closeH2H() {
-  $('modal-h2h').classList.add('hidden');
+window.openH2H = function(otherUserId) {
+  if (otherUserId === S.user.id) return;
+  S.h2hOpponent = otherUserId;
+  S.tabelleSubView = 'h2h';
+  goTo('tabelle');
 }
 
 function renderH2H(otherUserId, otherBets) {
-  const content = $('h2h-content');
+  const content = container || $('h2h-content');
   const otherPlayer = S.liveLeaderboard.find(p => p.id === otherUserId);
   const mePlayer = S.liveLeaderboard.find(p => p.id === S.user.id);
 
@@ -1240,8 +1232,7 @@ function renderView() {
     case 'dashboard':  renderDashboard(main);  break;
     case 'tippen':     renderBetting(main);     break;
     case 'uebersicht': renderOverviewShell(main); loadOverviewData(); break;
-    case 'tabelle':    renderTabelleShell(main); loadTabelleData('total'); renderPointsChart($('points-chart')); break;
-    // ↑ NEU: renderPointsChart aufrufen — läuft async im Hintergrund
+    case 'tabelle':    renderTabelleShell(main); break;
     case 'profil':     renderProfile(main);    break;
   }
   updateSmartActionBar();
@@ -2373,35 +2364,165 @@ function renderOverviewContent(cards, allBets, phaseMatches) {
 // TABELLE
 // ──────────────────────────────────────────
 function renderTabelleShell(main) {
-  const phaseOpts = matchPhases().map(p=>`<option value="phase_${p}">${p}</option>`).join('');
+  // Sub-Tab Icons
+  const icons = {
+    tabelle:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>',
+    diagramm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>',
+    h2h:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
+  };
 
-  main.innerHTML=`
+  const subTabs = [
+    { key: 'tabelle',  label: 'Tabelle' },
+    { key: 'diagramm', label: 'Diagramm' },
+    { key: 'h2h',      label: 'H2H' }
+  ];
+
+  main.innerHTML = `
     <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;" class="fade-up">
-      <div style="position:sticky;top:0;z-index:30;background:var(--bg);padding:14px 16px 12px;border-bottom:1px solid var(--border-light);">
-        <div style="position:relative;">
-          <select id="table-filter" onchange="loadTabelleData(this.value)"
-            style="width:100%;background:var(--surface);border:1.5px solid var(--border);color:var(--text);font-weight:700;font-size:13px;border-radius:10px;padding:11px 40px 11px 14px;outline:none;appearance:none;cursor:pointer;transition:border-color .15s;">
-            <option value="total">Gesamtwertung</option>
-            <option value="exact">Anzahl Exakte Treffer</option>
-            <option value="trend">Anzahl Richtige Tendenz</option>
-            <option value="first_scorer">Erster Torschütze (korrekt)</option>
-            <optgroup label="Stand nach Spielphase">${phaseOpts}</optgroup>
-          </select>
-          <div style="pointer-events:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--text-2);">
-            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
-          </div>
+      <div style="position:sticky;top:0;z-index:30;background:var(--bg);padding:12px 16px 10px;border-bottom:1px solid var(--border-light);">
+        <div class="sub-tab-container">
+          ${subTabs.map(t => `
+            <button class="sub-tab ${S.tabelleSubView === t.key ? 'active' : ''}" 
+                    data-subview="${t.key}"
+                    onclick="setTabelleSubView('${t.key}')">
+              ${icons[t.key]}
+              <span>${t.label}</span>
+            </button>
+          `).join('')}
         </div>
       </div>
-      <!-- ↓ NEU: padding-Container mit gap, enthält Tabelle + Graph -->
-      <div style="padding:16px;display:flex;flex-direction:column;gap:14px;">
-        <div id="table-content" class="card" style="padding:16px;overflow:hidden;"></div>
-        <div id="points-chart" class="card chart-card">
-          <div style="display:flex;justify-content:center;padding:40px 0;">
-            <div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div>
-          </div>
+      <div id="tabelle-sub-content" style="padding-bottom:32px;"></div>
+    </div>`;
+
+  renderTabelleSubContent();
+}
+
+window.setTabelleSubView = function(view) {
+  S.tabelleSubView = view;
+  // Sub-Tab Buttons aktualisieren (ohne ganzes Re-Render)
+  document.querySelectorAll('.sub-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.subview === view);
+  });
+  renderTabelleSubContent();
+}
+
+function renderTabelleSubContent() {
+  const c = $('tabelle-sub-content');
+  if (!c) return;
+  switch (S.tabelleSubView) {
+    case 'tabelle':  renderSubView_Tabelle(c);  break;
+    case 'diagramm': renderSubView_Diagramm(c); break;
+    case 'h2h':      renderSubView_H2H(c);      break;
+  }
+}
+
+// ── Sub-View 1: Tabelle ──────────────────────────────
+function renderSubView_Tabelle(c) {
+  const phaseOpts = matchPhases().map(p => `<option value="phase_${p}" ${S.tabelleFilter === `phase_${p}` ? 'selected' : ''}>${p}</option>`).join('');
+
+  c.innerHTML = `
+    <div style="padding:14px 16px 12px;">
+      <div style="position:relative;">
+        <select onchange="setTabelleFilter(this.value)"
+          style="width:100%;background:var(--surface);border:1.5px solid var(--border);color:var(--text);font-weight:700;font-size:13px;border-radius:10px;padding:11px 40px 11px 14px;outline:none;appearance:none;cursor:pointer;">
+          <option value="total"        ${S.tabelleFilter === 'total' ? 'selected' : ''}>Gesamtwertung</option>
+          <option value="exact"        ${S.tabelleFilter === 'exact' ? 'selected' : ''}>Anzahl Exakte Treffer</option>
+          <option value="trend"        ${S.tabelleFilter === 'trend' ? 'selected' : ''}>Anzahl Richtige Tendenz</option>
+          <option value="first_scorer" ${S.tabelleFilter === 'first_scorer' ? 'selected' : ''}>Erster Torschütze (korrekt)</option>
+          <optgroup label="Stand nach Spielphase">${phaseOpts}</optgroup>
+        </select>
+        <div style="pointer-events:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--text-2);">
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0 16px;">
+      <div id="table-content" class="card" style="padding:16px;overflow:hidden;"></div>
+    </div>`;
+
+  loadTabelleData(S.tabelleFilter);
+}
+
+window.setTabelleFilter = function(val) {
+  S.tabelleFilter = val;
+  loadTabelleData(val);
+}
+
+// ── Sub-View 2: Diagramm ─────────────────────────────
+function renderSubView_Diagramm(c) {
+  c.innerHTML = `
+    <div style="padding:16px;">
+      <div id="points-chart" class="card chart-card">
+        <div style="display:flex;justify-content:center;padding:60px 0;">
+          <div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div>
         </div>
       </div>
     </div>`;
+  renderPointsChart($('points-chart'));
+}
+
+// ── Sub-View 3: H2H ──────────────────────────────────
+function renderSubView_H2H(c) {
+  const others = S.liveLeaderboard.filter(p => p.id !== S.user.id);
+
+  if (others.length === 0) {
+    c.innerHTML = `<p style="text-align:center; padding:40px 16px; color:var(--text-3); font-size:13px;">Noch keine anderen Spieler.</p>`;
+    return;
+  }
+
+  // Default: erster Nicht-Ich-Spieler, oder gemerkter
+  if (!S.h2hOpponent || !others.find(p => p.id === S.h2hOpponent)) {
+    S.h2hOpponent = others[0].id;
+  }
+
+  c.innerHTML = `
+    <div style="padding:14px 16px 12px;">
+      <div style="position:relative;">
+        <select onchange="setH2HOpponent(this.value)"
+          style="width:100%;background:var(--surface);border:1.5px solid var(--border);color:var(--text);font-weight:700;font-size:13px;border-radius:10px;padding:11px 40px 11px 14px;outline:none;appearance:none;cursor:pointer;">
+          ${others.map(p => `<option value="${p.id}" ${p.id === S.h2hOpponent ? 'selected' : ''}>Vergleich mit: ${p.display_name || '?'}</option>`).join('')}
+        </select>
+        <div style="pointer-events:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--text-2);">
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+        </div>
+      </div>
+    </div>
+    <div id="h2h-content" style="">
+      <div style="display:flex; justify-content:center; padding:60px 0;">
+        <div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div>
+      </div>
+    </div>`;
+
+  loadH2HInline(S.h2hOpponent);
+}
+
+window.setH2HOpponent = async function(userId) {
+  S.h2hOpponent = userId;
+  await loadH2HInline(userId);
+}
+
+async function loadH2HInline(otherUserId) {
+  const container = $('h2h-content');
+  if (!container) return;
+
+  container.innerHTML = `<div style="display:flex; justify-content:center; padding:60px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
+
+  if (!S.h2hCache) S.h2hCache = {};
+  let otherBets = S.h2hCache[otherUserId];
+
+  if (!otherBets) {
+    const { data, error } = await db.from('bets')
+      .select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)')
+      .eq('user_id', otherUserId);
+    if (error) {
+      container.innerHTML = `<p style="color:var(--red); padding:24px; text-align:center; font-size:13px;">${error.message}</p>`;
+      return;
+    }
+    otherBets = data || [];
+    S.h2hCache[otherUserId] = otherBets;
+  }
+
+  renderH2H(otherUserId, otherBets, container);
 }
 
 async function loadTabelleData(filterType) {
@@ -3082,7 +3203,6 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!$('modal-scorer').classList.contains('hidden')) closeScorer();
-  if (!$('modal-h2h').classList.contains('hidden')) closeH2H();
 });
 
 initApp();
