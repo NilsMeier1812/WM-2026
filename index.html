@@ -2889,13 +2889,16 @@ function renderProfile(main) {
   const rank = myIndex >= 0 ? calculateRank(S.liveLeaderboard, myIndex) : '–';
   const pts = S.liveLeaderboard.find(x => x.id === S.user.id)?.total_points ?? 0;
   const total = S.liveLeaderboard.length;
-  
   const isReminderActive = p?.missing_tip_reminder === true;
+
+  // NEU: Streaks berechnen
+  const streaks = calculateStreaks();
 
   main.innerHTML = `
     <div style="max-width:480px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px;" class="fade-up">
       <div class="syne" style="font-size:24px;font-weight:800;letter-spacing:-.02em;">Mein Profil</div>
 
+      <!-- Card 1: Identity & Stats -->
       <div class="card" style="padding:20px 18px;">
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
           <div style="width:60px;height:60px;border-radius:16px;background:linear-gradient(135deg,var(--navy),var(--navy-2));display:flex;align-items:center;justify-content:center;flex-shrink:0;">
@@ -2907,7 +2910,7 @@ function renderProfile(main) {
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div style="background:#F4F0E8;border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border-light);">
             <div class="syne" style="font-size:36px;font-weight:800;letter-spacing:-.03em;color:var(--navy);">${pts}</div>
             <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);margin-top:6px;">Punkte</div>
@@ -2917,8 +2920,14 @@ function renderProfile(main) {
             <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);margin-top:6px;">Platz</div>
           </div>
         </div>
-        
-        <div style="display:flex;justify-content:space-between;align-items:center;background:#F4F0E8;border:1px solid var(--border-light);border-radius:12px;padding:14px 16px;margin-bottom:20px;">
+      </div>
+
+      <!-- Card 2: NEU — Streaks & Rekorde -->
+      ${renderStreaksCard(streaks)}
+
+      <!-- Card 3: Settings & Logout -->
+      <div class="card" style="padding:20px 18px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;background:#F4F0E8;border:1px solid var(--border-light);border-radius:12px;padding:14px 16px;margin-bottom:14px;">
           <div>
             <div style="font-size:14px;font-weight:700;color:var(--text);">Email Reminder</div>
             <div style="font-size:11px;color:var(--text-2);margin-top:2px;">Erinnerung bei fehlenden Tipps</div>
@@ -3035,6 +3044,7 @@ function _scheduleAutoReload() {
     _scheduleAutoReload();
   }, 5 * 60 * 1000);
 }
+
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && S.user) {
     fetchData(false);
