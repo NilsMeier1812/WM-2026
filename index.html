@@ -1256,6 +1256,9 @@ function betCard(m) {
     return checkMatch && checkMatch.phase === m.phase && b.is_boosted && isLocked(checkMatch);
   });
 
+  const isBoostDisabled = hasLockedBoost && !isBoosted;
+
+// NEU: Pending-State für Removal-Confirm berücksichtigen
   const isPendingRemoval = _pendingBoostRemoval === m.id && isBoosted;
 
   let boostBtnStyle = '';
