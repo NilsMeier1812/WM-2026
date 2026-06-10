@@ -2377,25 +2377,25 @@ function renderTabelleShell(main) {
       <div id="tabelle-sub-content" style="padding-bottom:32px;"></div>
     </div>`;
 
-  renderTabelleSubContent();
+  await renderTabelleSubContent();
 }
 
-window.setTabelleSubView = function(view) {
+window.setTabelleSubView = async function(view) {
   S.tabelleSubView = view;
   // Sub-Tab Buttons aktualisieren (ohne ganzes Re-Render)
   document.querySelectorAll('.sub-tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.subview === view);
   });
-  renderTabelleSubContent();
+  await renderTabelleSubContent();
 }
 
-function renderTabelleSubContent() {
+async function renderTabelleSubContent() {
   const c = $('tabelle-sub-content');
   if (!c) return;
   switch (S.tabelleSubView) {
     case 'tabelle':  renderSubView_Tabelle(c);  break;
     case 'diagramm': renderSubView_Diagramm(c); break;
-    case 'h2h':      renderSubView_H2H(c);      break;
+    case 'h2h':      await renderSubView_H2H(c);      break;
   }
 }
 
