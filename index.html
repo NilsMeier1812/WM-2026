@@ -2462,7 +2462,7 @@ function renderSubView_Diagramm(c) {
 }
 
 // ── Sub-View 3: H2H ──────────────────────────────────
-function renderSubView_H2H(c) {
+async function renderSubView_H2H(c) {
   const others = S.liveLeaderboard.filter(p => p.id !== S.user.id);
 
   if (others.length === 0) {
@@ -2470,7 +2470,6 @@ function renderSubView_H2H(c) {
     return;
   }
 
-  // Default: erster Nicht-Ich-Spieler, oder gemerkter
   if (!S.h2hOpponent || !others.find(p => p.id === S.h2hOpponent)) {
     S.h2hOpponent = others[0].id;
   }
@@ -2493,7 +2492,7 @@ function renderSubView_H2H(c) {
       </div>
     </div>`;
 
-  loadH2HInline(S.h2hOpponent);
+  await loadH2HInline(S.h2hOpponent);  // ← Jetzt mit await!
 }
 
 window.setH2HOpponent = async function(userId) {
