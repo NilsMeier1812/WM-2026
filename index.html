@@ -1169,8 +1169,31 @@ async function fetchData(showLoadingState=true, silent = false) {
     if (!S.bettingPhase  || !ph.includes(S.bettingPhase))  S.bettingPhase  = defaultPhase;
     if (!S.overviewPhase || !ph.includes(S.overviewPhase)) S.overviewPhase = defaultPhase;
 
-    if (silent) silentRender();
-    else renderView();
+    if (silent) {
+      // Bei Auto-Reload: für jedes Match das sich geändert hat surgical patchen
+      // Da wir nicht trackem was sich konkret geändert hat, machen wir's einfach:
+      // applyRealtimeUpdate für alle Matches in der aktuellen View
+      switch (S.view) {
+        case 'tippen':
+          S.matches.filter(m => m.phase === S.bettingPhase).forEach(m => patchBettingMatchCard(m.id));
+          break;
+        case 'uebersicht':
+          S.matches.filter(m => m.phase === S.overviewPhase).forEach(m => patchOverviewMatchCard(m.id));
+          break;
+        case 'dashboard':
+          patchDashboardValues();
+          break;
+        case 'tabelle':
+          patchTabelleValues();
+          break;
+        case 'profil':
+          patchProfilValues();
+          break;
+      }
+      updateSmartActionBar();
+    } else {
+      renderView();
+    }
   } catch(err) {
     if (showLoadingState) $('main').innerHTML = `<div style="padding:32px 20px; text-align:center;"><p style="color:var(--red);font-weight:700;margin-bottom:6px;">Fehler beim Laden</p><p style="font-size:13px;color:var(--text-2);">${err.message}</p></div>`;
     else showToast('Fehler beim Aktualisieren','error');
@@ -1205,6 +1228,23 @@ function getDisplayRank(leaderboard, playerIndex) {
   // Wenn der vorherige Spieler den gleichen Platz hat, zeige einen Punkt
   const prevRank = calculateRank(leaderboard, playerIndex - 1);
   return prevRank === currentRank ? '°' : currentRank;
+}
+
+// ──────────────────────────────────────────
+// SURGICAL DOM UPDATES (kein Re-Render beim Realtime)
+// ──────────────────────────────────────────
+
+function htmlToElement(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html.trim();
+  return tmp.firstElementChild;
+}
+
+// Sicher textContent setzen ohne Layout-Sprung wenn gleich
+function setText(el, value) {
+  if (!el) return;
+  const v = String(value);
+  if (el.textContent !== v) el.textContent = v;
 }
 
 // ──────────────────────────────────────────
@@ -1410,7 +1450,7 @@ function renderDashboard(main) {
 
       const sep = activeMatches.length>1 ? `<div style="border-bottom:1px solid var(--border-light);margin-bottom:14px;padding-bottom:14px;"></div>` : '';
 
-      return `<div>
+      return `<div id="dash-live-${m.id}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
           <div style="width:80px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;">${flag(m.home_team)}<div style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px;">${m.home_team?.name||'Heim'}</div></div>
           <div style="text-align:center;flex:1;">${centerHtml}</div>
@@ -1437,13 +1477,13 @@ function renderDashboard(main) {
     const displayRank=getDisplayRank(S.liveLeaderboard, i);
     const rankDisplay=displayRank==='°'?`<span style="font-weight:800;font-size:16px;color:var(--text-3);line-height:1;display:flex;align-items:center;justify-content:center;">•</span>`:`<span style="font-weight:800;font-size:13px;color:var(--text-3);">${displayRank}</span>`;
     // ↓ NEU: onclick + cursor + chevron
-    return `<div class="lb-row ${isMe?'me':''}" ${!isMe ? `onclick="openH2H('${p.id}')" style="cursor:pointer;"` : ''}>
+    return `<div class="lb-row ${isMe?'me':''}" data-dash-lb-user="${p.id}" ${!isMe ? `onclick="openH2H('${p.id}')" style="cursor:pointer;"` : ''}>
       <div style="display:flex;align-items:center;gap:10px;">
         <div style="width:22px;text-align:center;font-size:15px;line-height:1;">${rankDisplay}</div>
         <div style="font-weight:${isMe?700:600};font-size:14px;color:${isMe?'var(--blue)':'var(--text)'};">${p.display_name||'?'}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <div class="syne mono" style="font-size:16px;font-weight:800;color:${isMe?'var(--blue)':'var(--text)'};">${p.total_points??0} <span style="font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:var(--text-3);">Pkt</span></div>
+        <div class="syne mono" style="font-size:16px;font-weight:800;color:${isMe?'var(--blue)':'var(--text)'};"><span data-dash-lb-pts>${p.total_points??0}</span> <span style="font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:var(--text-3);">Pkt</span></div>
         ${!isMe ? `<span style="color:var(--text-3);font-size:14px;line-height:1;">›</span>` : ''}
       </div>
     </div>`;
@@ -1454,12 +1494,12 @@ function renderDashboard(main) {
 
       <div class="card hero-card" style="padding:22px 16px;background:var(--navy);border-color:transparent;">
         <div class="hero-stat hero-stat-platz">
-          <div class="num" style="color:#fff;"><span class="pre">Platz</span>${rank}</div>
-          <div class="lbl" style="color:rgba(255,255,255,.4);">von ${total}</div>
+          <div class="num" style="color:#fff;"><span class="pre">Platz</span><span id="dash-rank">${rank}</span></div>
+          <div class="lbl" style="color:rgba(255,255,255,.4);">von <span id="dash-total">${total}</span></div>
         </div>
         <div class="hero-divider"></div>
         <div class="hero-stat hero-stat-punkte">
-          <div class="num" style="color:var(--accent);">${pts}</div>
+          <div class="num" style="color:var(--accent);" id="dash-pts">${pts}</div>
           <div class="lbl" style="color:rgba(255,255,255,.4);">Punkte</div>
         </div>
       </div>
@@ -1474,6 +1514,36 @@ function renderDashboard(main) {
         </div>
       </div>
     </div>`;
+}
+
+function patchDashboardLive(matchId) {
+  const el = document.getElementById(`dash-live-${matchId}`);
+  if (!el) return false;
+  // Dashboard komplett mit aktuellen Daten neu rendern wäre nötig
+  // → da Dashboard nur Live-Karten zeigt, machen wir einen targeted refresh:
+  // Wir können nicht easy einzelne Felder updaten, also fallback auf silentRender
+  return false;
+}
+
+function patchDashboardValues() {
+  const me = S.liveLeaderboard.find(p => p.id === S.user.id);
+  const myIndex = S.liveLeaderboard.findIndex(p => p.id === S.user.id);
+  const rank = myIndex >= 0 ? calculateRank(S.liveLeaderboard, myIndex) : '–';
+  const pts = me?.total_points ?? 0;
+  const total = S.liveLeaderboard.length;
+
+  setText(document.getElementById('dash-rank'), rank);
+  setText(document.getElementById('dash-pts'), pts);
+  setText(document.getElementById('dash-total'), total);
+
+  // Top-5 LB Punkte aktualisieren
+  S.liveLeaderboard.slice(0, 5).forEach(p => {
+    const row = document.querySelector(`[data-dash-lb-user="${p.id}"]`);
+    if (row) {
+      const ptsEl = row.querySelector('[data-dash-lb-pts]');
+      setText(ptsEl, p.total_points ?? 0);
+    }
+  });
 }
 
 // ──────────────────────────────────────────
@@ -2139,6 +2209,179 @@ function overviewSkeleton() {
     <div style="display:flex;flex-direction:column;gap:14px;">${card}${card}${card}</div>`;
 }
 
+function buildOverviewMatchCardHTML(m, matchBets) {
+  const locked = isLocked(m), isLive = locked && !isFinished(m.status);
+  const fnH = getFinalScore(m, 'home'), fnA = getFinalScore(m, 'away');
+
+  let ext = '';
+  if (m.home_score_penalty !== null && m.home_score_penalty !== undefined) {
+    ext = ` (${m.home_score_penalty}:${m.away_score_penalty} n.E.)`;
+  } else if (m.home_score_extratime !== null && m.home_score_extratime !== undefined) {
+    ext = ' n.V.';
+  }
+
+  matchBets.forEach(b => b._pts = calcBetPoints(m, b));
+
+  let iGotScorer = false, someoneGotScorer = false;
+  const hasScorerResult = (locked && m.first_goalscorer) || (locked && isFinished(m.status) && m.is_goalless === true);
+  if (hasScorerResult) {
+    matchBets.forEach(b => {
+      let isCorrect = false;
+      if (m.is_goalless && b.is_goalless) isCorrect = true;
+      if (m.first_goalscorer_id && b.first_goalscorer_id === m.first_goalscorer_id) isCorrect = true;
+      if (isCorrect) {
+        someoneGotScorer = true;
+        if (b.user_id === S.user.id) iGotScorer = true;
+      }
+    });
+  }
+
+  let actualScorer = '';
+  if (hasScorerResult) {
+    let sName = '';
+    if (m.first_goalscorer) {
+      const scorerTeam = S.teams.find(x => x.id === m.first_goalscorer.team_id);
+      const teamAcr = scorerTeam ? scorerTeam.name.substring(0,3).toUpperCase() : '';
+      sName = teamAcr ? `⚽ ${m.first_goalscorer.name} (${teamAcr})` : `⚽ ${m.first_goalscorer.name}`;
+    } else if (m.is_goalless) {
+      sName = '🚫 Kein Tor';
+    }
+    let headerColor = '#FCA5A5';
+    if (iGotScorer) headerColor = '#4ADE80';
+    else if (someoneGotScorer) headerColor = '#FBBF24';
+    actualScorer = `<span style="font-size:10px;color:${headerColor};font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sName}</span>`;
+  }
+
+  let statusHtml = '';
+  if (isFinished(m.status)) statusHtml = `<span class="mono">${fnH}:${fnA}${ext}</span>`;
+  else if (isLive) statusHtml = `<span style="color:#FCA5A5;font-weight:800;" class="live-pulse">LIVE ${fnH ?? 0}:${fnA ?? 0}</span>`;
+  else statusHtml = formatRelativeDate(m.kickoff_time);
+
+  let displayRows = S.leaderboard.map(player => {
+    const b = matchBets.find(x => x.user_id === player.id);
+    return { player, bet: b, pts: b ? b._pts : 0 };
+  });
+
+  if (locked) {
+    displayRows.sort((a, b) => b.pts - a.pts);
+  } else {
+    displayRows.sort((a, b) => {
+      if (a.player.id === S.user.id) return -1;
+      if (b.player.id === S.user.id) return 1;
+      const ah = !!a.bet, bh = !!b.bet;
+      if (ah && !bh) return -1; if (!ah && bh) return 1;
+      return (a.player.display_name || '').localeCompare(b.player.display_name || '');
+    });
+  }
+
+  const rows = displayRows.map(({ player, bet, pts }) => {
+    const isMe = player.id === S.user.id;
+    let scoreBadge = `<span style="color:var(--text-3);">–:–</span>`;
+    let scorerBadge = `<span style="color:var(--text-3);">–</span>`;
+    const hasBet = !!bet;
+    const hasHome = hasBet && bet.home_score !== null && bet.away_score !== null;
+    let boostBadge = '';
+
+    if (locked || isMe) {
+      if (hasHome) {
+        let bh = bet.home_score, ba = bet.away_score;
+        let scoreStyle = 'font-weight:800; font-family:"DM Mono", monospace; font-size:12px; display:inline-block; text-align:center; min-width:32px;';
+        if (locked && fnH !== null) {
+          const isExact = (bh === fnH && ba === fnA);
+          const isTrend = !isExact && ((bh>ba && fnH>fnA) || (bh<ba && fnH<fnA) || (bh===ba && fnH===fnA));
+          if (isExact) scoreStyle += 'background:var(--green-bg); color:var(--green); padding:2px 6px; border-radius:6px;';
+          else if (isTrend) scoreStyle += 'background:#FEF3C7; color:var(--accent-text); padding:2px 6px; border-radius:6px;';
+          else scoreStyle += 'color:var(--text-3); text-decoration:line-through; font-weight:500;';
+        }
+        scoreBadge = `<span style="${scoreStyle}">${bh}:${ba}</span>`;
+      }
+      if (hasBet) {
+        let sName = '–';
+        if (bet.is_goalless) {
+          sName = '🚫 Kein Tor';
+        } else if (bet.goalscorer) {
+          const scorerTeam = S.teams.find(x => x.id === bet.goalscorer.team_id);
+          const acr = scorerTeam ? ` (${scorerTeam.name.substring(0,3).toUpperCase()})` : '';
+          sName = bet.goalscorer.name + acr;
+        }
+        let scorerStyle = 'font-size:11px; font-weight:600; min-width:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+        if (locked && isFinished(m.status)) {
+          let isCorrect = false;
+          if (bet.is_goalless && m.is_goalless) isCorrect = true;
+          if (bet.first_goalscorer_id && bet.first_goalscorer_id === m.first_goalscorer_id) isCorrect = true;
+          if (isCorrect) {
+            scorerStyle += 'color:var(--green); font-weight:700;';
+            sName = '✓ ' + sName;
+          } else {
+            scorerStyle += 'color:var(--red); opacity:0.8;';
+            sName = '✗ ' + sName;
+          }
+        } else {
+          scorerStyle += 'color:var(--text-2);';
+        }
+        scorerBadge = `<span style="${scorerStyle}">${sName}</span>`;
+      }
+      if (locked && bet && bet.is_boosted) {
+        boostBadge = `<span style="font-size:9px; background:var(--accent); color:var(--accent-text); padding:1px 4px; border-radius:4px; font-weight:800; margin-left:5px; vertical-align:middle; display:inline-block;">2x</span>`;
+      }
+    } else {
+      if (hasHome) scoreBadge = `<span style="font-weight:800; font-family:'DM Mono', monospace; font-size:12px;">?:?</span>`;
+      if (hasBet) scorerBadge = `<span style="background:#F1F0EC;color:var(--text-3);padding:2px 6px;border-radius:4px;font-size:11px;">Verdeckt</span>`;
+    }
+    return `<div class="ov-row ${isMe ? 'me' : ''}">
+      <span style="width:28%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isMe?700:600};color:${isMe?'var(--blue)':'var(--text)'};">${player.display_name||'?'}</span>
+      <span style="width:20%;text-align:center;">${scoreBadge}</span>
+      <span style="width:40%;text-align:left;display:flex;align-items:center;min-width:0;">${scorerBadge}</span>
+      <span style="width:12%;text-align:right;font-size:12px;display:flex;align-items:center;justify-content:flex-end;font-weight:700;color:${locked?'var(--text)':'var(--text-3)'};">${locked?pts:'-'}${boostBadge}</span>
+    </div>`;
+  }).join('');
+
+  let summaryHtml = '';
+  if (locked) {
+    const groups = {};
+    displayRows.forEach(({player, pts}) => {
+      if (!groups[pts]) groups[pts] = [];
+      groups[pts].push((player.display_name || '?').split(' ')[0]);
+    });
+    summaryHtml = Object.keys(groups).sort((a,b)=>b-a).map(p =>
+      `<span><strong style="color:${p > 0 ? 'var(--blue)' : 'var(--text-2)'};">${p} Pkt:</strong> <span style="color:var(--text-2);">${groups[p].join(', ')}</span></span>`
+    ).join(' <span style="color:var(--border);margin:0 6px;">|</span> ');
+  } else {
+    const isFullBet = r => r.bet && r.bet.home_score !== null && r.bet.away_score !== null && (r.bet.first_goalscorer_id !== null || r.bet.is_goalless === true);
+    const tipped = displayRows.filter(r => isFullBet(r)).map(r=>(r.player.display_name || '?').split(' ')[0]);
+    const untipped = displayRows.filter(r => !isFullBet(r)).map(r=>(r.player.display_name || '?').split(' ')[0]);
+    let parts = [];
+    if (tipped.length) parts.push(`<span><strong style="color:var(--green);">Getippt (${tipped.length}):</strong> <span style="color:var(--text-2);">${tipped.join(', ')}</span></span>`);
+    if (untipped.length) parts.push(`<span><strong style="color:var(--text-3);">Offen (${untipped.length}):</strong> <span style="color:var(--text-2);">${untipped.join(', ')}</span></span>`);
+    summaryHtml = parts.join(' <span style="color:var(--border);margin:0 6px;">|</span> ');
+    if (!summaryHtml) summaryHtml = '<span style="color:var(--text-3);">Noch keine Tipps</span>';
+  }
+
+  const hn = (m.home_team?.name || 'HM').substring(0,3).toUpperCase();
+  const an = (m.away_team?.name || 'GS').substring(0,3).toUpperCase();
+
+  return `<div id="match-ov-card-${m.id}" class="card" style="overflow:hidden; scroll-margin-top:140px;">
+    <div onclick="toggleMatchOverview(${m.id})" style="background:var(--navy);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;">
+      <div style="font-weight:800;font-size:12px;display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        ${flag(m.home_team,'w-4 h-3')}<span>${hn}–${an}</span>${flag(m.away_team,'w-4 h-3')}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;overflow:hidden;justify-content:flex-end;">
+        ${actualScorer}
+        <span class="mono" style="font-size:10px;font-weight:700;background:rgba(255,255,255,.1);padding:3px 8px;border-radius:6px;white-space:nowrap;flex-shrink:0;">${statusHtml}</span>
+        <svg id="match-ov-icon-${m.id}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </div>
+    </div>
+    <div id="match-ov-summary-${m.id}" style="padding:12px 14px; font-size:11px; line-height:1.6;">
+      ${summaryHtml}
+    </div>
+    <div id="match-ov-body-${m.id}" style="display:none;">
+      ${rows}
+    </div>
+  </div>`;
+}
+
 function renderOverviewContent(cards, allBets, phaseMatches) {
   // Nur Wetten der aktuellen Phase verwenden
   const phaseMatchIds = new Set(phaseMatches.map(m => m.id));
@@ -2174,205 +2417,40 @@ function renderOverviewContent(cards, allBets, phaseMatches) {
     </div>`;
 
     if (!isCollapsed) {
-      groupHtml += `<div style="display:flex;flex-direction:column;gap:14px;">` + matches.map(m => {
-        const locked = isLocked(m), isLive = locked && !isFinished(m.status);
-        const fnH = getFinalScore(m, 'home'), fnA = getFinalScore(m, 'away');
-        
-        let ext = '';
-        if (m.home_score_penalty !== null && m.home_score_penalty !== undefined) {
-          ext = ` (${m.home_score_penalty}:${m.away_score_penalty} n.E.)`;
-        } else if (m.home_score_extratime !== null && m.home_score_extratime !== undefined) {
-          ext = ' n.V.';
-        }
-
-        // 1. Wetten auswerten
-        const matchBets = byMatch[m.id] || [];
-        matchBets.forEach(b => b._pts = calcBetPoints(m, b));
-
-        // 2. Torschützen-Status analysieren
-        let iGotScorer = false;
-        let someoneGotScorer = false;
-        let hasScorerResult = (locked && m.first_goalscorer) || (locked && isFinished(m.status) && m.is_goalless === true);
-
-        if (hasScorerResult) {
-          matchBets.forEach(b => {
-            let isCorrect = false;
-            if (m.is_goalless && b.is_goalless) isCorrect = true;
-            if (m.first_goalscorer_id && b.first_goalscorer_id === m.first_goalscorer_id) isCorrect = true;
-
-            if (isCorrect) {
-              someoneGotScorer = true;
-              if (b.user_id === S.user.id) iGotScorer = true;
-            }
-          });
-        }
-
-        // 3. Header Actual Scorer bauen
-        let actualScorer = '';
-        if (hasScorerResult) {
-          let sName = '';
-          if (m.first_goalscorer) {
-            const scorerTeam = S.teams.find(x => x.id === m.first_goalscorer.team_id);
-            const teamAcr = scorerTeam ? scorerTeam.name.substring(0,3).toUpperCase() : '';
-            sName = teamAcr ? `⚽ ${m.first_goalscorer.name} (${teamAcr})` : `⚽ ${m.first_goalscorer.name}`;
-          } else if (m.is_goalless) {
-            sName = '🚫 Kein Tor';
-          }
-
-          // Pastell-Farben für gute Lesbarkeit auf dunkelblauem Header
-          let headerColor = '#FCA5A5'; // Rot (Niemand hat es)
-          if (iGotScorer) headerColor = '#4ADE80'; // Grün (Ich hab's)
-          else if (someoneGotScorer) headerColor = '#FBBF24'; // Gelb (Jemand anderes)
-
-          actualScorer = `<span style="font-size:10px;color:${headerColor};font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sName}</span>`;
-        }
-
-        // 4. Spielstatus Label
-        let statusHtml = '';
-        if (isFinished(m.status)) statusHtml = `<span class="mono">${fnH}:${fnA}${ext}</span>`;
-        else if (isLive) statusHtml = `<span style="color:#FCA5A5;font-weight:800;" class="live-pulse">LIVE ${fnH ?? 0}:${fnA ?? 0}</span>`;
-        else statusHtml = formatRelativeDate(m.kickoff_time);
-
-        // 5. Reihen sortieren
-        let displayRows = S.leaderboard.map(player => {
-          const b = matchBets.find(x => x.user_id === player.id);
-          return { player, bet: b, pts: b ? b._pts : 0 };
-        });
-
-        if (locked) {
-          displayRows.sort((a, b) => b.pts - a.pts);
-        } else {
-          displayRows.sort((a, b) => {
-            if (a.player.id === S.user.id) return -1;
-            if (b.player.id === S.user.id) return 1;
-            const ah = !!a.bet, bh = !!b.bet;
-            if (ah && !bh) return -1; if (!ah && bh) return 1;
-            return (a.player.display_name || '').localeCompare(b.player.display_name || '');
-          });
-        }
-
-        const rows = displayRows.map(({ player, bet, pts }) => {
-          const isMe = player.id === S.user.id;
-          let scoreBadge = `<span style="color:var(--text-3);">–:–</span>`;
-          let scorerBadge = `<span style="color:var(--text-3);">–</span>`;
-          const hasBet = !!bet;
-          const hasHome = hasBet && bet.home_score !== null && bet.away_score !== null;
-          let boostBadge = '';
-
-          if (locked || isMe) {
-            if (hasHome) {
-              let bh = bet.home_score, ba = bet.away_score;
-              let scoreStyle = 'font-weight:800; font-family:"DM Mono", monospace; font-size:12px; display:inline-block; text-align:center; min-width:32px;';
-              
-              if (locked && fnH !== null) {
-                const isExact = (bh === fnH && ba === fnA);
-                const isTrend = !isExact && ((bh>ba && fnH>fnA) || (bh<ba && fnH<fnA) || (bh===ba && fnH===fnA));
-                
-                if (isExact) scoreStyle += 'background:var(--green-bg); color:var(--green); padding:2px 6px; border-radius:6px;';
-                else if (isTrend) scoreStyle += 'background:#FEF3C7; color:var(--accent-text); padding:2px 6px; border-radius:6px;';
-                else scoreStyle += 'color:var(--text-3); text-decoration:line-through; font-weight:500;';
-              }
-              scoreBadge = `<span style="${scoreStyle}">${bh}:${ba}</span>`;
-            }
-
-            if (hasBet) {
-              let sName = '–';
-              let acr = '';
-              if (bet.is_goalless) {
-                sName = '🚫 Kein Tor';
-              } else if (bet.goalscorer) {
-                const scorerTeam = S.teams.find(x => x.id === bet.goalscorer.team_id);
-                acr = scorerTeam ? ` (${scorerTeam.name.substring(0,3).toUpperCase()})` : '';
-                sName = bet.goalscorer.name + acr;
-              }
-
-              let scorerStyle = 'font-size:11px; font-weight:600; min-width:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
-              
-              if (locked && isFinished(m.status)) {
-                let isCorrect = false;
-                if (bet.is_goalless && m.is_goalless) isCorrect = true;
-                if (bet.first_goalscorer_id && bet.first_goalscorer_id === m.first_goalscorer_id) isCorrect = true;
-
-                if (isCorrect) {
-                  scorerStyle += 'color:var(--green); font-weight:700;';
-                  sName = '✓ ' + sName;
-                } else {
-                  scorerStyle += 'color:var(--red); opacity:0.8;';
-                  sName = '✗ ' + sName;
-                }
-              } else {
-                scorerStyle += 'color:var(--text-2);';
-              }
-              scorerBadge = `<span style="${scorerStyle}">${sName}</span>`;
-            }
-
-            if (locked && bet && bet.is_boosted) {
-              boostBadge = `<span style="font-size:9px; background:var(--accent); color:var(--accent-text); padding:1px 4px; border-radius:4px; font-weight:800; margin-left:5px; vertical-align:middle; display:inline-block;">2x</span>`;
-            }
-          } else {
-            if (hasHome) scoreBadge = `<span style="font-weight:800; font-family:'DM Mono', monospace; font-size:12px;">?:?</span>`;
-            if (hasBet) scorerBadge = `<span style="background:#F1F0EC;color:var(--text-3);padding:2px 6px;border-radius:4px;font-size:11px;">Verdeckt</span>`;
-          }
-
-          return `<div class="ov-row ${isMe ? 'me' : ''}">
-            <span style="width:28%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isMe?700:600};color:${isMe?'var(--blue)':'var(--text)'};">${player.display_name||'?'}</span>
-            <span style="width:20%;text-align:center;">${scoreBadge}</span>
-            <span style="width:40%;text-align:left;display:flex;align-items:center;min-width:0;">${scorerBadge}</span>
-            <span style="width:12%;text-align:right;font-size:12px;display:flex;align-items:center;justify-content:flex-end;font-weight:700;color:${locked?'var(--text)':'var(--text-3)'};">${locked?pts:'-'}${boostBadge}</span>
-          </div>`;
-        }).join('');
-
-        let summaryHtml = '';
-        if (locked) {
-          const groups = {};
-          displayRows.forEach(({player, pts}) => {
-            if (!groups[pts]) groups[pts] = [];
-            groups[pts].push((player.display_name || '?').split(' ')[0]);
-          });
-          summaryHtml = Object.keys(groups).sort((a,b)=>b-a).map(p => 
-            `<span><strong style="color:${p > 0 ? 'var(--blue)' : 'var(--text-2)'};">${p} Pkt:</strong> <span style="color:var(--text-2);">${groups[p].join(', ')}</span></span>`
-          ).join(' <span style="color:var(--border);margin:0 6px;">|</span> ');
-        } else {
-          const isFullBet = r => r.bet && r.bet.home_score !== null && r.bet.away_score !== null && (r.bet.first_goalscorer_id !== null || r.bet.is_goalless === true);
-          const tipped = displayRows.filter(r => isFullBet(r)).map(r=>(r.player.display_name || '?').split(' ')[0]);
-          const untipped = displayRows.filter(r => !isFullBet(r)).map(r=>(r.player.display_name || '?').split(' ')[0]);
-          
-          let parts = [];
-          if (tipped.length) parts.push(`<span><strong style="color:var(--green);">Getippt (${tipped.length}):</strong> <span style="color:var(--text-2);">${tipped.join(', ')}</span></span>`);
-          if (untipped.length) parts.push(`<span><strong style="color:var(--text-3);">Offen (${untipped.length}):</strong> <span style="color:var(--text-2);">${untipped.join(', ')}</span></span>`);
-          summaryHtml = parts.join(' <span style="color:var(--border);margin:0 6px;">|</span> ');
-          if (!summaryHtml) summaryHtml = '<span style="color:var(--text-3);">Noch keine Tipps</span>';
-        }
-
-        const hn = (m.home_team?.name || 'HM').substring(0,3).toUpperCase();
-        const an = (m.away_team?.name || 'GS').substring(0,3).toUpperCase();
-
-        return `<div id="match-ov-card-${m.id}" class="card" style="overflow:hidden; scroll-margin-top:140px;">
-          <div onclick="toggleMatchOverview(${m.id})" style="background:var(--navy);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;">
-            <div style="font-weight:800;font-size:12px;display:flex;align-items:center;gap:6px;flex-shrink:0;">
-              ${flag(m.home_team,'w-4 h-3')}<span>${hn}–${an}</span>${flag(m.away_team,'w-4 h-3')}
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;overflow:hidden;justify-content:flex-end;">
-              ${actualScorer}
-              <span class="mono" style="font-size:10px;font-weight:700;background:rgba(255,255,255,.1);padding:3px 8px;border-radius:6px;white-space:nowrap;flex-shrink:0;">${statusHtml}</span>
-              <svg id="match-ov-icon-${m.id}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </div>
-          </div>
-          
-          <div id="match-ov-summary-${m.id}" style="padding:12px 14px; font-size:11px; line-height:1.6;">
-            ${summaryHtml}
-          </div>
-          
-          <div id="match-ov-body-${m.id}" style="display:none;">
-            ${rows}
-          </div>
-        </div>`;
-      }).join('') + `</div>`;
+      groupHtml += `<div style="display:flex;flex-direction:column;gap:14px;">` +
+        matches.map(m => buildOverviewMatchCardHTML(m, byMatch[m.id] || [])).join('') +
+        `</div>`;
     }
     return groupHtml;
   }).join('');
+}
+
+function patchOverviewMatchCard(matchId) {
+  const el = document.getElementById(`match-ov-card-${matchId}`);
+  if (!el) return false;
+  const m = S.matches.find(x => x.id === matchId);
+  if (!m || m.phase !== S.overviewPhase) return false;
+
+  // Open-State merken
+  const oldBody = document.getElementById(`match-ov-body-${matchId}`);
+  const wasExpanded = oldBody && oldBody.style.display === 'block';
+
+  const matchBets = (S.overviewAllBets || []).filter(b => b.match_id === matchId);
+  const newEl = htmlToElement(buildOverviewMatchCardHTML(m, matchBets));
+  if (!newEl) return false;
+
+  // Open-State wiederherstellen bevor das alte ersetzt wird
+  if (wasExpanded) {
+    const newBody = newEl.querySelector(`#match-ov-body-${matchId}`);
+    const newSummary = newEl.querySelector(`#match-ov-summary-${matchId}`);
+    const newIcon = newEl.querySelector(`#match-ov-icon-${matchId}`);
+    if (newBody) newBody.style.display = 'block';
+    if (newSummary) newSummary.style.display = 'none';
+    if (newIcon) newIcon.style.transform = 'rotate(180deg)';
+  }
+
+  el.replaceWith(newEl);
+  return true;
 }
 
 // ──────────────────────────────────────────
@@ -2594,17 +2672,29 @@ async function loadTabelleData(filterType) {
   c.innerHTML=`<div style="display:flex;flex-direction:column;gap:2px;">`+ranked.map((p,i)=>{
     const isMe=p.id===S.user.id, rn=calculateRank(ranked, i), displayRn=getDisplayRank(ranked, i);
     const rankDisplay=displayRn==='°'?`<span style="font-weight:800;font-size:16px;color:var(--text-3);line-height:1;display:flex;align-items:center;justify-content:center;">•</span>`:`<span style="font-weight:800;font-size:13px;color:var(--text-3);">${displayRn}</span>`;
-    return `<div class="lb-row ${isMe?'me':''}" ${!isMe ? `onclick="openH2H('${p.id}')" style="cursor:pointer;"` : ''}>
+    return `<div class="lb-row ${isMe?'me':''}" data-tabelle-user="${p.id}" ${!isMe ? `onclick="openH2H('${p.id}')" style="cursor:pointer;"` : ''}>
       <div style="display:flex;align-items:center;gap:10px;">
         <div style="width:22px;text-align:center;font-size:16px;line-height:1;">${rankDisplay}</div>
         <div style="font-weight:${isMe?700:600};font-size:14px;color:${isMe?'var(--blue)':'var(--text)'};">${p.display_name||'?'}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <div class="syne" style="font-size:16px;font-weight:800;color:${isMe?'var(--blue)':'var(--text)'};">${p.value} <span style="font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:var(--text-3);">${unit}</span></div>
+        <div class="syne" style="font-size:16px;font-weight:800;color:${isMe?'var(--blue)':'var(--text)'};"><span data-tabelle-val>${p.value}</span> <span style="font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:var(--text-3);">${unit}</span></div>
         ${!isMe ? `<span style="color:var(--text-3);font-size:14px;line-height:1;">›</span>` : ''}
       </div>
     </div>`;
   }).join('')+(ranked.length===0?'<p style="text-align:center;font-size:13px;color:var(--text-3);padding:16px 0;">Keine Daten.</p>':'')+`</div>`;
+}
+
+function patchTabelleValues() {
+  // Nur sinnvoll wenn Sub-View = tabelle UND Filter = total (Live-Werte)
+  if (S.tabelleSubView !== 'tabelle' || S.tabelleFilter !== 'total') return;
+  S.liveLeaderboard.forEach(p => {
+    const row = document.querySelector(`[data-tabelle-user="${p.id}"]`);
+    if (row) {
+      const valEl = row.querySelector('[data-tabelle-val]');
+      setText(valEl, p.total_points ?? 0);
+    }
+  });
 }
 
 async function renderPointsChart(container) {
@@ -3047,11 +3137,11 @@ function renderProfile(main) {
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div style="background:#F4F0E8;border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border-light);">
-            <div class="syne" style="font-size:36px;font-weight:800;letter-spacing:-.03em;color:var(--navy);">${pts}</div>
+            <div class="syne" style="font-size:36px;font-weight:800;letter-spacing:-.03em;color:var(--navy);" id="prof-pts">${pts}</div>
             <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);margin-top:6px;">Punkte</div>
           </div>
           <div style="background:#F4F0E8;border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border-light);">
-            <div class="syne" style="font-size:36px;font-weight:800;letter-spacing:-.03em;color:var(--navy);">${rank}<span style="font-size:16px;color:var(--text-3);">/${total}</span></div>
+            <div class="syne" style="font-size:36px;font-weight:800;letter-spacing:-.03em;color:var(--navy);"><span id="prof-rank">${rank}</span><span style="font-size:16px;color:var(--text-3);">/<span id="prof-total">${total}</span></span></div>
             <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);margin-top:6px;">Platz</div>
           </div>
         </div>
@@ -3077,6 +3167,18 @@ function renderProfile(main) {
         </button>
       </div>
     </div>`;
+}
+
+function patchProfilValues() {
+  const me = S.liveLeaderboard.find(p => p.id === S.user.id);
+  const myIndex = S.liveLeaderboard.findIndex(p => p.id === S.user.id);
+  const rank = myIndex >= 0 ? calculateRank(S.liveLeaderboard, myIndex) : '–';
+  const pts = me?.total_points ?? 0;
+  const total = S.liveLeaderboard.length;
+
+  setText(document.getElementById('prof-pts'), pts);
+  setText(document.getElementById('prof-rank'), rank);
+  setText(document.getElementById('prof-total'), total);
 }
 
 let logoutConfirmPending = false;
@@ -3198,6 +3300,37 @@ function teardownRealtime() {
   }
 }
 
+function applyRealtimeUpdate(matchId) {
+  // 1. View-spezifisches Match-Update
+  switch (S.view) {
+    case 'tippen':
+      patchBettingMatchCard(matchId);
+      break;
+    case 'uebersicht':
+      patchOverviewMatchCard(matchId);
+      break;
+    case 'dashboard':
+      // Dashboard zeigt mehrere Karten; Live-Match komplett zu patchen wäre aufwendig.
+      // Falls eine spezifische Live-Karte sichtbar ist, fall back auf silentRender für das Match.
+      // Hero + LB Werte aktualisieren funktioniert sowieso:
+      patchDashboardValues();
+      // Live-Match-Card im Dashboard: surgical falls vorhanden, sonst silent
+      if (!patchDashboardLive(matchId)) {
+        // Fallback: nur wenn das geänderte Match aktuell sichtbar ist
+        if (document.getElementById(`dash-live-${matchId}`)) silentRender();
+      }
+      break;
+    case 'tabelle':
+      patchTabelleValues();
+      break;
+    case 'profil':
+      patchProfilValues();
+      break;
+  }
+  // 2. Smart Action Bar immer aktualisieren
+  updateSmartActionBar();
+}
+
 async function handleRealtimeMatchUpdate(updated) {
   const idx = S.matches.findIndex(m => m.id === updated.id);
   if (idx < 0) return; // Match nicht in unserem State
@@ -3241,7 +3374,7 @@ async function handleRealtimeMatchUpdate(updated) {
   recomputeLiveLeaderboard();
 
   // Re-render aktive Ansicht
-  renderView();
+  applyRealtimeUpdate(updated.id);
 
   // Mini-Toast bei Toren
   if (scoreChanged && (existing.home_score !== null || existing.away_score !== null)) {
@@ -3257,6 +3390,18 @@ async function handleRealtimeMatchUpdate(updated) {
 }
 
 // Helper: Live-Leaderboard neu berechnen ohne kompletten fetchData
+
+function patchBettingMatchCard(matchId) {
+  const el = document.getElementById(`match-card-${matchId}`);
+  if (!el) return false;
+  const m = S.matches.find(x => x.id === matchId);
+  if (!m || m.phase !== S.bettingPhase) return false;
+  const newEl = htmlToElement(betCard(m));
+  if (!newEl) return false;
+  el.replaceWith(newEl);
+  return true;
+}
+
 function recomputeLiveLeaderboard() {
   const livePointsMap = {};
   const liveMatches = S.matches.filter(m => isLocked(m) && !isFinished(m.status));
