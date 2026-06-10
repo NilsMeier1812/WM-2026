@@ -3119,14 +3119,130 @@ async function handleSession(session) {
   $('header-user').textContent=`${(prof?.display_name||'Du').split(' ')[0]}`;
   goTo('dashboard');
   await fetchData();
+  setupRealtime();        // ← NEU
   _scheduleAutoReload();
 }
 
 function handleSignOut() {
   S.user=null; S.profile=null;
+  teardownRealtime();     // ← NEU
   $('auth-screen').classList.remove('hidden');
   const app=$('app-screen');
   app.classList.add('hidden'); app.classList.remove('flex');
+}
+
+// ──────────────────────────────────────────
+// REALTIME (Live-Updates für matches)
+// ──────────────────────────────────────────
+let _realtimeChannel = null;
+const _pendingPlayerFetches = new Set();
+
+function setupRealtime() {
+  if (_realtimeChannel) return; // schon aktiv
+
+  _realtimeChannel = db
+    .channel('matches-live')
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'matches' },
+      async (payload) => {
+        await handleRealtimeMatchUpdate(payload.new);
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Realtime] Verbunden — Live-Updates aktiv.');
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('[Realtime] Verbindung verloren:', status);
+      }
+    });
+}
+
+function teardownRealtime() {
+  if (_realtimeChannel) {
+    db.removeChannel(_realtimeChannel);
+    _realtimeChannel = null;
+    console.log('[Realtime] Getrennt.');
+  }
+}
+
+async function handleRealtimeMatchUpdate(updated) {
+  const idx = S.matches.findIndex(m => m.id === updated.id);
+  if (idx < 0) return; // Match nicht in unserem State
+
+  const existing = S.matches[idx];
+  const scoreChanged   = existing.home_score !== updated.home_score || existing.away_score !== updated.away_score;
+  const statusChanged  = existing.status !== updated.status;
+  const scorerChanged  = existing.first_goalscorer_id !== updated.first_goalscorer_id;
+  const justFinished   = !isFinished(existing.status) && isFinished(updated.status);
+
+  // Update mergen, joined relations beibehalten
+  S.matches[idx] = {
+    ...existing,
+    ...updated,
+    home_team: existing.home_team,
+    away_team: existing.away_team,
+    first_goalscorer: existing.first_goalscorer
+  };
+
+  // Torschütze aufgelöst (cache oder fetch)
+  if (scorerChanged) {
+    if (updated.first_goalscorer_id === null) {
+      S.matches[idx].first_goalscorer = null;
+    } else if (S.playerCache[updated.first_goalscorer_id]) {
+      S.matches[idx].first_goalscorer = S.playerCache[updated.first_goalscorer_id];
+    } else if (!_pendingPlayerFetches.has(updated.first_goalscorer_id)) {
+      _pendingPlayerFetches.add(updated.first_goalscorer_id);
+      const { data } = await db.from('players')
+        .select('id,name,team_id')
+        .eq('id', updated.first_goalscorer_id)
+        .single();
+      _pendingPlayerFetches.delete(updated.first_goalscorer_id);
+      if (data) {
+        S.playerCache[data.id] = data;
+        S.matches[idx].first_goalscorer = data;
+      }
+    }
+  }
+
+  // Live Leaderboard neu berechnen (für laufende Spiele)
+  recomputeLiveLeaderboard();
+
+  // Re-render aktive Ansicht
+  renderView();
+
+  // Mini-Toast bei Toren
+  if (scoreChanged && (existing.home_score !== null || existing.away_score !== null)) {
+    const newH = updated.home_score ?? 0;
+    const newA = updated.away_score ?? 0;
+    showToast(`⚽ ${existing.home_team?.name || 'Heim'} ${newH}:${newA} ${existing.away_team?.name || 'Gast'}`);
+  }
+
+  // Bei finalisierten Spielen Daten komplett neu laden (Punkte sind dann vom Cron vergeben)
+  if (justFinished) {
+    setTimeout(() => fetchData(false), 2500);
+  }
+}
+
+// Helper: Live-Leaderboard neu berechnen ohne kompletten fetchData
+function recomputeLiveLeaderboard() {
+  const livePointsMap = {};
+  const liveMatches = S.matches.filter(m => isLocked(m) && !isFinished(m.status));
+  
+  // Diese Berechnung braucht Bets aller User — wir haben aber nur unsere eigenen
+  // Im einfachsten Fall: nur eigene Live-Punkte aktualisieren
+  liveMatches.forEach(m => {
+    const myBet = S.bets[m.id];
+    if (myBet && (myBet.points_awarded === null || myBet.points_awarded === undefined)) {
+      const pts = calcBetPoints(m, myBet);
+      if (pts > 0) livePointsMap[S.user.id] = (livePointsMap[S.user.id] || 0) + pts;
+    }
+  });
+
+  S.liveLeaderboard = S.leaderboard.map(p => ({
+    ...p,
+    total_points: (p.total_points || 0) + (livePointsMap[p.id] || 0)
+  })).sort((a, b) => b.total_points - a.total_points);
 }
 
 async function initApp() {
