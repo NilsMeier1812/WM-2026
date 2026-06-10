@@ -1258,16 +1258,21 @@ function betCard(m) {
 
   const isBoostDisabled = hasLockedBoost && !isBoosted;
 
+// NEU: Pending-State für Removal-Confirm berücksichtigen
+  const isPendingRemoval = _pendingBoostRemoval === m.id && isBoosted;
+
   let boostBtnStyle = '';
-  if (isBoosted) {
+  if (isPendingRemoval) {
+    boostBtnStyle = 'background:#FEE9E7; color:var(--red); border-color:var(--red); font-weight:800; cursor:pointer;';
+  } else if (isBoosted) {
     boostBtnStyle = 'background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:800; cursor:pointer;';
   } else if (isBoostDisabled) {
     boostBtnStyle = 'background:#F1F0EC; color:var(--text-3); border-color:transparent; font-weight:700; opacity:0.6; cursor:not-allowed;';
   } else {
     boostBtnStyle = 'background:#F4F0E8; color:var(--text-2); border-color:var(--border); font-weight:700; cursor:pointer;';
   }
-  
-  const boostText = '2x Punkte';
+
+  const boostText = isPendingRemoval ? 'Entfernen?' : '2x Punkte';
 
   return `
     <div id="match-card-${m.id}" class="mc" style="scroll-margin-top:140px;">
@@ -2184,9 +2189,24 @@ async function saveBonus(qId) {
   }
 }
 
+
+
+// ──────────────────────────────────────────
+// Boost-Entfernung mit Confirm
+// ──────────────────────────────────────────
+let _pendingBoostRemoval = null;
+let _pendingBoostRemovalTimer = null;
+
+function clearPendingBoostRemoval() {
+  if (_pendingBoostRemovalTimer) clearTimeout(_pendingBoostRemovalTimer);
+  _pendingBoostRemoval = null;
+  _pendingBoostRemovalTimer = null;
+}
+
 // ──────────────────────────────────────────
 // Tipp boosten
 // ──────────────────────────────────────────
+
 
 async function toggleBoost(matchId) {
   const match = S.matches.find(m => m.id === matchId);
@@ -2197,12 +2217,57 @@ async function toggleBoost(matchId) {
     return;
   }
 
-  if (bet.is_boosted) return;
-
   if (isLocked(match)) {
     showToast('Dieses Spiel hat bereits begonnen. Boost nicht mehr möglich.', 'error');
     return;
   }
+
+  // ─────────────────────────────────────────
+  // Wenn bereits geboostet: Entfernen mit Confirm
+  // ─────────────────────────────────────────
+  if (bet.is_boosted) {
+    if (_pendingBoostRemoval !== matchId) {
+      // Erster Klick: Confirm-Modus
+      clearPendingBoostRemoval();
+      _pendingBoostRemoval = matchId;
+      renderBettingContent();
+
+      // Auto-Reset nach 3.5s
+      _pendingBoostRemovalTimer = setTimeout(() => {
+        _pendingBoostRemoval = null;
+        _pendingBoostRemovalTimer = null;
+        renderBettingContent();
+      }, 3500);
+      return;
+    }
+
+    // Zweiter Klick: tatsächlich entfernen
+    clearPendingBoostRemoval();
+
+    // Optimistic update
+    S.bets[matchId].is_boosted = false;
+    renderBettingContent();
+
+    try {
+      const { error } = await db.rpc('remove_bet_boost', {
+        p_user_id: S.user.id,
+        p_match_id: matchId
+      });
+      if (error) throw error;
+      showToast('Boost entfernt');
+    } catch (err) {
+      // Rollback
+      S.bets[matchId].is_boosted = true;
+      renderBettingContent();
+      showToast('Fehler beim Entfernen', 'error');
+    }
+    return;
+  }
+
+  // ─────────────────────────────────────────
+  // Boost neu setzen / swappen (wie bisher)
+  // ─────────────────────────────────────────
+  clearPendingBoostRemoval(); // falls anderes pending war
 
   const hasLockedBoost = Object.values(S.bets).some(b => {
     const m = S.matches.find(x => x.id === b.match_id);
@@ -2218,7 +2283,7 @@ async function toggleBoost(matchId) {
     const m = S.matches.find(x => x.id === b.match_id);
     if (m && m.phase === match.phase) b.is_boosted = false;
   });
-  
+
   S.bets[matchId].is_boosted = true;
   renderBettingContent();
 
@@ -2232,9 +2297,10 @@ async function toggleBoost(matchId) {
     showToast('Boost erfolgreich aktiviert!');
   } catch (err) {
     showToast('Fehler beim Boosten', 'error');
-    await triggerSoftRefresh(); 
+    await triggerSoftRefresh();
   }
 }
+
 
 // ──────────────────────────────────────────
 // PROFILE
