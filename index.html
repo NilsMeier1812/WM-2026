@@ -867,7 +867,7 @@ window.openH2H = function(otherUserId) {
   goTo('tabelle');
 }
 
-function renderH2H(otherUserId, otherBets) {
+function renderH2H(otherUserId, otherBets, container) {
   const content = container || $('h2h-content');
   const otherPlayer = S.liveLeaderboard.find(p => p.id === otherUserId);
   const mePlayer = S.liveLeaderboard.find(p => p.id === S.user.id);
