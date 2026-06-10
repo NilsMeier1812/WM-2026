@@ -170,6 +170,9 @@
     .pill-offen  { background:#F1F0EC;         color:var(--text-2);}
     .pill-done   { background:#F1F0EC;         color:var(--text-2);}
     .pill-gold   { background:#FEF3C7;         color:var(--accent-text); }
+    .pill-countdown        { background:#F1F0EC;         color:var(--text-2); }
+    .pill-countdown-warn   { background:#FEF3C7;         color:var(--accent-text); }
+    .pill-countdown-urgent { background:var(--red-bg);   color:var(--red); animation:blink 1.6s ease-in-out infinite; }
     .live-dot    { width:6px; height:6px; border-radius:50%; background:var(--red); display:inline-block; }
 
     /* ═══════════════════════════════════
@@ -589,6 +592,28 @@ function formatRelativeDate(ts) {
   if (d.toDateString()===today.toDateString()) return `Heute, ${time}`;
   if (d.toDateString()===tmrw.toDateString()) return `Morgen, ${time}`;
   return `${fmtDate(ts)}, ${time}`;
+}
+
+function getTimeUntilLock(kickoffTime) {
+  const diff = new Date(kickoffTime) - new Date();
+  if (diff <= 0) return null;
+  const totalMin = Math.floor(diff / 60000);
+  if (totalMin > 48 * 60) return null; // > 48h: nicht zeigen
+
+  const days  = Math.floor(totalMin / 1440);
+  const hours = Math.floor((totalMin % 1440) / 60);
+  const mins  = totalMin % 60;
+
+  let label;
+  if (days > 0)       label = `${days}T ${hours}h`;
+  else if (hours > 0) label = `${hours}h ${mins}m`;
+  else                label = `${mins} min`;
+
+  return {
+    label,
+    urgent:     totalMin <= 60,
+    veryUrgent: totalMin <= 15
+  };
 }
 
 function getDateLabel(ts) {
@@ -1102,7 +1127,24 @@ function renderBetting(main) {
   renderBettingContent();
 }
 
-window.setBettingPhase = function(p) { S.bettingPhase=p; renderBetting($('main')); }
+window.setBettingPhase = function(p) {
+  S.bettingPhase = p;
+  const main = $('main');
+
+  // Shell + Skeleton sofort einsetzen
+  main.innerHTML = `
+    <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;">
+      ${renderPhaseTabsContainer(p, 'setBettingPhase')}
+      <div id="betting-content" style="padding:16px;padding-bottom:32px;display:flex;flex-direction:column;gap:14px;">
+        ${p === 'Bonusfragen'
+          ? `<div style="display:flex;justify-content:center;padding:40px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`
+          : skeletonCards(3)}
+      </div>
+    </div>`;
+
+  // Im nächsten Frame echten Inhalt rendern (lässt Skeleton kurz sichtbar werden)
+  requestAnimationFrame(() => renderBettingContent());
+}
 
 function renderBettingContent() {
   const c=$('betting-content');
@@ -1248,7 +1290,19 @@ function betCard(m) {
     sHint = `<span style="color:var(--text-3);">Wählen …</span>`;
   }
 
-  let headerBadge = isGetippt ? `<span class="pill pill-getippt">✓ Getippt</span>` : `<span class="pill pill-offen">Offen</span>`;
+  let headerBadge = isGetippt 
+    ? `<span class="pill pill-getippt">✓ Getippt</span>` 
+    : `<span class="pill pill-offen">Offen</span>`;
+  
+  const countdown = getTimeUntilLock(m.kickoff_time);
+  let countdownBadge = '';
+  if (countdown) {
+    const cls = countdown.veryUrgent ? 'pill-countdown-urgent' 
+              : countdown.urgent     ? 'pill-countdown-warn' 
+              : 'pill-countdown';
+    countdownBadge = `<span class="pill ${cls}" data-countdown-for="${m.id}">⏱ ${countdown.label}</span>`;
+  }
+
 
   // Prüfen, ob in der Phase dieses Spiels bereits ein Boost in einem gestarteten Spiel fixiert ist
   const hasLockedBoost = Object.values(S.bets).some(b => {
@@ -1278,7 +1332,10 @@ function betCard(m) {
     <div id="match-card-${m.id}" class="mc" style="scroll-margin-top:140px;">
       <div class="mc-header">
         <span class="mono" style="color:var(--text-2);font-size:11px;">${fmtTime(m.kickoff_time)} Uhr</span>
-        ${headerBadge}
+        <div style="display:flex; gap:6px; align-items:center;">
+          ${countdownBadge}
+          ${headerBadge}
+        </div>
       </div>
       <div class="mc-body">
         <div class="mc-teams">
@@ -1575,11 +1632,18 @@ function renderOverviewShell(main) {
 }
 
 window.setOverviewPhase = async function(p) {
-  S.overviewPhase=p;
-  document.querySelectorAll('[onclick^="setOverviewPhase"]').forEach(btn=>{
-    const bp=btn.getAttribute('onclick').match(/'([^']+)'/)?.[1];
-    btn.className=`phase-tab ${bp===p?'phase-tab-on':'phase-tab-off'}`;
+  S.overviewPhase = p;
+  document.querySelectorAll('[onclick^="setOverviewPhase"]').forEach(btn => {
+    const bp = btn.getAttribute('onclick').match(/'([^']+)'/)?.[1];
+    btn.className = `phase-tab ${bp === p ? 'phase-tab-on' : 'phase-tab-off'}`;
   });
+
+  // Skeleton sofort zeigen für Feedback
+  const cards = $('ov-cards');
+  if (cards) cards.innerHTML = overviewSkeleton();
+
+  // Im nächsten Frame Daten rendern
+  await new Promise(r => requestAnimationFrame(r));
   await loadOverviewData();
 }
 
@@ -2466,6 +2530,26 @@ document.addEventListener('visibilitychange', () => {
     clearTimeout(_autoReloadTimer);
   }
 });
+
+setInterval(() => {
+  if (S.view !== 'tippen' || !S.user) return;
+  let needsRerender = false;
+  document.querySelectorAll('[data-countdown-for]').forEach(el => {
+    const matchId = parseInt(el.dataset.countdownFor);
+    const m = S.matches.find(x => x.id === matchId);
+    if (!m) return;
+    const c = getTimeUntilLock(m.kickoff_time);
+    if (!c) {
+      needsRerender = true; // Spiel hat angefangen → re-render notwendig
+    } else {
+      const cls = 'pill ' + (c.veryUrgent ? 'pill-countdown-urgent' : c.urgent ? 'pill-countdown-warn' : 'pill-countdown');
+      el.className = cls;
+      el.textContent = `⏱ ${c.label}`;
+    }
+  });
+  if (needsRerender) renderBettingContent();
+}, 30000);
+
 
 initApp();
 </script>
