@@ -178,7 +178,7 @@
     ═══════════════════════════════════ */
     .date-header {
       display:flex; justify-content:space-between; align-items:center;
-      padding:10px 14px; margin: 16px 0 8px 0;
+      padding:10px 14px; margin: 18px 0 10px 0;
       background: var(--border-light);
       border-radius: 10px;
       font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.04em;
@@ -188,6 +188,9 @@
     }
     .date-header:active { background: var(--border); }
     .date-header:first-child { margin-top: 0; }
+    /* Eingeklappte Tage: kein Abstand nach unten, und folgende Header rücken eng auf */
+    .date-header.collapsed { margin-bottom: 0; }
+    .date-header.collapsed + .date-header { margin-top: 6px; }
     .date-header svg { transition: transform 0.2s; }
 
     /* ═══════════════════════════════════
@@ -1012,11 +1015,18 @@ function renderH2H(otherUserId, otherBets, container) {
                         : otherPts > myPts ? 'var(--red)' 
                         : 'var(--border-light)';
 
-        const hn = (m.home_team?.name || 'HM').substring(0, 4).toUpperCase();
-        const an = (m.away_team?.name || 'GS').substring(0, 4).toUpperCase();
-        const resultText = fin ? `${fh}:${fa}` 
-                        : isLocked(m) ? `<span style="color:var(--red); font-weight:800;">LIVE ${fh}:${fa}</span>` 
+        const hn = (m.home_team?.name || 'HM').substring(0, 3).toUpperCase();
+        const an = (m.away_team?.name || 'GS').substring(0, 3).toUpperCase();
+        const resultText = fin ? `${fh}:${fa}`
+                        : isLocked(m) ? `<span style="color:var(--red); font-weight:800;">LIVE ${fh}:${fa}</span>`
                         : '–';
+
+        // Echter erster Torschütze (sobald aufgelöst) — Vergleichswert neben dem Ergebnis
+        let realScorerHtml = '';
+        if (scorerResolved(m)) {
+          const rn = m.is_goalless === true ? 'Kein Tor' : (m.first_goalscorer?.name || '–');
+          realScorerHtml = `<span style="font-size:10px; color:var(--text-2); font-weight:700; max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">⚽ ${rn}</span>`;
+        }
 
         const otherNameShort = (otherPlayer?.display_name || '?').split(' ')[0];
 
@@ -1050,7 +1060,10 @@ function renderH2H(otherUserId, otherBets, container) {
               <div style="font-weight:700; display:flex; align-items:center; gap:5px;">
                 ${flag(m.home_team, 'w-4 h-3')}<span>${hn}</span><span style="color:var(--text-3);">–</span><span>${an}</span>${flag(m.away_team, 'w-4 h-3')}
               </div>
-              <div class="mono" style="font-weight:700; font-size:11px;">${resultText}</div>
+              <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+                ${realScorerHtml}
+                <div class="mono" style="font-weight:700; font-size:11px; flex-shrink:0;">${resultText}</div>
+              </div>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
               ${playerCell('Du', 'var(--blue)', myBet, myPts)}
@@ -1082,7 +1095,7 @@ function renderH2H(otherUserId, otherBets, container) {
       ${statRow('Exakte Treffer', myExact, otherExact)}
       <div style="display:grid; grid-template-columns:1fr 1.3fr 1fr; padding:11px 14px; align-items:center;">
         <div class="syne" style="text-align:right; font-weight:800; font-size:20px; color:${myScorer > otherScorer ? 'var(--blue)' : 'var(--text-3)'};">${myScorer}</div>
-        <div style="text-align:center; font-size:10px; color:var(--text-2); font-weight:700; text-transform:uppercase; letter-spacing:.05em;">Korrekter Torschütze<div style="font-size:9px; color:var(--text-3); margin-top:2px; text-transform:none; letter-spacing:0;">${commonMatches.length} gemeinsame Tipps</div></div>
+        <div style="text-align:center; font-size:10px; color:var(--text-2); font-weight:700; text-transform:uppercase; letter-spacing:.05em;">Korrekter Torschütze</div>
         <div class="syne" style="text-align:left; font-weight:800; font-size:20px; color:${otherScorer > myScorer ? 'var(--text)' : 'var(--text-3)'};">${otherScorer}</div>
       </div>
     </div>
@@ -1707,7 +1720,7 @@ function renderBettingContent() {
     const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
     const status = getDayTipStatus(matches); // ← NEU
 
-    let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
+    let groupHtml = `<div class="date-header${isCollapsed ? ' collapsed' : ''}" onclick="toggleDateGroup('${dateLabel}')">
       <span style="display:flex; align-items:center; gap:10px;">
         <span title="${status.label}" style="width:9px; height:9px; border-radius:50%; background:${status.color}; flex-shrink:0; box-shadow:0 0 0 2px ${status.color}22;"></span>
         <span>${dateLabel}</span>
@@ -1721,7 +1734,8 @@ function renderBettingContent() {
     return groupHtml;
   }).join('');
 
-  c.innerHTML = html;
+  // In eigenen Wrapper packen, damit der gap:14 des Containers (für Bonusfragen) hier nicht greift
+  c.innerHTML = `<div style="display:flex;flex-direction:column;">${html}</div>`;
 }
 
 function betCard(m) {
@@ -2505,13 +2519,13 @@ function renderOverviewContent(cards, allBets, phaseMatches) {
     }
   });
 
-  cards.innerHTML = Object.keys(groups).map(dateLabel => {
+  const groupedHtml = Object.keys(groups).map(dateLabel => {
     const matches = groups[dateLabel];
     const isCollapsed = S.collapsedDates[dateLabel];
     const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
     const status = getDayTipStatus(matches); // ← NEU
 
-    let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
+    let groupHtml = `<div class="date-header${isCollapsed ? ' collapsed' : ''}" onclick="toggleDateGroup('${dateLabel}')">
       <span style="display:flex; align-items:center; gap:10px;">
         <span title="${status.label}" style="width:9px; height:9px; border-radius:50%; background:${status.color}; flex-shrink:0; box-shadow:0 0 0 2px ${status.color}22;"></span>
         <span>${dateLabel}</span>
@@ -2526,6 +2540,9 @@ function renderOverviewContent(cards, allBets, phaseMatches) {
     }
     return groupHtml;
   }).join('');
+
+  // In eigenen Wrapper packen, damit der gap:14 des Containers hier nicht greift
+  cards.innerHTML = `<div style="display:flex;flex-direction:column;">${groupedHtml}</div>`;
 }
 
 function patchOverviewMatchCard(matchId) {
