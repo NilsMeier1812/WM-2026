@@ -844,11 +844,6 @@ function calculateStreaks() {
   for (let i = results.length - 1; i >= 0; i--) {
     if (results[i].pts >= 1) currentPoints++; else break;
   }
-  let currentExact = 0;
-  for (let i = results.length - 1; i >= 0; i--) {
-    if (results[i].isExact) currentExact++; else break;
-  }
-
   // Beste Serien (über gesamte Historie)
   let bestPoints = 0, tmp = 0;
   results.forEach(r => {
@@ -863,16 +858,28 @@ function calculateStreaks() {
     else tmp = 0;
   });
 
-  // Beste Einzelleistung
+  // Aktuelle Pechsträhne (vom Ende rückwärts: Spiele ohne Punkte)
+  let currentWorst = 0;
+  for (let i = results.length - 1; i >= 0; i--) {
+    if (results[i].pts === 0) currentWorst++; else break;
+  }
+
+  // Beste Einzelleistung & letzter Tipp
   const bestSingle = results.reduce((acc, r) => r.pts > acc.pts ? r : acc, { pts: 0, match: null });
+  const lastResult = results[results.length - 1] || null;
+
+  // Anzahl korrekt getippter erster Torschützen
+  const scorerCount = results.filter(r => scorerHit(r.match, r.bet)).length;
 
   return {
     total: results.length,
     currentPoints,
-    currentExact,
+    currentWorst,
     bestPoints,
     worstStreak,
     bestSingle,
+    lastResult,
+    scorerCount,
     exactCount: results.filter(r => r.isExact).length
   };
 }
@@ -886,53 +893,35 @@ function renderStreaksCard(s) {
       </div>`;
   }
 
-  // Aktiver Streak-Banner: nur wenn was läuft (≥2) — clean, im App-Stil (Navy + Akzent)
-  let activeBanner = '';
-  let bannerLabel = '', bannerText = '', bannerNum = 0;
-  if (s.currentExact >= 2) {
-    bannerLabel = 'Aktuelle Serie';
-    bannerText = `${s.currentExact} exakte Treffer in Folge`;
-    bannerNum = s.currentExact;
-  } else if (s.currentPoints >= 2) {
-    bannerLabel = 'Aktuelle Serie';
-    bannerText = `${s.currentPoints} Spiele mit Punkten in Folge`;
-    bannerNum = s.currentPoints;
-  }
-  if (bannerNum) {
-    activeBanner = `
-      <div style="background:var(--navy); border-radius:12px; padding:13px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px;">
-        <div style="flex:1; min-width:0;">
-          <div style="font-size:10px; color:rgba(255,255,255,.5); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">${bannerLabel}</div>
-          <div class="syne" style="font-size:15px; font-weight:800; color:#fff; line-height:1.2; margin-top:4px;">${bannerText}</div>
-        </div>
-        <div class="syne" style="font-size:30px; font-weight:800; color:var(--accent); line-height:1; flex-shrink:0;">${bannerNum}</div>
-      </div>`;
-  }
-
   const recordCard = (value, label, sub = '') => `
     <div style="background:#F4F0E8; border:1px solid var(--border-light); border-radius:12px; padding:14px 13px;">
       <div class="syne" style="font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--navy);line-height:1;">${value}</div>
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);margin-top:8px;">${label}</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);margin-top:8px;line-height:1.25;">${label}</div>
       ${sub ? `<div style="font-size:10px;color:var(--text-3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub}</div>` : ''}
     </div>`;
 
-  // Beste-Einzelleistung-Hinweis: Teams zeigen (gekürzt)
-  let bestSingleSub = '';
-  if (s.bestSingle.pts > 0 && s.bestSingle.match) {
-    const h = (s.bestSingle.match.home_team?.name || '').substring(0, 8);
-    const a = (s.bestSingle.match.away_team?.name || '').substring(0, 8);
-    bestSingleSub = `${h} – ${a}`;
-  }
+  // Teams eines Spiels gekürzt (für Sub-Zeilen)
+  const teamsSub = (match) => {
+    if (!match) return '';
+    const h = (match.home_team?.name || '').substring(0, 8);
+    const a = (match.away_team?.name || '').substring(0, 8);
+    return `${h} – ${a}`;
+  };
+  const bestSingleSub = s.bestSingle.pts > 0 ? teamsSub(s.bestSingle.match) : '';
+  const lastSub = s.lastResult ? teamsSub(s.lastResult.match) : '';
 
   return `
     <div class="card" style="padding:18px 16px;">
       <div class="section-label" style="margin-bottom:12px;">Serien & Rekorde</div>
-      ${activeBanner}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-        ${recordCard(s.bestPoints, 'Längste Serie', s.bestPoints > 0 ? 'Spiele mit Punkten' : '')}
-        ${recordCard(s.bestSingle.pts > 0 ? `${s.bestSingle.pts} Pkt` : '–', 'Bestes Spiel', bestSingleSub)}
-        ${recordCard(`${s.exactCount}<span style="font-size:13px;color:var(--text-3);font-weight:600;">/${s.total}</span>`, 'Exakte Treffer')}
-        ${recordCard(s.worstStreak, 'Pechsträhne', s.worstStreak > 0 ? 'Spiele ohne Punkte' : '')}
+        ${recordCard(s.currentPoints, 'Aktuelle Serie', 'Spiele mit Punkten')}
+        ${recordCard(s.bestPoints, 'Längste Serie', 'Spiele mit Punkten')}
+        ${recordCard(s.bestSingle.pts > 0 ? `${s.bestSingle.pts} Pkt` : '–', 'Bester Tipp', bestSingleSub)}
+        ${recordCard(s.lastResult ? `${s.lastResult.pts} Pkt` : '–', 'Letzter Tipp', lastSub)}
+        ${recordCard(`${s.exactCount}<span style="font-size:13px;color:var(--text-3);font-weight:600;">/${s.total}</span>`, 'Perfekte Treffer')}
+        ${recordCard(`${s.scorerCount}<span style="font-size:13px;color:var(--text-3);font-weight:600;">/${s.total}</span>`, 'Richtige Torschützen')}
+        ${recordCard(s.currentWorst, 'Aktuelle Pechsträhne', 'Spiele ohne Punkte')}
+        ${recordCard(s.worstStreak, 'Längste Pechsträhne', 'Spiele ohne Punkte')}
       </div>
     </div>`;
 }
