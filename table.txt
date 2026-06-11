@@ -1,147 +1,131 @@
-## Table `matches`
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
 
-### Columns
-
-| Name | Type | Constraints |
-|------|------|-------------|
-| `id` | `int8` | Primary Identity |
-| `api_id` | `int8` |  Nullable Unique |
-| `home_team_id` | `int8` |  |
-| `away_team_id` | `int8` |  |
-| `kickoff_time` | `timestamptz` |  |
-| `status` | `text` |  |
-| `home_score` | `int8` |  Nullable |
-| `away_score` | `int8` |  Nullable |
-| `first_goalscorer_id` | `int8` |  Nullable |
-| `updated_at` | `timestamptz` |  Nullable |
-| `created_at` | `timestamptz` |  |
-| `phase` | `text` |  |
-| `home_score_extratime` | `int8` |  Nullable |
-| `away_score_extratime` | `int8` |  Nullable |
-| `points_processed` | `bool` |  Nullable |
-| `is_goalless` | `bool` |  Nullable |
-| `reminder_sent` | `bool` |  |
-| `sent_reminders` | `jsonb` |  Nullable |
-
-## Table `teams`
-
-### Columns
-
-| Name | Type | Constraints |
-|------|------|-------------|
-| `id` | `int8` | Primary Identity |
-| `api_id` | `int8` |  Unique |
-| `name` | `text` |  |
-| `flag_url` | `text` |  Nullable |
-| `created_at` | `timestamptz` |  |
-| `updated_at` | `timestamptz` |  Nullable |
-
-## Table `players`
-
-### Columns
-
-| Name | Type | Constraints |
-|------|------|-------------|
-| `id` | `int8` | Primary Identity |
-| `created_at` | `timestamptz` |  |
-| `api_id` | `int8` |  Unique |
-| `team_id` | `int8` |  |
-| `name` | `text` |  |
-| `position` | `text` |  Nullable |
-| `tournament_goals` | `int8` |  Nullable |
-
-## Table `profiles`
-
-### Columns
-
-| Name | Type | Constraints |
-|------|------|-------------|
-| `id` | `uuid` | Primary |
-| `display_name` | `text` |  |
-| `created_at` | `timestamptz` |  |
-| `missing_tip_reminder` | `bool` |  Nullable |
-| `email` | `text` |  Nullable |
-
-## Table `system_state`
-
-### Columns
-
-| Name | Type | Constraints |
-|------|------|-------------|
-| `id` | `int8` | Primary Identity |
-| `count_calls` | `int8` |  |
-
-## Table `bets`
-
-### Columns
-
-| Name | Type | Constraints |
-|------|------|-------------|
-| `id` | `uuid` | Primary |
-| `user_id` | `uuid` |  |
-| `match_id` | `int8` |  |
-| `home_score` | `int8` |  Nullable |
-| `away_score` | `int8` |  Nullable |
-| `first_goalscorer_id` | `int8` |  Nullable |
-| `points_awarded` | `int8` |  Nullable |
-| `created_at` | `timestamptz` |  |
-| `updated_at` | `timestamptz` |  Nullable |
-| `is_goalless` | `bool` |  Nullable |
-| `is_boosted` | `bool` |  Nullable |
-
-## Table `extra_questions`
-
-### Columns
-
-| Name | Type | Constraints |
-|------|------|-------------|
-| `id` | `int8` | Primary Identity |
-| `created_at` | `timestamptz` |  |
-| `question_text` | `text` |  |
-| `points` | `int8` |  |
-| `answer_type` | `text` |  |
-| `correct_answer` | `text` |  Nullable |
-| `deadline` | `timestamptz` |  |
-
-## Table `extra_bets`
-
-### Columns
-
-| Name | Type | Constraints |
-|------|------|-------------|
-| `id` | `int8` | Primary Identity |
-| `user_id` | `uuid` |  |
-| `question_id` | `int8` |  |
-| `bet_value` | `text` |  |
-| `points_awarded` | `int8` |  Nullable |
-| `created_at` | `timestamptz` |  |
-
-## Table `match_lineups`
-
-### Columns
-
-| Name | Type | Constraints |
-|------|------|-------------|
-| `id` | `int8` | Primary Identity |
-| `created_at` | `timestamptz` |  |
-| `match_id` | `int8` |  |
-| `player_id` | `int8` |  |
-| `is_starter` | `bool` |  |
-| `status` | `text` |  Nullable |
-
-## Table `match_events`
-
-### Columns
-
-| Name | Type | Constraints |
-|------|------|-------------|
-| `id` | `int8` | Primary Identity |
-| `created_at` | `timestamptz` |  |
-| `match_id` | `int8` |  |
-| `team_id` | `int8` |  |
-| `player_id` | `int8` |  |
-| `event_type` | `text` |  |
-| `event_detail` | `text` |  Nullable |
-| `time_minute` | `int2` |  |
-| `time_extra` | `int2` |  Nullable |
-
+CREATE TABLE public.matches (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  api_id bigint UNIQUE,
+  home_team_id bigint NOT NULL,
+  away_team_id bigint NOT NULL,
+  kickoff_time timestamp with time zone NOT NULL,
+  status text NOT NULL,
+  home_score bigint,
+  away_score bigint,
+  first_goalscorer_id bigint,
+  updated_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  phase text NOT NULL,
+  home_score_extratime bigint,
+  away_score_extratime bigint,
+  points_processed boolean DEFAULT false,
+  is_goalless boolean,
+  reminder_sent boolean NOT NULL DEFAULT false,
+  sent_reminders jsonb DEFAULT '[]'::jsonb,
+  home_score_penalty bigint,
+  away_score_penalty bigint,
+  CONSTRAINT matches_pkey PRIMARY KEY (id),
+  CONSTRAINT matches_home_team_id_fkey FOREIGN KEY (home_team_id) REFERENCES public.teams(id),
+  CONSTRAINT matches_first_goalscorer_id_fkey FOREIGN KEY (first_goalscorer_id) REFERENCES public.players(id),
+  CONSTRAINT matches_away_team_id_fkey FOREIGN KEY (away_team_id) REFERENCES public.teams(id)
+);
+CREATE TABLE public.teams (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  api_id bigint NOT NULL UNIQUE,
+  name text NOT NULL,
+  flag_url text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone,
+  group text,
+  CONSTRAINT teams_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.players (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  api_id bigint NOT NULL UNIQUE,
+  team_id bigint NOT NULL,
+  name text NOT NULL,
+  position text,
+  tournament_goals bigint,
+  CONSTRAINT players_pkey PRIMARY KEY (id),
+  CONSTRAINT players_team_id_fkey FOREIGN KEY (team_id) REFERENCES public.teams(id)
+);
+CREATE TABLE public.profiles (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  display_name text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  missing_tip_reminder boolean DEFAULT true,
+  email text,
+  CONSTRAINT profiles_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.system_state (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  count_calls bigint NOT NULL DEFAULT '0'::bigint,
+  CONSTRAINT system_state_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.bets (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  match_id bigint NOT NULL,
+  home_score bigint,
+  away_score bigint,
+  first_goalscorer_id bigint,
+  points_awarded bigint,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone,
+  is_goalless boolean DEFAULT false,
+  is_boosted boolean DEFAULT false,
+  CONSTRAINT bets_pkey PRIMARY KEY (id),
+  CONSTRAINT bets_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
+  CONSTRAINT bets_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(id),
+  CONSTRAINT bets_first_goalscorer_id_fkey FOREIGN KEY (first_goalscorer_id) REFERENCES public.players(id)
+);
+CREATE TABLE public.extra_questions (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  question_text text NOT NULL,
+  points bigint NOT NULL,
+  answer_type text NOT NULL,
+  correct_answer text,
+  deadline timestamp with time zone NOT NULL,
+  CONSTRAINT extra_questions_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.extra_bets (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  user_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  question_id bigint NOT NULL,
+  bet_value text NOT NULL,
+  points_awarded bigint,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  bet_player_id bigint,
+  bet_team_id bigint,
+  CONSTRAINT extra_bets_pkey PRIMARY KEY (id),
+  CONSTRAINT extra_bets_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
+  CONSTRAINT extra_bets_question_id_fkey FOREIGN KEY (question_id) REFERENCES public.extra_questions(id),
+  CONSTRAINT extra_bets_bet_player_id_fkey FOREIGN KEY (bet_player_id) REFERENCES public.players(id),
+  CONSTRAINT extra_bets_bet_team_id_fkey FOREIGN KEY (bet_team_id) REFERENCES public.teams(id)
+);
+CREATE TABLE public.match_lineups (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  match_id bigint NOT NULL,
+  player_id bigint NOT NULL,
+  is_starter boolean NOT NULL,
+  status text,
+  CONSTRAINT match_lineups_pkey PRIMARY KEY (id),
+  CONSTRAINT match_startingplayers_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(id),
+  CONSTRAINT match_startingplayers_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(id)
+);
+CREATE TABLE public.match_events (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  match_id bigint NOT NULL,
+  team_id bigint NOT NULL,
+  player_id bigint NOT NULL,
+  event_type text NOT NULL,
+  event_detail text,
+  time_minute smallint NOT NULL,
+  time_extra smallint,
+  CONSTRAINT match_events_pkey PRIMARY KEY (id),
+  CONSTRAINT match_events_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(id),
+  CONSTRAINT match_events_team_id_fkey FOREIGN KEY (team_id) REFERENCES public.teams(id),
+  CONSTRAINT match_events_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(id)
+);
