@@ -963,8 +963,9 @@ function renderH2H(otherUserId, otherBets, container) {
     if (myPts > otherPts) myWins++;
     else if (otherPts > myPts) otherWins++;
 
-    if (isFinished(m.status)) {
-      const fh = getFinalScore(m, 'home'), fa = getFinalScore(m, 'away');
+    // Exakte Treffer: auch laufende Spiele (aktueller Spielstand) — wie bei den anderen Stats
+    const fh = getFinalScore(m, 'home'), fa = getFinalScore(m, 'away');
+    if (fh !== null && fa !== null) {
       if (myBet.home_score === fh && myBet.away_score === fa) myExact++;
       if (otherBet.home_score === fh && otherBet.away_score === fa) otherExact++;
     }
