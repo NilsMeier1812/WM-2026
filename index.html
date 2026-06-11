@@ -900,12 +900,15 @@ function renderStreaksCard(s) {
       ${sub ? `<div style="font-size:10px;color:var(--text-3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub}</div>` : ''}
     </div>`;
 
-  // Teams eines Spiels gekürzt (für Sub-Zeilen)
+  // Teams eines Spiels als Flagge + 3-Buchstaben-Kürzel (für Sub-Zeilen)
   const teamsSub = (match) => {
     if (!match) return '';
-    const h = (match.home_team?.name || '').substring(0, 8);
-    const a = (match.away_team?.name || '').substring(0, 8);
-    return `${h} – ${a}`;
+    const abbr = (t) => (t?.name || '???').substring(0, 3).toUpperCase();
+    return `<span style="display:inline-flex; align-items:center; gap:3px;">`
+      + `${flag(match.home_team, 'w-4 h-3')}<span>(${abbr(match.home_team)})</span>`
+      + `<span style="margin:0 2px; color:var(--text-3);">–</span>`
+      + `${flag(match.away_team, 'w-4 h-3')}<span>(${abbr(match.away_team)})</span>`
+      + `</span>`;
   };
   const bestSingleSub = s.bestSingle.pts > 0 ? teamsSub(s.bestSingle.match) : '';
   const lastSub = s.lastResult ? teamsSub(s.lastResult.match) : '';
@@ -916,8 +919,8 @@ function renderStreaksCard(s) {
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
         ${recordCard(s.currentPoints, 'Aktuelle Serie', 'Spiele mit Punkten')}
         ${recordCard(s.bestPoints, 'Längste Serie', 'Spiele mit Punkten')}
-        ${recordCard(s.bestSingle.pts > 0 ? `${s.bestSingle.pts} Pkt` : '–', 'Bester Tipp', bestSingleSub)}
-        ${recordCard(s.lastResult ? `${s.lastResult.pts} Pkt` : '–', 'Letzter Tipp', lastSub)}
+        ${recordCard(s.bestSingle.pts > 0 ? s.bestSingle.pts : '–', 'Bester Tipp', bestSingleSub)}
+        ${recordCard(s.lastResult ? s.lastResult.pts : '–', 'Letzter Tipp', lastSub)}
         ${recordCard(`${s.exactCount}<span style="font-size:13px;color:var(--text-3);font-weight:600;">/${s.total}</span>`, 'Perfekte Treffer')}
         ${recordCard(`${s.scorerCount}<span style="font-size:13px;color:var(--text-3);font-weight:600;">/${s.total}</span>`, 'Richtige Torschützen')}
         ${recordCard(s.currentWorst, 'Aktuelle Pechsträhne', 'Spiele ohne Punkte')}
