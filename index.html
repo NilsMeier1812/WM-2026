@@ -589,7 +589,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ──────────────────────────────────────────
 const S = {
   user: null, profile: null,
-  matches: [], bets: {}, leaderboard: [], liveLeaderboard: [],
+  matches: [], bets: {}, leaderboard: [], liveLeaderboard: [], liveBets: [],
   teams: [], view: 'dashboard',
   bettingPhase: null, overviewPhase: null,
   pendingScorer: {}, playerCache: {},
@@ -1254,25 +1254,9 @@ async function fetchData(showLoadingState=true, silent = false) {
       };
     }).sort((a,b)=>b.total_points-a.total_points);
 
-    const livePointsMap = {};
-    const liveMatches = S.matches.filter(m=>isLocked(m)&&!isFinished(m.status));
-    if (liveMatches.length>0) {
-      const {data:liveBets} = await db.from('bets')
-        .select('user_id,match_id,home_score,away_score,first_goalscorer_id,is_goalless,is_boosted,points_awarded')
-        .in('match_id', liveMatches.map(m=>m.id));
-      (liveBets||[]).forEach(b => {
-        const m = S.matches.find(x=>x.id===b.match_id);
-        if (m && (b.points_awarded===null || b.points_awarded===undefined)) {
-          const pts = calcBetPoints(m,b);
-          if (pts>0) livePointsMap[b.user_id] = (livePointsMap[b.user_id]||0) + pts;
-        }
-      });
-    }
-
-    S.liveLeaderboard = S.leaderboard.map(p => ({
-      ...p,
-      total_points: (p.total_points||0) + (livePointsMap[p.id]||0)
-    })).sort((a,b)=>b.total_points-a.total_points);
+    // Live-Bets ALLER User für laufende Spiele laden + Live-Leaderboard berechnen
+    await refreshLiveBets();
+    recomputeLiveLeaderboard();
 
     // AUTOMATISCHER SPIELTAG (Phase) FINDEN
     const nextActiveMatch = S.matches.find(m => new Date(m.kickoff_time) > new Date() || (!isFinished(m.status) && isLocked(m)));
@@ -3490,7 +3474,10 @@ async function handleRealtimeMatchUpdate(updated) {
     }
   }
 
-  // Live Leaderboard neu berechnen (für laufende Spiele)
+  // Live Leaderboard neu berechnen (für laufende Spiele).
+  // Bei Status-Wechsel (Spiel startet/endet) erst die Live-Bets aller User auffrischen,
+  // damit ein neu gestartetes Spiel sofort korrekt einfließt.
+  if (statusChanged) await refreshLiveBets();
   recomputeLiveLeaderboard();
 
   // Re-render aktive Ansicht
@@ -3524,17 +3511,27 @@ function patchBettingMatchCard(matchId) {
   return true;
 }
 
+// Lädt die Tipps ALLER User für aktuell laufende Spiele (für Live-Punkte im Leaderboard).
+// Tipps sind ab Anpfiff gesperrt → ändern sich während des Spiels nicht, nur die Spielstände.
+async function refreshLiveBets() {
+  const liveMatches = S.matches.filter(m => isLocked(m) && !isFinished(m.status));
+  if (liveMatches.length === 0) { S.liveBets = []; return; }
+  const { data, error } = await db.from('bets')
+    .select('user_id,match_id,home_score,away_score,first_goalscorer_id,is_goalless,is_boosted,points_awarded')
+    .in('match_id', liveMatches.map(m => m.id));
+  if (!error) S.liveBets = data || [];
+}
+
 function recomputeLiveLeaderboard() {
   const livePointsMap = {};
-  const liveMatches = S.matches.filter(m => isLocked(m) && !isFinished(m.status));
-  
-  // Diese Berechnung braucht Bets aller User — wir haben aber nur unsere eigenen
-  // Im einfachsten Fall: nur eigene Live-Punkte aktualisieren
-  liveMatches.forEach(m => {
-    const myBet = S.bets[m.id];
-    if (myBet && (myBet.points_awarded === null || myBet.points_awarded === undefined)) {
-      const pts = calcBetPoints(m, myBet);
-      if (pts > 0) livePointsMap[S.user.id] = (livePointsMap[S.user.id] || 0) + pts;
+
+  // Live-Punkte für ALLE User aus den gecachten Live-Bets berechnen
+  (S.liveBets || []).forEach(b => {
+    const m = S.matches.find(x => x.id === b.match_id);
+    if (m && isLocked(m) && !isFinished(m.status) &&
+        (b.points_awarded === null || b.points_awarded === undefined)) {
+      const pts = calcBetPoints(m, b);
+      if (pts > 0) livePointsMap[b.user_id] = (livePointsMap[b.user_id] || 0) + pts;
     }
   });
 
