@@ -125,6 +125,55 @@
     }
 
     /* ═══════════════════════════════════
+       REALTIME POPUP (Tor / Spielende)
+    ═══════════════════════════════════ */
+    #realtime-popup {
+      position: fixed;
+      top: calc(env(safe-area-inset-top) + 68px);
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px) scale(0.92);
+      background: var(--navy);
+      color: #fff;
+      padding: 11px 18px;
+      border-radius: 100px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.1);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      z-index: 110;
+      white-space: nowrap;
+    }
+    #realtime-popup.visible {
+      transform: translateX(-50%) translateY(0) scale(1);
+      opacity: 1;
+    }
+    .rp-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+      color: var(--accent);
+      margin-right: 2px;
+    }
+    .rp-flag-img {
+      width: 24px; height: 17px; object-fit: cover; border-radius: 2px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.25);
+      display: block;
+    }
+    .rp-flag-emoji { font-size: 20px; line-height: 1; }
+    .rp-score {
+      font-family: 'Syne', sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      color: #fff;
+      padding: 0 2px;
+    }
+
+    /* ═══════════════════════════════════
        DATE GROUP HEADERS
     ═══════════════════════════════════ */
     .date-header {
@@ -405,6 +454,9 @@
 ════════════════════════════════════════════ -->
 <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none w-11/12 max-w-sm"></div>
 
+<!-- Realtime Popup (Tor / Spielende) -->
+<div id="realtime-popup"></div>
+
 <!-- ═══════════════════════════════════════════
      AUTH
 ════════════════════════════════════════════ -->
@@ -574,6 +626,27 @@ function renderPhaseTabsContainer(activePhase, setPhaseFnName) {
 function isFinished(status) {
   if (!status) return false;
   return ['FINISHED','FT','AET','PEN'].includes(status.toUpperCase());
+}
+
+let _realtimePopupTimer = null;
+function rpFlag(team) {
+  if (!team?.flag_url) return `<span class="rp-flag-emoji">🏳️</span>`;
+  if (team.flag_url.startsWith('http') || team.flag_url.startsWith('/'))
+    return `<img src="${team.flag_url}" class="rp-flag-img" alt="${team.name||''}" />`;
+  return `<span class="rp-flag-emoji">${team.flag_url}</span>`;
+}
+function showRealtimePopup(title, homeTeam, homeScore, awayScore, awayTeam) {
+  const el = $('realtime-popup');
+  if (!el) return;
+  el.innerHTML = `
+    <span class="rp-title">${title}</span>
+    ${rpFlag(homeTeam)}
+    <span class="rp-score">${homeScore ?? 0} : ${awayScore ?? 0}</span>
+    ${rpFlag(awayTeam)}
+  `;
+  el.classList.add('visible');
+  clearTimeout(_realtimePopupTimer);
+  _realtimePopupTimer = setTimeout(() => el.classList.remove('visible'), 3200);
 }
 
 function showToast(msg, type = 'success') {
@@ -3379,11 +3452,13 @@ async function handleRealtimeMatchUpdate(updated) {
   // Re-render aktive Ansicht
   applyRealtimeUpdate(updated.id);
 
-  // Mini-Toast bei Toren
-  if (scoreChanged && (existing.home_score !== null || existing.away_score !== null)) {
-    const newH = updated.home_score ?? 0;
-    const newA = updated.away_score ?? 0;
-    showToast(`⚽ ${existing.home_team?.name || 'Heim'} ${newH}:${newA} ${existing.away_team?.name || 'Gast'}`);
+  // Realtime Popup (Tor / Spielende)
+  const newH = updated.home_score ?? 0;
+  const newA = updated.away_score ?? 0;
+  if (justFinished) {
+    showRealtimePopup('Spielende!', existing.home_team, newH, newA, existing.away_team);
+  } else if (scoreChanged && (existing.home_score !== null || existing.away_score !== null)) {
+    showRealtimePopup('Tor!', existing.home_team, newH, newA, existing.away_team);
   }
 
   // Bei finalisierten Spielen Daten komplett neu laden (Punkte sind dann vom Cron vergeben)
