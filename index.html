@@ -178,7 +178,7 @@
     ═══════════════════════════════════ */
     .date-header {
       display:flex; justify-content:space-between; align-items:center;
-      padding:10px 14px; margin: 16px 0 8px 0;
+      padding:10px 14px; margin: 18px 0 10px 0;
       background: var(--border-light);
       border-radius: 10px;
       font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.04em;
@@ -188,6 +188,9 @@
     }
     .date-header:active { background: var(--border); }
     .date-header:first-child { margin-top: 0; }
+    /* Eingeklappte Tage: kein Abstand nach unten, und folgende Header rücken eng auf */
+    .date-header.collapsed { margin-bottom: 0; }
+    .date-header.collapsed + .date-header { margin-top: 6px; }
     .date-header svg { transition: transform 0.2s; }
 
     /* ═══════════════════════════════════
@@ -809,6 +812,18 @@ function calcBetPoints(m, b) {
   return pts;
 }
 
+// Torschützen-Outcome bekannt? (Tor gefallen & Schütze gesetzt, oder torlos beendet)
+function scorerResolved(m) {
+  return m.is_goalless === true || (m.is_goalless === false && !!m.first_goalscorer_id);
+}
+// Hat der Tipp den ersten Torschützen korrekt getroffen? (gleiche Logik wie der +1-Bonus)
+function scorerHit(m, b) {
+  if (!m || !b) return false;
+  if (m.is_goalless === false && m.first_goalscorer_id && b.first_goalscorer_id === m.first_goalscorer_id) return true;
+  if (m.is_goalless === true && b.is_goalless === true) return true;
+  return false;
+}
+
 function calculateStreaks() {
   const results = S.matches
     .filter(m => isFinished(m.status) && S.bets[m.id])
@@ -871,33 +886,33 @@ function renderStreaksCard(s) {
       </div>`;
   }
 
-  // Aktiver Streak-Banner: nur wenn was läuft (≥2)
+  // Aktiver Streak-Banner: nur wenn was läuft (≥2) — clean, im App-Stil (Navy + Akzent)
   let activeBanner = '';
+  let bannerLabel = '', bannerText = '', bannerNum = 0;
   if (s.currentExact >= 2) {
-    activeBanner = `
-      <div style="background:linear-gradient(135deg, #D1FAE5, #6EE7B7); border-radius:12px; padding:14px 16px; display:flex; align-items:center; gap:14px; margin-bottom:14px;">
-        <span style="font-size:28px;">⚡</span>
-        <div style="flex:1;">
-          <div class="syne" style="font-size:17px;font-weight:800;color:#065F46;line-height:1.1;">${s.currentExact} exakte Treffer in Serie</div>
-          <div style="font-size:11px;color:#047857;font-weight:600;opacity:.85;margin-top:3px;">Hellseher-Niveau!</div>
-        </div>
-      </div>`;
+    bannerLabel = 'Aktuelle Serie';
+    bannerText = `${s.currentExact} exakte Treffer in Folge`;
+    bannerNum = s.currentExact;
   } else if (s.currentPoints >= 2) {
+    bannerLabel = 'Aktuelle Serie';
+    bannerText = `${s.currentPoints} Spiele mit Punkten in Folge`;
+    bannerNum = s.currentPoints;
+  }
+  if (bannerNum) {
     activeBanner = `
-      <div style="background:linear-gradient(135deg, #FEF3C7, #FCD34D); border-radius:12px; padding:14px 16px; display:flex; align-items:center; gap:14px; margin-bottom:14px;">
-        <span style="font-size:28px;">🔥</span>
-        <div style="flex:1;">
-          <div class="syne" style="font-size:17px;font-weight:800;color:var(--accent-text);line-height:1.1;">${s.currentPoints} Spiele in Serie</div>
-          <div style="font-size:11px;color:var(--accent-text);font-weight:600;opacity:.85;margin-top:3px;">Mit mindestens einem Punkt — bleib dran!</div>
+      <div style="background:var(--navy); border-radius:12px; padding:13px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px;">
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:10px; color:rgba(255,255,255,.5); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">${bannerLabel}</div>
+          <div class="syne" style="font-size:15px; font-weight:800; color:#fff; line-height:1.2; margin-top:4px;">${bannerText}</div>
         </div>
+        <div class="syne" style="font-size:30px; font-weight:800; color:var(--accent); line-height:1; flex-shrink:0;">${bannerNum}</div>
       </div>`;
   }
 
-  const recordCard = (icon, value, label, sub = '') => `
-    <div style="background:#F4F0E8; border:1px solid var(--border-light); border-radius:12px; padding:14px 12px;">
-      <div style="font-size:18px;line-height:1;">${icon}</div>
-      <div class="syne" style="font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--navy);margin-top:8px;line-height:1;">${value}</div>
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);margin-top:6px;">${label}</div>
+  const recordCard = (value, label, sub = '') => `
+    <div style="background:#F4F0E8; border:1px solid var(--border-light); border-radius:12px; padding:14px 13px;">
+      <div class="syne" style="font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--navy);line-height:1;">${value}</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);margin-top:8px;">${label}</div>
       ${sub ? `<div style="font-size:10px;color:var(--text-3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub}</div>` : ''}
     </div>`;
 
@@ -914,10 +929,10 @@ function renderStreaksCard(s) {
       <div class="section-label" style="margin-bottom:12px;">Serien & Rekorde</div>
       ${activeBanner}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-        ${recordCard('🔥', s.bestPoints, 'Längste Serie', s.bestPoints > 0 ? 'Spiele mit Punkten' : '')}
-        ${recordCard('⭐', s.bestSingle.pts > 0 ? `${s.bestSingle.pts} Pkt` : '–', 'Bestes Spiel', bestSingleSub)}
-        ${recordCard('🎯', `${s.exactCount}<span style="font-size:13px;color:var(--text-3);font-weight:600;">/${s.total}</span>`, 'Exakte Treffer')}
-        ${recordCard('💢', s.worstStreak, 'Pechsträhne', s.worstStreak > 0 ? 'Spiele ohne Punkte' : '')}
+        ${recordCard(s.bestPoints, 'Längste Serie', s.bestPoints > 0 ? 'Spiele mit Punkten' : '')}
+        ${recordCard(s.bestSingle.pts > 0 ? `${s.bestSingle.pts} Pkt` : '–', 'Bestes Spiel', bestSingleSub)}
+        ${recordCard(`${s.exactCount}<span style="font-size:13px;color:var(--text-3);font-weight:600;">/${s.total}</span>`, 'Exakte Treffer')}
+        ${recordCard(s.worstStreak, 'Pechsträhne', s.worstStreak > 0 ? 'Spiele ohne Punkte' : '')}
       </div>
     </div>`;
 }
@@ -943,8 +958,8 @@ function renderH2H(otherUserId, otherBets, container) {
     .sort((a, b) => new Date(b.kickoff_time) - new Date(a.kickoff_time));
 
   // Stats berechnen
-  let myWins = 0, otherWins = 0, draws = 0;
-  let myH2H = 0, otherH2H = 0;
+  let myWins = 0, otherWins = 0;
+  let myScorer = 0, otherScorer = 0;
   let myExact = 0, otherExact = 0;
 
   commonMatches.forEach(m => {
@@ -953,12 +968,11 @@ function renderH2H(otherUserId, otherBets, container) {
     const myPts = calcBetPoints(m, myBet);
     const otherPts = calcBetPoints(m, otherBet);
 
-    myH2H += myPts;
-    otherH2H += otherPts;
+    if (scorerHit(m, myBet)) myScorer++;
+    if (scorerHit(m, otherBet)) otherScorer++;
 
     if (myPts > otherPts) myWins++;
     else if (otherPts > myPts) otherWins++;
-    else draws++;
 
     if (isFinished(m.status)) {
       const fh = getFinalScore(m, 'home'), fa = getFinalScore(m, 'away');
@@ -1001,13 +1015,44 @@ function renderH2H(otherUserId, otherBets, container) {
                         : otherPts > myPts ? 'var(--red)' 
                         : 'var(--border-light)';
 
-        const hn = (m.home_team?.name || 'HM').substring(0, 4).toUpperCase();
-        const an = (m.away_team?.name || 'GS').substring(0, 4).toUpperCase();
-        const resultText = fin ? `${fh}:${fa}` 
-                        : isLocked(m) ? `<span style="color:var(--red); font-weight:800;">LIVE ${fh}:${fa}</span>` 
+        const hn = (m.home_team?.name || 'HM').substring(0, 3).toUpperCase();
+        const an = (m.away_team?.name || 'GS').substring(0, 3).toUpperCase();
+        const resultText = fin ? `${fh}:${fa}`
+                        : isLocked(m) ? `<span style="color:var(--red); font-weight:800;">LIVE ${fh}:${fa}</span>`
                         : '–';
 
+        // Echter erster Torschütze (sobald aufgelöst) — Vergleichswert neben dem Ergebnis
+        let realScorerHtml = '';
+        if (scorerResolved(m)) {
+          const rn = m.is_goalless === true ? 'Kein Tor' : (m.first_goalscorer?.name || '–');
+          realScorerHtml = `<span style="font-size:10px; color:var(--text-2); font-weight:700; max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">⚽ ${rn}</span>`;
+        }
+
         const otherNameShort = (otherPlayer?.display_name || '?').split(' ')[0];
+
+        // Torschützen-Tipp pro Spieler (mit Treffer-Färbung sobald aufgelöst)
+        const scorerLine = (bet) => {
+          let label;
+          if (bet.is_goalless === true) label = 'Kein Tor';
+          else if (bet.first_goalscorer_id) label = bet.goalscorer?.name || '–';
+          else label = '–';
+          let col = 'var(--text-2)';
+          if (label === '–') col = 'var(--text-3)';
+          else if (scorerResolved(m)) col = scorerHit(m, bet) ? 'var(--green)' : 'var(--red)';
+          return `<span style="color:${col}; font-weight:${label==='–'?'400':'700'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">⚽ ${label}</span>`;
+        };
+
+        const playerCell = (name, nameColor, bet, pts) => `
+          <div style="display:flex; flex-direction:column; gap:4px; padding:7px 10px; background:#fff; border-radius:7px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+              <span style="color:${nameColor}; font-weight:700; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60px;">${name}</span>
+              <span class="mono" style="font-weight:600;">${bet.home_score ?? '-'}:${bet.away_score ?? '-'}</span>
+              <span class="syne" style="font-weight:800; color:${pts > 0 ? nameColor : 'var(--text-3)'};">${pts > 0 ? '+' + pts : '0'}</span>
+            </div>
+            <div style="display:flex; align-items:center; font-size:10.5px; border-top:1px solid var(--border-light); padding-top:4px;">
+              ${scorerLine(bet)}
+            </div>
+          </div>`;
 
         return `
           <div style="background:${cardBg}; border:1px solid ${cardBorder}; border-left:3px solid ${cardBorder}; border-radius:10px; padding:10px 12px;">
@@ -1015,19 +1060,14 @@ function renderH2H(otherUserId, otherBets, container) {
               <div style="font-weight:700; display:flex; align-items:center; gap:5px;">
                 ${flag(m.home_team, 'w-4 h-3')}<span>${hn}</span><span style="color:var(--text-3);">–</span><span>${an}</span>${flag(m.away_team, 'w-4 h-3')}
               </div>
-              <div class="mono" style="font-weight:700; font-size:11px;">${resultText}</div>
+              <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+                ${realScorerHtml}
+                <div class="mono" style="font-weight:700; font-size:11px; flex-shrink:0;">${resultText}</div>
+              </div>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-              <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:#fff; border-radius:7px; font-size:12px;">
-                <span style="color:var(--blue); font-weight:700; font-size:11px;">Du</span>
-                <span class="mono" style="font-weight:600;">${myBet.home_score ?? '-'}:${myBet.away_score ?? '-'}</span>
-                <span class="syne" style="font-weight:800; color:${myPts > 0 ? 'var(--blue)' : 'var(--text-3)'};">${myPts > 0 ? '+' + myPts : '0'}</span>
-              </div>
-              <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:#fff; border-radius:7px; font-size:12px;">
-                <span style="font-weight:700; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60px;">${otherNameShort}</span>
-                <span class="mono" style="font-weight:600;">${otherBet.home_score ?? '-'}:${otherBet.away_score ?? '-'}</span>
-                <span class="syne" style="font-weight:800; color:${otherPts > 0 ? 'var(--text)' : 'var(--text-3)'};">${otherPts > 0 ? '+' + otherPts : '0'}</span>
-              </div>
+              ${playerCell('Du', 'var(--blue)', myBet, myPts)}
+              ${playerCell(otherNameShort, 'var(--text)', otherBet, otherPts)}
             </div>
           </div>`;
       }).join('') + `</div>`;
@@ -1054,9 +1094,9 @@ function renderH2H(otherUserId, otherBets, container) {
       ${statRow('Bessere Tipps', myWins, otherWins)}
       ${statRow('Exakte Treffer', myExact, otherExact)}
       <div style="display:grid; grid-template-columns:1fr 1.3fr 1fr; padding:11px 14px; align-items:center;">
-        <div class="syne" style="text-align:right; font-weight:800; font-size:20px; color:${myH2H > otherH2H ? 'var(--blue)' : 'var(--text-3)'};">${myH2H}</div>
-        <div style="text-align:center; font-size:10px; color:var(--text-2); font-weight:700; text-transform:uppercase; letter-spacing:.05em;">H2H Punkte<div style="font-size:9px; color:var(--text-3); margin-top:2px; text-transform:none; letter-spacing:0;">${commonMatches.length} gemeinsame Tipps · ${draws} unentschieden</div></div>
-        <div class="syne" style="text-align:left; font-weight:800; font-size:20px; color:${otherH2H > myH2H ? 'var(--text)' : 'var(--text-3)'};">${otherH2H}</div>
+        <div class="syne" style="text-align:right; font-weight:800; font-size:20px; color:${myScorer > otherScorer ? 'var(--blue)' : 'var(--text-3)'};">${myScorer}</div>
+        <div style="text-align:center; font-size:10px; color:var(--text-2); font-weight:700; text-transform:uppercase; letter-spacing:.05em;">Korrekter Torschütze</div>
+        <div class="syne" style="text-align:left; font-weight:800; font-size:20px; color:${otherScorer > myScorer ? 'var(--text)' : 'var(--text-3)'};">${otherScorer}</div>
       </div>
     </div>
 
@@ -1680,7 +1720,7 @@ function renderBettingContent() {
     const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
     const status = getDayTipStatus(matches); // ← NEU
 
-    let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
+    let groupHtml = `<div class="date-header${isCollapsed ? ' collapsed' : ''}" onclick="toggleDateGroup('${dateLabel}')">
       <span style="display:flex; align-items:center; gap:10px;">
         <span title="${status.label}" style="width:9px; height:9px; border-radius:50%; background:${status.color}; flex-shrink:0; box-shadow:0 0 0 2px ${status.color}22;"></span>
         <span>${dateLabel}</span>
@@ -1694,7 +1734,8 @@ function renderBettingContent() {
     return groupHtml;
   }).join('');
 
-  c.innerHTML = html;
+  // In eigenen Wrapper packen, damit der gap:14 des Containers (für Bonusfragen) hier nicht greift
+  c.innerHTML = `<div style="display:flex;flex-direction:column;">${html}</div>`;
 }
 
 function betCard(m) {
@@ -2478,13 +2519,13 @@ function renderOverviewContent(cards, allBets, phaseMatches) {
     }
   });
 
-  cards.innerHTML = Object.keys(groups).map(dateLabel => {
+  const groupedHtml = Object.keys(groups).map(dateLabel => {
     const matches = groups[dateLabel];
     const isCollapsed = S.collapsedDates[dateLabel];
     const iconRot = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
     const status = getDayTipStatus(matches); // ← NEU
 
-    let groupHtml = `<div class="date-header" onclick="toggleDateGroup('${dateLabel}')">
+    let groupHtml = `<div class="date-header${isCollapsed ? ' collapsed' : ''}" onclick="toggleDateGroup('${dateLabel}')">
       <span style="display:flex; align-items:center; gap:10px;">
         <span title="${status.label}" style="width:9px; height:9px; border-radius:50%; background:${status.color}; flex-shrink:0; box-shadow:0 0 0 2px ${status.color}22;"></span>
         <span>${dateLabel}</span>
@@ -2499,6 +2540,9 @@ function renderOverviewContent(cards, allBets, phaseMatches) {
     }
     return groupHtml;
   }).join('');
+
+  // In eigenen Wrapper packen, damit der gap:14 des Containers hier nicht greift
+  cards.innerHTML = `<div style="display:flex;flex-direction:column;">${groupedHtml}</div>`;
 }
 
 function patchOverviewMatchCard(matchId) {
