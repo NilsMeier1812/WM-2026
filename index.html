@@ -988,17 +988,39 @@ function renderH2H(otherUserId, otherBets, container) {
     }
   });
 
-  // Hilfsfunktion für Stat-Zeilen
-  const statRow = (label, myVal, otherVal) => {
-    const myColor = myVal > otherVal ? 'var(--blue)' : 'var(--text-3)';
-    const otherColor = otherVal > myVal ? 'var(--text)' : 'var(--text-3)';
+  // Serien, Pechsträhnen & Boost-Punkte pro Spieler (über alle eigenen beendeten Tipps)
+  const computeExtra = (betFor) => {
+    const seq = S.matches
+      .filter(m => isFinished(m.status) && betFor(m))
+      .sort((a, b) => new Date(a.kickoff_time) - new Date(b.kickoff_time))
+      .map(m => { const b = betFor(m); return { pts: calcBetPoints(m, b), boosted: b.is_boosted === true }; });
+    let cur = 0; for (let i = seq.length - 1; i >= 0; i--) { if (seq[i].pts >= 1) cur++; else break; }
+    let best = 0, t = 0; seq.forEach(r => { if (r.pts >= 1) { t++; best = Math.max(best, t); } else t = 0; });
+    let worst = 0; t = 0; seq.forEach(r => { if (r.pts === 0) { t++; worst = Math.max(worst, t); } else t = 0; });
+    let curWorst = 0; for (let i = seq.length - 1; i >= 0; i--) { if (seq[i].pts === 0) curWorst++; else break; }
+    let boostPts = 0; seq.forEach(r => { if (r.boosted) boostPts += r.pts / 2; }); // Boost verdoppelt → 1/2 = Bonus
+    return { cur, best, worst, curWorst, boostPts: Math.round(boostPts) };
+  };
+  const myExtra = computeExtra(m => S.bets[m.id]);
+  const otherExtra = computeExtra(m => otherBetsMap[m.id]);
+
+  // Hilfsfunktion für Stat-Zeilen — flach, optional Sub-Label & eigener Vergleichswert, neutral möglich
+  const statRow = (label, myVal, otherVal, opts = {}) => {
+    const { sub = '', myCmp = myVal, otherCmp = otherVal, neutral = false, last = false } = opts;
+    const myColor = !neutral && myCmp > otherCmp ? 'var(--blue)' : 'var(--text-3)';
+    const otherColor = !neutral && otherCmp > myCmp ? 'var(--text)' : 'var(--text-3)';
     return `
-      <div style="display:grid; grid-template-columns:1fr 1.3fr 1fr; padding:11px 14px; border-bottom:1px solid var(--border-light); align-items:center;">
-        <div class="syne" style="text-align:right; font-weight:800; font-size:20px; color:${myColor};">${myVal}</div>
-        <div style="text-align:center; font-size:10px; color:var(--text-2); font-weight:700; text-transform:uppercase; letter-spacing:.05em;">${label}</div>
-        <div class="syne" style="text-align:left; font-weight:800; font-size:20px; color:${otherColor};">${otherVal}</div>
+      <div style="display:grid; grid-template-columns:auto 1fr auto; gap:10px; padding:8px 20px; ${last ? '' : 'border-bottom:1px solid var(--border-light);'} align-items:center;">
+        <div class="syne" style="text-align:left; font-weight:800; font-size:17px; color:${myColor}; white-space:nowrap;">${myVal}</div>
+        <div style="text-align:center;">
+          <div style="font-size:10px; color:var(--text-2); font-weight:700; text-transform:uppercase; letter-spacing:.04em;">${label}</div>
+          ${sub ? `<div style="font-size:8px; color:var(--text-3); font-weight:600; letter-spacing:.02em; margin-top:1px;">${sub}</div>` : ''}
+        </div>
+        <div class="syne" style="text-align:right; font-weight:800; font-size:17px; color:${otherColor}; white-space:nowrap;">${otherVal}</div>
       </div>`;
   };
+  // "aktuell / längste"-Darstellung in einer Zelle
+  const dual = (cur, max) => `${cur} <span style="font-size:12px; color:var(--text-3); font-weight:700;">/ ${max}</span>`;
 
   // Match-Karten
   let matchesHtml;
@@ -1100,11 +1122,10 @@ function renderH2H(otherUserId, otherBets, container) {
     <div style="margin:14px 16px 0; background:var(--surface); border:1px solid var(--border-light); border-radius:12px; overflow:hidden;">
       ${statRow('Bessere Tipps', myWins, otherWins)}
       ${statRow('Exakte Treffer', myExact, otherExact)}
-      <div style="display:grid; grid-template-columns:1fr 1.3fr 1fr; padding:11px 14px; align-items:center;">
-        <div class="syne" style="text-align:right; font-weight:800; font-size:20px; color:${myScorer > otherScorer ? 'var(--blue)' : 'var(--text-3)'};">${myScorer}</div>
-        <div style="text-align:center; font-size:10px; color:var(--text-2); font-weight:700; text-transform:uppercase; letter-spacing:.05em;">Korrekter Torschütze</div>
-        <div class="syne" style="text-align:left; font-weight:800; font-size:20px; color:${otherScorer > myScorer ? 'var(--text)' : 'var(--text-3)'};">${otherScorer}</div>
-      </div>
+      ${statRow('Korrekter Torschütze', myScorer, otherScorer)}
+      ${statRow('Punkte durch Boosts', myExtra.boostPts, otherExtra.boostPts)}
+      ${statRow('Serie', dual(myExtra.cur, myExtra.best), dual(otherExtra.cur, otherExtra.best), { sub: 'aktuell / längste', myCmp: myExtra.best, otherCmp: otherExtra.best })}
+      ${statRow('Pechsträhne', dual(myExtra.curWorst, myExtra.worst), dual(otherExtra.curWorst, otherExtra.worst), { sub: 'aktuell / längste', neutral: true, last: true })}
     </div>
 
     <div class="section-label" style="margin:18px 16px 6px;">Spiele</div>
