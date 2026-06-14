@@ -398,10 +398,15 @@
 
     /* Punkteverlaufs-Graph */
     .chart-card { padding:18px 16px; }
-    .chart-svg { width:100%; height:auto; max-height:280px; display:block; }
-    .chart-legend { display:flex; flex-wrap:wrap; gap:10px 14px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border-light); }
-    .chart-legend-item { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:600; color:var(--text-2); }
+    .chart-svg { width:100%; height:auto; max-height:420px; display:block; }
+    .chart-legend { display:flex; flex-wrap:wrap; gap:9px 12px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border-light); }
+    .chart-legend-item { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:600; color:var(--text-2); cursor:pointer; user-select:none; padding:2px 4px; border-radius:6px; transition:opacity .15s, background .15s; }
+    .chart-legend-item:hover { background:var(--border-light); }
+    .chart-legend-item.is-hidden { opacity:.4; }
+    .chart-legend-item.is-hidden .chart-legend-name { text-decoration:line-through; }
     .chart-legend-swatch { width:14px; height:3px; border-radius:2px; flex-shrink:0; }
+    .chart-legend-ctrl { font-size:10px; font-weight:700; color:var(--text-3); background:var(--border-light); border:none; border-radius:6px; padding:3px 9px; cursor:pointer; letter-spacing:.02em; }
+    .chart-legend-ctrl:hover { color:var(--navy); }
     
     /* ═══════════════════════════════════
        MISC
@@ -2836,11 +2841,11 @@ async function renderPointsChart(container) {
     return;
   }
 
-  // 3) Kumulative Werte pro User berechnen
+  // 3) Kumulative Werte pro User berechnen — mit Tag-0-Ursprung (alle starten bei 0)
   const userIds = S.leaderboard.map(p => p.id);
   const cumulative = {};
   userIds.forEach(uid => {
-    cumulative[uid] = [];
+    cumulative[uid] = [{ date: null, value: 0 }]; // Ursprung: Tag 0, 0 Punkte
     let total = 0;
     sortedDays.forEach(date => {
       total += (dayMap.get(date)[uid] || 0);
@@ -2848,19 +2853,27 @@ async function renderPointsChart(container) {
     });
   });
 
+  // Anzahl Stützstellen inkl. Ursprung; Intervalle = sortedDays.length
+  const nIntervals = sortedDays.length; // mind. 1
   const maxY = Math.max(1, ...userIds.flatMap(uid => cumulative[uid].map(p => p.value)));
 
-  // 4) SVG-Geometrie
-  const W = 600, H = 280;
-  const padL = 32, padR = 12, padT = 14, padB = 26;
+  // 4) SVG-Geometrie — höher (mehr vertikaler Platz)
+  const W = 600, H = 380;
+  const padL = 34, padR = 14, padT = 16, padB = 28;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
-  const xStep = sortedDays.length > 1 ? chartW / (sortedDays.length - 1) : chartW;
+  const xStep = chartW / Math.max(1, nIntervals);
   const yScale = chartH / maxY;
+  const xAt = i => padL + i * xStep;
+  const yAt = v => padT + chartH - (v * yScale);
+
+  // Sichtbarkeits-State (welche Linien sind ausgeblendet)
+  if (!S.chartHidden) S.chartHidden = new Set();
+  S.chartContainer = container;
 
   // 5) Y-Achse: Gitterlinien + Beschriftung
   let yGrid = '';
-  const yTicks = 4;
+  const yTicks = 5;
   for (let i = 0; i <= yTicks; i++) {
     const y = padT + (chartH / yTicks) * i;
     const val = Math.round(maxY - (maxY / yTicks) * i);
@@ -2868,69 +2881,69 @@ async function renderPointsChart(container) {
     yGrid += `<text x="${padL - 5}" y="${y + 3}" text-anchor="end" font-size="9" fill="#9CA3AF" font-family="DM Mono">${val}</text>`;
   }
 
-  // 6) X-Achse: Datum-Labels (max ~5 Labels)
+  // 6) X-Achse: Ursprung (0) + Datum-Labels (max ~5 Labels)
   const labelStep = Math.max(1, Math.ceil(sortedDays.length / 5));
-  let xLabels = '';
+  let xLabels = `<text x="${xAt(0)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="#9CA3AF" font-family="DM Mono">0</text>`;
   sortedDays.forEach((date, i) => {
     if (i % labelStep === 0 || i === sortedDays.length - 1) {
-      const x = padL + i * xStep;
       const d = new Date(date);
       const label = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}`;
-      xLabels += `<text x="${x}" y="${H - 8}" text-anchor="middle" font-size="9" fill="#9CA3AF" font-family="DM Mono">${label}</text>`;
+      xLabels += `<text x="${xAt(i + 1)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="#9CA3AF" font-family="DM Mono">${label}</text>`;
     }
   });
 
-  // 7) Linien: Reihenfolge bestimmen (Andere → Top 3 → Ich ganz oben)
-  const topIds = S.liveLeaderboard.slice(0, 3).map(p => p.id);
-  const topColors = ['#F0BC2C', '#A78BFA', '#34D399']; // Gold, Lila, Grün
-  const otherIds = userIds.filter(uid => uid !== S.user.id && !topIds.includes(uid));
-  const topNonMe = topIds.filter(uid => uid !== S.user.id);
-  const drawOrder = [...otherIds, ...topNonMe, S.user.id];
+  // 7) Farben pro Spieler — jede Linie eigene Farbe (nach Rang sortiert), Ich = Blau
+  const COLOR_ME = '#2563EB';
+  const PALETTE = ['#F0BC2C','#A78BFA','#34D399','#F87171','#FB923C','#22D3EE','#EC4899','#84CC16','#8B5CF6','#14B8A6','#E879F9','#FBBF24','#0EA5E9','#F472B6'];
+  const ranked = S.liveLeaderboard.map(p => p.id).filter(uid => userIds.includes(uid));
+  userIds.forEach(uid => { if (!ranked.includes(uid)) ranked.push(uid); });
+  const colorOf = {};
+  let pi = 0;
+  ranked.forEach(uid => {
+    if (uid === S.user.id) colorOf[uid] = COLOR_ME;
+    else colorOf[uid] = PALETTE[pi++ % PALETTE.length];
+  });
+
+  // Zeichenreihenfolge: schlechtere Ränge zuerst, Top-Ränge darüber, Ich ganz oben
+  const drawOrder = [...ranked].reverse().filter(uid => uid !== S.user.id);
+  if (userIds.includes(S.user.id)) drawOrder.push(S.user.id);
 
   let lines = '';
   drawOrder.forEach(uid => {
-    if (!cumulative[uid]) return;
+    if (!cumulative[uid] || S.chartHidden.has(uid)) return;
     const isMe = uid === S.user.id;
-    const topIdx = topIds.indexOf(uid);
+    const strokeColor = colorOf[uid];
+    const strokeWidth = isMe ? 3 : 2;
+    const opacity = isMe ? 1 : 0.85;
 
-    let strokeColor, strokeWidth, opacity;
-    if (isMe)            { strokeColor = '#2563EB';      strokeWidth = 3;   opacity = 1;   }
-    else if (topIdx >= 0){ strokeColor = topColors[topIdx]; strokeWidth = 2; opacity = 0.85; }
-    else                 { strokeColor = '#D3CCBA';      strokeWidth = 1.2; opacity = 0.55; }
-
-    const points = cumulative[uid].map((p, i) => {
-      const x = padL + i * xStep;
-      const y = padT + chartH - (p.value * yScale);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-
+    const points = cumulative[uid].map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.value).toFixed(1)}`).join(' ');
     lines += `<polyline points="${points}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}" />`;
 
-    // Endpunkt markieren — nur für Top 3 + Ich
-    if (isMe || topIdx >= 0) {
-      const last = cumulative[uid][cumulative[uid].length - 1];
-      const x = padL + (cumulative[uid].length - 1) * xStep;
-      const y = padT + chartH - (last.value * yScale);
-      lines += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${isMe ? 4 : 3}" fill="${strokeColor}" stroke="#fff" stroke-width="1.5" />`;
-    }
+    // Endpunkt markieren
+    const last = cumulative[uid][cumulative[uid].length - 1];
+    lines += `<circle cx="${xAt(cumulative[uid].length - 1).toFixed(1)}" cy="${yAt(last.value).toFixed(1)}" r="${isMe ? 4 : 3}" fill="${strokeColor}" stroke="#fff" stroke-width="1.5" />`;
   });
 
-  // 8) Legende
-  const me = S.liveLeaderboard.find(p => p.id === S.user.id);
-  const legendItems = [
-    `<div class="chart-legend-item"><span class="chart-legend-swatch" style="background:#2563EB;height:4px;"></span><span style="color:var(--blue);font-weight:700;">Du · ${me?.total_points ?? 0}</span></div>`,
-    ...topNonMe.map((uid, i) => {
-      const p = S.liveLeaderboard.find(x => x.id === uid);
-      const c = topColors[topIds.indexOf(uid)];
-      return `<div class="chart-legend-item"><span class="chart-legend-swatch" style="background:${c};"></span><span>${p?.display_name || '?'} · ${p?.total_points ?? 0}</span></div>`;
-    }),
-    otherIds.length > 0 ? `<div class="chart-legend-item"><span class="chart-legend-swatch" style="background:#D3CCBA;"></span><span style="color:var(--text-3);">Andere (${otherIds.length})</span></div>` : ''
-  ].join('');
+  // 8) Legende — alle Spieler, einzeln klickbar zum Ein-/Ausblenden
+  const legendItems = ranked.map(uid => {
+    const p = S.liveLeaderboard.find(x => x.id === uid) || S.leaderboard.find(x => x.id === uid);
+    const isMe = uid === S.user.id;
+    const hidden = S.chartHidden.has(uid);
+    const name = isMe ? 'Du' : (p?.display_name || '?');
+    return `<div class="chart-legend-item${hidden ? ' is-hidden' : ''}" onclick="toggleChartLine('${uid}')">
+      <span class="chart-legend-swatch" style="background:${colorOf[uid]};${isMe ? 'height:4px;' : ''}"></span>
+      <span class="chart-legend-name"${isMe ? ' style="color:var(--blue);font-weight:700;"' : ''}>${name} · ${p?.total_points ?? 0}</span>
+    </div>`;
+  }).join('');
 
   container.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;">
       <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;">Punkteverlauf</div>
-      <span style="font-size:10px;color:var(--text-3);font-weight:600;">${sortedDays.length} ${sortedDays.length === 1 ? 'Tag' : 'Tage'}</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button class="chart-legend-ctrl" onclick="setChartLines('all')">Alle</button>
+        <button class="chart-legend-ctrl" onclick="setChartLines('me')">Nur ich</button>
+        <span style="font-size:10px;color:var(--text-3);font-weight:600;white-space:nowrap;">${sortedDays.length} ${sortedDays.length === 1 ? 'Tag' : 'Tage'}</span>
+      </div>
     </div>
     <svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
       ${yGrid}
@@ -2939,6 +2952,21 @@ async function renderPointsChart(container) {
     </svg>
     <div class="chart-legend">${legendItems}</div>`;
 }
+
+window.toggleChartLine = function(uid) {
+  if (!S.chartHidden) S.chartHidden = new Set();
+  if (S.chartHidden.has(uid)) S.chartHidden.delete(uid);
+  else S.chartHidden.add(uid);
+  if (S.chartContainer) renderPointsChart(S.chartContainer);
+};
+
+window.setChartLines = function(mode) {
+  S.chartHidden = new Set();
+  if (mode === 'me') {
+    S.leaderboard.forEach(p => { if (p.id !== S.user.id) S.chartHidden.add(p.id); });
+  }
+  if (S.chartContainer) renderPointsChart(S.chartContainer);
+};
 
 // ──────────────────────────────────────────
 // BONUS (inside Tippen)
