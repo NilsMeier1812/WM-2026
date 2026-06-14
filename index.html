@@ -1010,13 +1010,13 @@ function renderH2H(otherUserId, otherBets, container) {
     const myColor = !neutral && myCmp > otherCmp ? 'var(--blue)' : 'var(--text-3)';
     const otherColor = !neutral && otherCmp > myCmp ? 'var(--text)' : 'var(--text-3)';
     return `
-      <div style="display:grid; grid-template-columns:1fr 1.3fr 1fr; padding:7px 14px; ${last ? '' : 'border-bottom:1px solid var(--border-light);'} align-items:center;">
-        <div class="syne" style="text-align:right; font-weight:800; font-size:17px; color:${myColor};">${myVal}</div>
+      <div style="display:grid; grid-template-columns:auto 1fr auto; gap:10px; padding:8px 20px; ${last ? '' : 'border-bottom:1px solid var(--border-light);'} align-items:center;">
+        <div class="syne" style="text-align:left; font-weight:800; font-size:17px; color:${myColor}; white-space:nowrap;">${myVal}</div>
         <div style="text-align:center;">
           <div style="font-size:10px; color:var(--text-2); font-weight:700; text-transform:uppercase; letter-spacing:.04em;">${label}</div>
           ${sub ? `<div style="font-size:8px; color:var(--text-3); font-weight:600; letter-spacing:.02em; margin-top:1px;">${sub}</div>` : ''}
         </div>
-        <div class="syne" style="text-align:left; font-weight:800; font-size:17px; color:${otherColor};">${otherVal}</div>
+        <div class="syne" style="text-align:right; font-weight:800; font-size:17px; color:${otherColor}; white-space:nowrap;">${otherVal}</div>
       </div>`;
   };
   // "aktuell / längste"-Darstellung in einer Zelle
