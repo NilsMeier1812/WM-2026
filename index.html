@@ -1495,7 +1495,123 @@ window.executeSmartAction = async function() {
 // ──────────────────────────────────────────
 // DASHBOARD
 // ──────────────────────────────────────────
+// ── Zusammenfassung seit letztem Besuch ──────────────
+// Zeitpunkt, zu dem ein Spiel als "fertig" gilt (für das Abwesenheits-Fenster)
+function matchFinishMoment(m) { return new Date(m.updated_at || m.kickoff_time); }
+
+async function computeWelcomeSummary(lastSeenIso) {
+  S.welcomeSummary = null;
+  if (!lastSeenIso) return;                 // erster Login überhaupt → nichts anzeigen
+  const since = new Date(lastSeenIso);
+  const now = new Date();
+
+  // Spiele, die im Abwesenheits-Fenster beendet wurden
+  const windowMatches = S.matches
+    .filter(m => isFinished(m.status) && matchFinishMoment(m) > since && matchFinishMoment(m) <= now)
+    .sort((a, b) => matchFinishMoment(a) - matchFinishMoment(b));
+  if (windowMatches.length === 0) return;   // nur zeigen, wenn was passiert ist
+
+  const windowIds = new Set(windowMatches.map(m => m.id));
+  const games = windowMatches.map(m => {
+    const bet = S.bets[m.id];
+    return { m, pts: bet ? calcBetPoints(m, bet) : 0, boosted: bet?.is_boosted === true, hasBet: !!bet };
+  });
+  const myPointsGained = games.reduce((s, g) => s + g.pts, 0);
+
+  // Leaderboard-Stand "vorher" vs. "jetzt" (für Rang & Überholungen).
+  // "jetzt" = autoritative Tabellen-Totals; "vorher" = abzüglich der im Fenster erzielten Punkte.
+  const totalsNow = {}, winPts = {};
+  S.leaderboard.forEach(p => { totalsNow[p.id] = p.total_points || 0; });
+  const { data: winBets } = await db.from('bets').select('user_id,points_awarded,match_id').in('match_id', [...windowIds]);
+  (winBets || []).forEach(b => { winPts[b.user_id] = (winPts[b.user_id] || 0) + Number(b.points_awarded || 0); });
+  const allIds = S.leaderboard.map(p => p.id);
+  const before = id => (totalsNow[id] || 0) - (winPts[id] || 0);
+  const nowPts = id => (totalsNow[id] || 0);
+  const rankIn = (fn, id) => 1 + allIds.filter(o => fn(o) > fn(id)).length;
+
+  const meId = S.user.id;
+  const nameOf = id => S.leaderboard.find(p => p.id === id)?.display_name || '?';
+  const overtookMe = allIds.filter(u => u !== meId && before(u) <= before(meId) && nowPts(u) > nowPts(meId)).map(nameOf);
+  const iPassed    = allIds.filter(u => u !== meId && before(u) >= before(meId) && nowPts(u) < nowPts(meId)).map(nameOf);
+
+  S.welcomeSummary = {
+    since: since.toISOString(),
+    games,
+    myPointsGained,
+    rankBefore: rankIn(before, meId),
+    rankNow: rankIn(nowPts, meId),
+    overtookMe,
+    iPassed
+  };
+}
+
+function welcomeSummaryCard(s) {
+  const abbr = t => (t?.name || '???').substring(0, 3).toUpperCase();
+  const fmtSince = iso => {
+    const d = new Date(iso), now = new Date();
+    const hm = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const yest = new Date(now); yest.setDate(now.getDate() - 1);
+    if (d.toDateString() === now.toDateString()) return `heute ${hm}`;
+    if (d.toDateString() === yest.toDateString()) return `gestern ${hm}`;
+    return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}. ${hm}`;
+  };
+  const nameList = (arr, max = 3) => arr.length <= max
+    ? arr.join(', ')
+    : `${arr.slice(0, max).join(', ')} +${arr.length - max}`;
+
+  const gameRows = s.games.map(g => {
+    const m = g.m;
+    const ptsLabel = !g.hasBet ? '–' : (g.pts > 0 ? `+${g.pts}` : '0');
+    const ptsColor = g.pts > 0 ? 'var(--green)' : 'var(--text-3)';
+    const boost = g.boosted ? ` <span style="font-size:8px;font-weight:800;color:var(--accent-text);background:var(--accent);padding:1px 4px;border-radius:4px;vertical-align:middle;">2×</span>` : '';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--border-light);">
+      <div style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;min-width:0;">
+        ${flag(m.home_team,'w-4 h-3')}<span>${abbr(m.home_team)}</span>
+        <span class="mono" style="font-weight:800;">${m.home_score ?? '-'}:${m.away_score ?? '-'}</span>
+        <span>${abbr(m.away_team)}</span>${flag(m.away_team,'w-4 h-3')}
+      </div>
+      <span class="syne" style="font-weight:800;font-size:13px;color:${ptsColor};white-space:nowrap;">${ptsLabel}${boost}</span>
+    </div>`;
+  }).join('');
+
+  let rankHtml;
+  if (s.rankNow < s.rankBefore)      rankHtml = `<span style="color:var(--green);font-weight:800;">▲ Rang ${s.rankBefore} → ${s.rankNow}</span>`;
+  else if (s.rankNow > s.rankBefore) rankHtml = `<span style="color:var(--red);font-weight:800;">▼ Rang ${s.rankBefore} → ${s.rankNow}</span>`;
+  else                               rankHtml = `<span style="color:var(--text-2);font-weight:700;">Rang ${s.rankNow} gehalten</span>`;
+
+  let moves = '';
+  if (s.overtookMe.length) moves += `<div style="font-size:11px;font-weight:600;color:var(--red);margin-top:6px;">↓ ${nameList(s.overtookMe)} ${s.overtookMe.length === 1 ? 'hat' : 'haben'} dich überholt</div>`;
+  if (s.iPassed.length)    moves += `<div style="font-size:11px;font-weight:600;color:var(--green);margin-top:6px;">↑ Du hast ${nameList(s.iPassed)} überholt</div>`;
+
+  const n = s.games.length;
+  return `
+    <div id="welcome-card" class="card fade-in" style="padding:16px;border-left:3px solid var(--accent);position:relative;">
+      <button onclick="dismissWelcome()" aria-label="Schließen" style="position:absolute;top:12px;right:12px;width:26px;height:26px;border:none;background:#F4F0E8;border-radius:100px;color:var(--text-2);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;">Seit deinem letzten Besuch 👋</div>
+      <div style="font-size:11px;color:var(--text-3);font-weight:600;margin-top:2px;">${fmtSince(s.since)}</div>
+
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 4px;font-size:12px;font-weight:700;">
+        <span style="color:var(--text-2);">⚽ ${n} ${n === 1 ? 'Spiel' : 'Spiele'}</span>
+        <span style="color:var(--text-3);">·</span>
+        <span class="syne" style="color:${s.myPointsGained > 0 ? 'var(--green)' : 'var(--text-2)'};font-weight:800;">+${s.myPointsGained} ${s.myPointsGained === 1 ? 'Punkt' : 'Punkte'}</span>
+        <span style="color:var(--text-3);">·</span>
+        <span style="font-size:11px;">${rankHtml}</span>
+      </div>
+      ${moves}
+      <div style="margin-top:8px;">${gameRows}</div>
+    </div>`;
+}
+
+window.dismissWelcome = function() {
+  S.welcomeSummary = null;
+  const el = document.getElementById('welcome-card');
+  if (el) el.remove();
+};
+
 function renderDashboard(main) {
+  const welcomeHtml = S.welcomeSummary ? welcomeSummaryCard(S.welcomeSummary) : '';
   const me    = S.liveLeaderboard.find(p=>p.id===S.user.id);
   const myIndex = S.liveLeaderboard.findIndex(p=>p.id===S.user.id);
   const rank  = myIndex >= 0 ? calculateRank(S.liveLeaderboard, myIndex) : '–';
@@ -1625,6 +1741,7 @@ function renderDashboard(main) {
         </div>
       </div>
 
+      ${welcomeHtml}
       ${warningHtml}
       ${nextHtml}
 
@@ -3403,10 +3520,33 @@ async function handleSession(session) {
   const app=$('app-screen');
   app.classList.remove('hidden'); app.classList.add('flex');
   $('header-user').textContent=`${(prof?.display_name||'Du').split(' ')[0]}`;
+  const lastSeenIso = prof?.last_seen_at || null;   // Stand vor diesem Besuch merken
   goTo('dashboard');
   await fetchData();
   setupRealtime();        // ← NEU
   _scheduleAutoReload();
+
+  // Zusammenfassung seit letztem Besuch berechnen & Dashboard ggf. neu rendern
+  try {
+    await computeWelcomeSummary(lastSeenIso);
+    if (S.welcomeSummary && S.view === 'dashboard') renderDashboard($('main'));
+  } catch (e) { /* Summary ist optional – Fehler nicht hochreichen */ }
+
+  // Besuchszeitpunkt aktualisieren (jetzt + beim Verlassen, damit live Gesehenes nicht doppelt auftaucht)
+  _touchLastSeen();
+  if (!S._lastSeenHook) {
+    S._lastSeenHook = true;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') _touchLastSeen();
+    });
+  }
+}
+
+function _touchLastSeen() {
+  if (!S.user) return;
+  const nowIso = new Date().toISOString();
+  db.from('profiles').update({ last_seen_at: nowIso }).eq('id', S.user.id).then(() => {}, () => {});
+  if (S.profile) S.profile.last_seen_at = nowIso;
 }
 
 function handleSignOut() {
