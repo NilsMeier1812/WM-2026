@@ -610,6 +610,7 @@ const S = {
   authMode: 'login', allBetsCache: null,
   overviewMode: 'full',
   collapsedDates: {}, // Speichert Einklapp-Zustand für Daten
+  expandedMatches: new Set(), // Speichert aufgeklappte Übersicht-Spiele (überlebt Re-Render)
   smartActionMatch: null, // Aktuelles Ziel für Smart Action Bar
   overviewAllBets: null, // Cache für ALLE Übersicht-Wetten (phasenübergreifend)
   tabelleSubView: 'tabelle',  // 'tabelle' | 'diagramm' | 'h2h'
@@ -1237,7 +1238,18 @@ async function handleAuth() {
 async function triggerSoftRefresh() {
   const btn=$('btn-refresh');
   if (btn) { btn.style.transition='transform .5s'; btn.style.transform='rotate(360deg)'; }
+  const main = $('main');
+  const scrollTop = main ? main.scrollTop : 0;   // Position merken
+  S._pendingScroll = scrollTop;
   await fetchData(false);
+  if (S.view !== 'uebersicht') {
+    // Synchron gerenderte Views: direkt wiederherstellen
+    if (main) { main.scrollTop = scrollTop; requestAnimationFrame(() => { if (main) main.scrollTop = scrollTop; }); }
+    S._pendingScroll = null;
+  } else {
+    // Übersicht lädt asynchron → renderOverviewContent stellt wieder her; Fallback-Reset
+    setTimeout(() => { S._pendingScroll = null; }, 1500);
+  }
   setTimeout(() => { if (btn) btn.style.transform=''; }, 500);
 }
 
@@ -1449,35 +1461,26 @@ window.executeSmartAction = async function() {
   if (!S.smartActionMatch) return;
   const m = S.smartActionMatch;
   
-  // Wenn wir in der Übersicht sind, bleiben wir dort. Ansonsten (z.B. aus Tabelle, Profil) gehen wir zu Tippen
+  // Wenn wir in der Übersicht sind, bleiben wir dort und öffnen das Spiel aufgeklappt
   const targetView = (S.view === 'uebersicht') ? 'uebersicht' : 'tippen';
-  
-  if (S.view !== targetView) {
-    goTo(targetView);
+
+  if (targetView === 'uebersicht') {
+    await openMatchInOverview(m.id); // navigiert, klappt Datumsgruppe + Spiel auf, scrollt hin
+    return;
   }
+
+  if (S.view !== targetView) goTo(targetView);
 
   // Datumsgruppe sicherstellen
   const dLabel = getDateLabel(m.kickoff_time);
   S.collapsedDates[dLabel] = false;
 
-  // Phase wechseln und neu rendern
-  if (targetView === 'uebersicht') {
-    if (S.overviewPhase !== m.phase) {
-      await setOverviewPhase(m.phase); // Setzt Phase und lädt Daten
-    } else {
-      await loadOverviewData(); // Re-render falls es nur eingeklappt war
-    }
-  } else {
-    if (S.bettingPhase !== m.phase) {
-      S.bettingPhase = m.phase;
-    }
-    renderBettingContent(); // Synchrons re-render
-  }
+  if (S.bettingPhase !== m.phase) S.bettingPhase = m.phase;
+  renderBettingContent(); // Synchrones re-render
 
   // Leicht verzögert zum Element scrollen
   setTimeout(() => {
-    const elId = targetView === 'uebersicht' ? `match-ov-card-${m.id}` : `match-card-${m.id}`;
-    const el = $(elId);
+    const el = $(`match-card-${m.id}`);
     if (el) {
       el.scrollIntoView({behavior:'smooth',block:'start'});
       setTimeout(() => {
@@ -1613,26 +1616,18 @@ window.dismissWelcome = function() {
   if (el) el.remove();
 };
 
-// Vom Update-Card-Eintrag direkt zum Spiel in der Übersicht (aufgeklappt) springen
+// Direkt zu einem Spiel in der Übersicht springen – Datumsgruppe + Spiel aufgeklappt
 window.openMatchInOverview = async function(matchId) {
   const m = S.matches.find(x => x.id === matchId);
   if (!m) return;
+  S.expandedMatches.add(matchId);                              // Spiel aufgeklappt rendern
+  S.collapsedDates[getDateLabel(m.kickoff_time)] = false;      // beendete Tage sind sonst auto-collapsed
   if (S.view !== 'uebersicht') goTo('uebersicht');
-  // Datumsgruppe aufklappen (beendete Tage sind sonst auto-collapsed → Karte fehlt im DOM)
-  S.collapsedDates[getDateLabel(m.kickoff_time)] = false;
   if (S.overviewPhase !== m.phase) await setOverviewPhase(m.phase);
   else await loadOverviewData();
 
   setTimeout(() => {
-    const card    = document.getElementById(`match-ov-card-${matchId}`);
-    const body    = document.getElementById(`match-ov-body-${matchId}`);
-    const summary = document.getElementById(`match-ov-summary-${matchId}`);
-    const icon    = document.getElementById(`match-ov-icon-${matchId}`);
-    if (body && body.style.display === 'none') {     // aufklappen
-      body.style.display = 'block';
-      if (summary) summary.style.display = 'none';
-      if (icon) icon.style.transform = 'rotate(180deg)';
-    }
+    const card = document.getElementById(`match-ov-card-${matchId}`);
     if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 150);
 };
@@ -2420,16 +2415,15 @@ window.toggleMatchOverview = function(matchId) {
   const body = document.getElementById(`match-ov-body-${matchId}`);
   const summary = document.getElementById(`match-ov-summary-${matchId}`);
   const icon = document.getElementById(`match-ov-icon-${matchId}`);
-  
-  if (body.style.display === 'none') {
-    body.style.display = 'block';
-    summary.style.display = 'none';
-    icon.style.transform = 'rotate(180deg)';
-  } else {
-    body.style.display = 'none';
-    summary.style.display = 'block';
-    icon.style.transform = 'rotate(0deg)';
-  }
+  if (!body) return;
+
+  const expand = body.style.display === 'none';
+  if (expand) S.expandedMatches.add(matchId);     // State merken → überlebt Re-Render
+  else S.expandedMatches.delete(matchId);
+
+  body.style.display = expand ? 'block' : 'none';
+  if (summary) summary.style.display = expand ? 'none' : 'block';
+  if (icon) icon.style.transform = expand ? 'rotate(180deg)' : 'rotate(0deg)';
 };
 
 async function loadOverviewData() {
@@ -2630,6 +2624,7 @@ function buildOverviewMatchCardHTML(m, matchBets) {
   const hn = (m.home_team?.name || 'HM').substring(0,3).toUpperCase();
   const an = (m.away_team?.name || 'GS').substring(0,3).toUpperCase();
 
+  const isExp = S.expandedMatches && S.expandedMatches.has(m.id);
   return `<div id="match-ov-card-${m.id}" class="card" style="overflow:hidden; scroll-margin-top:140px;">
     <div onclick="toggleMatchOverview(${m.id})" style="background:var(--navy);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;">
       <div style="font-weight:800;font-size:12px;display:flex;align-items:center;gap:6px;flex-shrink:0;">
@@ -2638,15 +2633,15 @@ function buildOverviewMatchCardHTML(m, matchBets) {
       <div style="display:flex;align-items:center;gap:8px;overflow:hidden;justify-content:flex-end;">
         ${actualScorer}
         <span class="mono" style="font-size:10px;font-weight:700;background:rgba(255,255,255,.1);padding:3px 8px;border-radius:6px;white-space:nowrap;flex-shrink:0;">${statusHtml}</span>
-        <svg id="match-ov-icon-${m.id}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;">
+        <svg id="match-ov-icon-${m.id}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;${isExp ? 'transform:rotate(180deg);' : ''}">
           <polyline points="6 9 12 15 18 9"></polyline>
         </svg>
       </div>
     </div>
-    <div id="match-ov-summary-${m.id}" style="padding:12px 14px; font-size:11px; line-height:1.6;">
+    <div id="match-ov-summary-${m.id}" style="padding:12px 14px; font-size:11px; line-height:1.6;${isExp ? 'display:none;' : ''}">
       ${summaryHtml}
     </div>
-    <div id="match-ov-body-${m.id}" style="display:none;">
+    <div id="match-ov-body-${m.id}" style="display:${isExp ? 'block' : 'none'};">
       ${rows}
     </div>
   </div>`;
@@ -2696,6 +2691,12 @@ function renderOverviewContent(cards, allBets, phaseMatches) {
 
   // In eigenen Wrapper packen, damit der gap:14 des Containers hier nicht greift
   cards.innerHTML = `<div style="display:flex;flex-direction:column;">${groupedHtml}</div>`;
+
+  // Nach manuellem Aktualisieren: gemerkte Scroll-Position wiederherstellen
+  if (S._pendingScroll != null) {
+    const mainEl = $('main');
+    if (mainEl) requestAnimationFrame(() => { mainEl.scrollTop = S._pendingScroll; S._pendingScroll = null; });
+  }
 }
 
 function patchOverviewMatchCard(matchId) {
