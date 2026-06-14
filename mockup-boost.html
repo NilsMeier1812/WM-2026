@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boost-Varianten Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy:         #1A1F3A;
+    --accent:       #F0BC2C;
+    --accent-text:  #7A5A0E;
+    --green:        #22C55E;
+    --green-bg:     #F0FDF4;
+    --blue:         #2563EB;
+    --border:       #E5E0D5;
+    --border-light: #F0EDE6;
+    --text:         #1A1814;
+    --text-2:       #6B6560;
+    --text-3:       #A09A92;
+    --bg:           #F9F7F2;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #F0ECE4;
+    font-family: 'DM Sans', sans-serif;
+    padding: 24px 16px 48px;
+    color: var(--text);
+  }
+  h1 {
+    font-size: 22px; font-weight: 800; letter-spacing: -.02em;
+    margin-bottom: 6px; color: var(--navy);
+  }
+  .subtitle { font-size: 13px; color: var(--text-2); margin-bottom: 28px; }
+  .section-label {
+    font-size: 10px; font-weight: 800; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--text-3);
+    margin: 32px 0 12px;
+  }
+  .section-label.yours { color: var(--blue); }
+  .section-label.mine  { color: #9333EA; }
+
+  /* Card wrapper */
+  .card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.05);
+  }
+  .card-title {
+    padding: 12px 14px 10px;
+    border-bottom: 1px solid var(--border-light);
+    font-size: 12px; font-weight: 700; color: var(--text-2);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title span { font-weight: 400; color: var(--text-3); }
+
+  /* Base row */
+  .row {
+    display: flex; align-items: center;
+    padding: 9px 14px; font-size: 11.5px;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .row:last-child { border-bottom: none; }
+  .col-name  { width: 28%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .col-score { width: 20%; text-align: center; font-family: 'DM Mono', monospace; font-weight: 800; font-size: 12px; }
+  .col-scorer{ width: 40%; font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+  .col-pts   { width: 12%; text-align: right; font-size: 12px; font-weight: 700; }
+
+  .score-exact { background: var(--green-bg); color: var(--green); padding: 2px 6px; border-radius: 6px; }
+  .score-trend { background: #FEF3C7; color: var(--accent-text); padding: 2px 6px; border-radius: 6px; }
+  .score-miss  { color: var(--text-3); text-decoration: line-through; font-weight: 500; }
+  .me { color: var(--blue); font-weight: 700; }
+  .pts-pos { color: var(--text); }
+  .pts-zero { color: var(--text-3); }
+
+  /* ─────────────────────────────────────────────────────────────────
+     VARIANTE 1  Deine Vorgabe, bereinigt:
+     Nur "2x" als gekachelter Hintergrundtext, warm-gelb, gute Lesbarkeit
+  ───────────────────────────────────────────────────────────────── */
+  .v1 {
+    position: relative;
+    background-color: rgba(240,188,44,.10) !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='52' height='32'%3E%3Ctext x='4' y='22' font-family='DM Sans,sans-serif' font-size='16' font-weight='800' fill='%23F0BC2C' fill-opacity='0.28'%3E2x%3C/text%3E%3C/svg%3E") !important;
+    background-repeat: repeat !important;
+  }
+  .v1 > * { position: relative; z-index: 1; }
+
+  /* ─────────────────────────────────────────────────────────────────
+     VARIANTE 2  "2x" diagonal (45°), subtil
+  ───────────────────────────────────────────────────────────────── */
+  .v2 {
+    position: relative;
+    background-color: rgba(240,188,44,.09) !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Ctext x='-4' y='34' font-family='DM Sans,sans-serif' font-size='14' font-weight='800' fill='%23F0BC2C' fill-opacity='0.30' transform='rotate(-35 30 30)'%3E2x%3C/text%3E%3C/svg%3E") !important;
+    background-repeat: repeat !important;
+  }
+  .v2 > * { position: relative; z-index: 1; }
+
+  /* ─────────────────────────────────────────────────────────────────
+     VARIANTE 3  "2x" groß, spärlich, mittig ausgerichtet
+  ───────────────────────────────────────────────────────────────── */
+  .v3 {
+    position: relative;
+    background-color: rgba(240,188,44,.08) !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='34'%3E%3Ctext x='50%25' y='24' text-anchor='middle' font-family='DM Sans,sans-serif' font-size='22' font-weight='900' fill='%23F0BC2C' fill-opacity='0.22'%3E2x%3C/text%3E%3C/svg%3E") !important;
+    background-repeat: repeat-x !important;
+  }
+  .v3 > * { position: relative; z-index: 1; }
+
+  /* ─────────────────────────────────────────────────────────────────
+     VARIANTE 4  Amber-Tönung, "2x" etwas kräftiger/sichtbarer
+  ───────────────────────────────────────────────────────────────── */
+  .v4 {
+    position: relative;
+    background-color: rgba(251,191,36,.18) !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='52' height='32'%3E%3Ctext x='4' y='22' font-family='DM Sans,sans-serif' font-size='16' font-weight='800' fill='%23B45309' fill-opacity='0.22'%3E2x%3C/text%3E%3C/svg%3E") !important;
+    background-repeat: repeat !important;
+  }
+  .v4 > * { position: relative; z-index: 1; }
+
+  /* ─────────────────────────────────────────────────────────────────
+     VARIANTE 5  Cremiger Warmton, "2x" groß & sehr dezent
+  ───────────────────────────────────────────────────────────────── */
+  .v5 {
+    position: relative;
+    background-color: #FFF8E8 !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='34'%3E%3Ctext x='8' y='24' font-family='DM Sans,sans-serif' font-size='20' font-weight='900' fill='%23F0BC2C' fill-opacity='0.18'%3E2x%3C/text%3E%3C/svg%3E") !important;
+    background-repeat: repeat !important;
+  }
+  .v5 > * { position: relative; z-index: 1; }
+
+  /* ─────────────────────────────────────────────────────────────────
+     VARIANTE 6  Gold-Linksstreifen, kein Hintergrundbild
+     Minimal & professionell — der Akzent kommt vom Border
+  ───────────────────────────────────────────────────────────────── */
+  .v6 {
+    background: rgba(240,188,44,.07) !important;
+    border-left: 3px solid var(--accent) !important;
+    padding-left: 11px !important;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────
+     VARIANTE 7  Amber-Gradient von links
+  ───────────────────────────────────────────────────────────────── */
+  .v7 {
+    background: linear-gradient(90deg, rgba(240,188,44,.20) 0%, rgba(240,188,44,.04) 55%, transparent 100%) !important;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────
+     VARIANTE 8  Premium-Dunkel: Navy-Tint + Gold (auffällig)
+  ───────────────────────────────────────────────────────────────── */
+  .v8 {
+    background: rgba(26,31,58,.06) !important;
+    border-left: 3px solid var(--navy) !important;
+    padding-left: 11px !important;
+  }
+  .v8 .col-name.me  { color: var(--navy) !important; }
+  .v8 .v8-badge {
+    display: inline-flex; align-items: center;
+    background: var(--navy); color: var(--accent);
+    font-size: 9px; font-weight: 800; padding: 1px 5px;
+    border-radius: 4px; margin-left: 5px; vertical-align: middle;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────
+     VARIANTE 9  Grüngold-Shimmer (Energie, Erfolg)
+  ───────────────────────────────────────────────────────────────── */
+  .v9 {
+    background: linear-gradient(105deg, rgba(240,188,44,.14) 0%, rgba(34,197,94,.10) 100%) !important;
+  }
+  .v9 .v9-badge {
+    display: inline-flex; align-items: center;
+    background: linear-gradient(135deg,#F0BC2C,#22C55E);
+    color: #fff; font-size: 9px; font-weight: 800; padding: 1px 5px;
+    border-radius: 4px; margin-left: 5px; vertical-align: middle;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────
+     VARIANTE 10  Subtiles Konfetti-Dots im Hintergrund (verspielt)
+  ───────────────────────────────────────────────────────────────── */
+  .v10 {
+    position: relative;
+    background-color: rgba(240,188,44,.08) !important;
+    background-image:
+      radial-gradient(circle, rgba(240,188,44,.55) 1.5px, transparent 1.5px),
+      radial-gradient(circle, rgba(240,188,44,.25) 1px,   transparent 1px) !important;
+    background-size: 18px 18px, 9px 9px !important;
+    background-position: 0 0, 9px 9px !important;
+  }
+  .v10 > * { position: relative; z-index: 1; }
+
+  /* ─────────────────────────────────────────────────────────────────
+     VARIANTE 11  Pulsierender Glow-Ring (CSS-Animation — auffälligst)
+  ───────────────────────────────────────────────────────────────── */
+  .v11 {
+    position: relative;
+    background: rgba(240,188,44,.10) !important;
+    outline: 1.5px solid rgba(240,188,44,.5);
+    outline-offset: -1px;
+    animation: boostPulse 2.2s ease-in-out infinite;
+  }
+  @keyframes boostPulse {
+    0%,100% { background-color: rgba(240,188,44,.10); outline-color: rgba(240,188,44,.5); }
+    50%      { background-color: rgba(240,188,44,.22); outline-color: rgba(240,188,44,.9); }
+  }
+  .v11 > * { position: relative; z-index: 1; }
+
+  /* ─────────────────────────────────────────────────────────────────
+     VARIANTE 12  Vollständig andersfarbig: Lila/Pink (kreativ, modern)
+  ───────────────────────────────────────────────────────────────── */
+  .v12 {
+    background: linear-gradient(90deg, rgba(168,85,247,.09) 0%, rgba(236,72,153,.06) 100%) !important;
+    border-left: 3px solid #A855F7 !important;
+    padding-left: 11px !important;
+  }
+  .v12 .v12-badge {
+    display: inline-flex; align-items: center;
+    background: linear-gradient(135deg,#A855F7,#EC4899);
+    color: #fff; font-size: 9px; font-weight: 800; padding: 1px 5px;
+    border-radius: 4px; margin-left: 5px; vertical-align: middle;
+  }
+
+  /* badge: legend */
+  .legend {
+    display: inline-block;
+    font-size: 9px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase;
+    background: #F0ECE4; color: var(--text-3);
+    padding: 2px 7px; border-radius: 20px;
+  }
+  .legend.boosted { background: #FEF3C7; color: var(--accent-text); }
+</style>
+</head>
+<body>
+
+<h1>Boost-Design Varianten</h1>
+<p class="subtitle">Jede Karte zeigt 3 Zeilen: normale Zeile · geboostete Zeile · deine Zeile (blau). So siehst du immer den Kontrast.</p>
+
+<!-- ═══ DEINE VORGABE (1–5) ══════════════════════════════════════════ -->
+<div class="section-label yours">● Varianten 1–5 — Deine Vorgabe: gelber Hintergrund + „2x" als Hintergrundtext</div>
+
+<!-- V1 -->
+<div class="card">
+  <div class="card-title">1 &nbsp;„2x" klein & dicht gekachelt &nbsp;<span>sehr subtil, warm-gelber Hauch</span> <span class="legend boosted" style="margin-left:auto;">⚡ Boost</span></div>
+  <div class="row"><div class="col-name">Max M.</div><div class="col-score"><span class="score-miss">1:0</span></div><div class="col-scorer">T. Müller (GER)</div><div class="col-pts pts-zero">0</div></div>
+  <div class="row v1"><div class="col-name">Sophie K.</div><div class="col-score"><span class="score-trend">2:1</span></div><div class="col-scorer">K. Mbappé (FRA)</div><div class="col-pts pts-pos">4</div></div>
+  <div class="row"><div class="col-name me">Du</div><div class="col-score"><span class="score-exact">2:1</span></div><div class="col-scorer" style="color:var(--green);">✓ K. Mbappé (FRA)</div><div class="col-pts" style="color:var(--green);">6</div></div>
+</div>
+
+<!-- V2 -->
+<div class="card">
+  <div class="card-title">2 &nbsp;„2x" diagonal (45°) &nbsp;<span>leicht dynamisch, klassisches Wasserzeichen-Feeling</span> <span class="legend boosted" style="margin-left:auto;">⚡ Boost</span></div>
+  <div class="row"><div class="col-name">Max M.</div><div class="col-score"><span class="score-miss">1:0</span></div><div class="col-scorer">T. Müller (GER)</div><div class="col-pts pts-zero">0</div></div>
+  <div class="row v2"><div class="col-name">Sophie K.</div><div class="col-score"><span class="score-trend">2:1</span></div><div class="col-scorer">K. Mbappé (FRA)</div><div class="col-pts pts-pos">4</div></div>
+  <div class="row"><div class="col-name me">Du</div><div class="col-score"><span class="score-exact">2:1</span></div><div class="col-scorer" style="color:var(--green);">✓ K. Mbappé (FRA)</div><div class="col-pts" style="color:var(--green);">6</div></div>
+</div>
+
+<!-- V3 -->
+<div class="card">
+  <div class="card-title">3 &nbsp;„2x" groß & spärlich (horizontal) &nbsp;<span>weniger Rauschen, klarer Fokus</span> <span class="legend boosted" style="margin-left:auto;">⚡ Boost</span></div>
+  <div class="row"><div class="col-name">Max M.</div><div class="col-score"><span class="score-miss">1:0</span></div><div class="col-scorer">T. Müller (GER)</div><div class="col-pts pts-zero">0</div></div>
+  <div class="row v3"><div class="col-name">Sophie K.</div><div class="col-score"><span class="score-trend">2:1</span></div><div class="col-scorer">K. Mbappé (FRA)</div><div class="col-pts pts-pos">4</div></div>
+  <div class="row"><div class="col-name me">Du</div><div class="col-score"><span class="score-exact">2:1</span></div><div class="col-scorer" style="color:var(--green);">✓ K. Mbappé (FRA)</div><div class="col-pts" style="color:var(--green);">6</div></div>
+</div>
+
+<!-- V4 -->
+<div class="card">
+  <div class="card-title">4 &nbsp;Amber-Tönung, „2x" in Braun &nbsp;<span>wärmer, etwas kräftiger</span> <span class="legend boosted" style="margin-left:auto;">⚡ Boost</span></div>
+  <div class="row"><div class="col-name">Max M.</div><div class="col-score"><span class="score-miss">1:0</span></div><div class="col-scorer">T. Müller (GER)</div><div class="col-pts pts-zero">0</div></div>
+  <div class="row v4"><div class="col-name">Sophie K.</div><div class="col-score"><span class="score-trend">2:1</span></div><div class="col-scorer">K. Mbappé (FRA)</div><div class="col-pts pts-pos">4</div></div>
+  <div class="row"><div class="col-name me">Du</div><div class="col-score"><span class="score-exact">2:1</span></div><div class="col-scorer" style="color:var(--green);">✓ K. Mbappé (FRA)</div><div class="col-pts" style="color:var(--green);">6</div></div>
+</div>
+
+<!-- V5 -->
+<div class="card">
+  <div class="card-title">5 &nbsp;Creme-Hintergrund, „2x" sehr groß & ganz zart &nbsp;<span>fast unsichtbar, edel</span> <span class="legend boosted" style="margin-left:auto;">⚡ Boost</span></div>
+  <div class="row"><div class="col-name">Max M.</div><div class="col-score"><span class="score-miss">1:0</span></div><div class="col-scorer">T. Müller (GER)</div><div class="col-pts pts-zero">0</div></div>
+  <div class="row v5"><div class="col-name">Sophie K.</div><div class="col-score"><span class="score-trend">2:1</span></div><div class="col-scorer">K. Mbappé (FRA)</div><div class="col-pts pts-pos">4</div></div>
+  <div class="row"><div class="col-name me">Du</div><div class="col-score"><span class="score-exact">2:1</span></div><div class="col-scorer" style="color:var(--green);">✓ K. Mbappé (FRA)</div><div class="col-pts" style="color:var(--green);">6</div></div>
+</div>
+
+
+<!-- ═══ MEINE VORSCHLÄGE (6–12) ════════════════════════════════════════ -->
+<div class="section-label mine" style="margin-top:40px;">● Varianten 6–12 — Eigene Vorschläge (subtil → auffällig)</div>
+
+<!-- V6 -->
+<div class="card">
+  <div class="card-title">6 &nbsp;Gold-Linksstreifen &nbsp;<span>minimalistisch, sauber — kein Rauschen</span> <span class="legend boosted" style="margin-left:auto;">⚡ Boost</span></div>
+  <div class="row"><div class="col-name">Max M.</div><div class="col-score"><span class="score-miss">1:0</span></div><div class="col-scorer">T. Müller (GER)</div><div class="col-pts pts-zero">0</div></div>
+  <div class="row v6"><div class="col-name">Sophie K.</div><div class="col-score"><span class="score-trend">2:1</span></div><div class="col-scorer">K. Mbappé (FRA)</div><div class="col-pts pts-pos">4</div></div>
+  <div class="row"><div class="col-name me">Du</div><div class="col-score"><span class="score-exact">2:1</span></div><div class="col-scorer" style="color:var(--green);">✓ K. Mbappé (FRA)</div><div class="col-pts" style="color:var(--green);">6</div></div>
+</div>
+
+<!-- V7 -->
+<div class="card">
+  <div class="card-title">7 &nbsp;Amber-Gradient von links &nbsp;<span>smooth, modern, gut lesbar</span> <span class="legend boosted" style="margin-left:auto;">⚡ Boost</span></div>
+  <div class="row"><div class="col-name">Max M.</div><div class="col-score"><span class="score-miss">1:0</span></div><div class="col-scorer">T. Müller (GER)</div><div class="col-pts pts-zero">0</div></div>
+  <div class="row v7"><div class="col-name">Sophie K.</div><div class="col-score"><span class="score-trend">2:1</span></div><div class="col-scorer">K. Mbappé (FRA)</div><div class="col-pts pts-pos">4</div></div>
+  <div class="row"><div class="col-name me">Du</div><div class="col-score"><span class="score-exact">2:1</span></div><div class="col-scorer" style="color:var(--green);">✓ K. Mbappé (FRA)</div><div class="col-pts" style="color:var(--green);">6</div></div>
+</div>
+
+<!-- V8 -->
+<div class="card">
+  <div class="card-title">8 &nbsp;Navy-Streifen + gold „2x"-Badge im Name &nbsp;<span>premium, klar zugeordnet</span> <span class="legend boosted" style="margin-left:auto;">⚡ Boost</span></div>
+  <div class="row"><div class="col-name">Max M.</div><div class="col-score"><span class="score-miss">1:0</span></div><div class="col-scorer">T. Müller (GER)</div><div class="col-pts pts-zero">0</div></div>
+  <div class="row v8">
+    <div class="col-name">Sophie K.<span class="v8-badge">2x</span></div>
+    <div class="col-score"><span class="score-trend">2:1</span></div>
+    <div class="col-scorer">K. Mbappé (FRA)</div>
+    <div class="col-pts pts-pos">4</div>
+  </div>
+  <div class="row"><div class="col-name me">Du</div><div class="col-score"><span class="score-exact">2:1</span></div><div class="col-scorer" style="color:var(--green);">✓ K. Mbappé (FRA)</div><div class="col-pts" style="color:var(--green);">6</div></div>
+</div>
+
+<!-- V9 -->
+<div class="card">
+  <div class="card-title">9 &nbsp;Gold→Grün-Gradient + zweifarbiger Badge &nbsp;<span>lebendig, Erfolg-Feeling</span> <span class="legend boosted" style="margin-left:auto;">⚡ Boost</span></div>
+  <div class="row"><div class="col-name">Max M.</div><div class="col-score"><span class="score-miss">1:0</span></div><div class="col-scorer">T. Müller (GER)</div><div class="col-pts pts-zero">0</div></div>
+  <div class="row v9">
+    <div class="col-name">Sophie K.<span class="v9-badge">2x</span></div>
+    <div class="col-score"><span class="score-trend">2:1</span></div>
+    <div class="col-scorer">K. Mbappé (FRA)</div>
+    <div class="col-pts pts-pos">4</div>
+  </div>
+  <div class="row"><div class="col-name me">Du</div><div class="col-score"><span class="score-exact">2:1</span></div><div class="col-scorer" style="color:var(--green);">✓ K. Mbappé (FRA)</div><div class="col-pts" style="color:var(--green);">6</div></div>
+</div>
+
+<!-- V10 -->
+<div class="card">
+  <div class="card-title">10 &nbsp;Gepunktetes Muster (Konfetti) &nbsp;<span>verspielt, fällt auf</span> <span class="legend boosted" style="margin-left:auto;">⚡ Boost</span></div>
+  <div class="row"><div class="col-name">Max M.</div><div class="col-score"><span class="score-miss">1:0</span></div><div class="col-scorer">T. Müller (GER)</div><div class="col-pts pts-zero">0</div></div>
+  <div class="row v10"><div class="col-name">Sophie K.</div><div class="col-score"><span class="score-trend">2:1</span></div><div class="col-scorer">K. Mbappé (FRA)</div><div class="col-pts pts-pos">4</div></div>
+  <div class="row"><div class="col-name me">Du</div><div class="col-score"><span class="score-exact">2:1</span></div><div class="col-scorer" style="color:var(--green);">✓ K. Mbappé (FRA)</div><div class="col-pts" style="color:var(--green);">6</div></div>
+</div>
+
+<!-- V11 -->
+<div class="card">
+  <div class="card-title">11 &nbsp;Pulsierender Glow-Rahmen (Animation) &nbsp;<span>sehr auffällig — sticht sofort heraus</span> <span class="legend boosted" style="margin-left:auto;">⚡ Boost</span></div>
+  <div class="row"><div class="col-name">Max M.</div><div class="col-score"><span class="score-miss">1:0</span></div><div class="col-scorer">T. Müller (GER)</div><div class="col-pts pts-zero">0</div></div>
+  <div class="row v11"><div class="col-name">Sophie K.</div><div class="col-score"><span class="score-trend">2:1</span></div><div class="col-scorer">K. Mbappé (FRA)</div><div class="col-pts pts-pos">4</div></div>
+  <div class="row"><div class="col-name me">Du</div><div class="col-score"><span class="score-exact">2:1</span></div><div class="col-scorer" style="color:var(--green);">✓ K. Mbappé (FRA)</div><div class="col-pts" style="color:var(--green);">6</div></div>
+</div>
+
+<!-- V12 -->
+<div class="card">
+  <div class="card-title">12 &nbsp;Lila/Pink Gradient + Badge &nbsp;<span>komplett anderer Ton — frech, modern</span> <span class="legend boosted" style="margin-left:auto;">⚡ Boost</span></div>
+  <div class="row"><div class="col-name">Max M.</div><div class="col-score"><span class="score-miss">1:0</span></div><div class="col-scorer">T. Müller (GER)</div><div class="col-pts pts-zero">0</div></div>
+  <div class="row v12">
+    <div class="col-name">Sophie K.<span class="v12-badge">2x</span></div>
+    <div class="col-score"><span class="score-trend">2:1</span></div>
+    <div class="col-scorer">K. Mbappé (FRA)</div>
+    <div class="col-pts pts-pos">4</div>
+  </div>
+  <div class="row"><div class="col-name me">Du</div><div class="col-score"><span class="score-exact">2:1</span></div><div class="col-scorer" style="color:var(--green);">✓ K. Mbappé (FRA)</div><div class="col-pts" style="color:var(--green);">6</div></div>
+</div>
+
+</body>
+</html>
