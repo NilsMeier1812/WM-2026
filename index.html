@@ -1564,13 +1564,16 @@ function welcomeSummaryCard(s) {
     const ptsLabel = !g.hasBet ? '–' : (g.pts > 0 ? `+${g.pts}` : '0');
     const ptsColor = g.pts > 0 ? 'var(--green)' : 'var(--text-3)';
     const boost = g.boosted ? ` <span style="font-size:8px;font-weight:800;color:var(--accent-text);background:var(--accent);padding:1px 4px;border-radius:4px;vertical-align:middle;">2×</span>` : '';
-    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--border-light);">
+    return `<div onclick="openMatchInOverview(${m.id})" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid var(--border-light);cursor:pointer;">
       <div style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;min-width:0;">
         ${flag(m.home_team,'w-4 h-3')}<span>${abbr(m.home_team)}</span>
         <span class="mono" style="font-weight:800;">${m.home_score ?? '-'}:${m.away_score ?? '-'}</span>
         <span>${abbr(m.away_team)}</span>${flag(m.away_team,'w-4 h-3')}
       </div>
-      <span class="syne" style="font-weight:800;font-size:13px;color:${ptsColor};white-space:nowrap;">${ptsLabel}${boost}</span>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        <span class="syne" style="font-weight:800;font-size:13px;color:${ptsColor};white-space:nowrap;">${ptsLabel}${boost}</span>
+        <span style="color:var(--text-3);font-size:14px;line-height:1;">›</span>
+      </div>
     </div>`;
   }).join('');
 
@@ -1589,7 +1592,7 @@ function welcomeSummaryCard(s) {
       <button onclick="dismissWelcome()" aria-label="Schließen" style="position:absolute;top:12px;right:12px;width:26px;height:26px;border:none;background:#F4F0E8;border-radius:100px;color:var(--text-2);cursor:pointer;display:flex;align-items:center;justify-content:center;">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
-      <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;">Seit deinem letzten Besuch 👋</div>
+      <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;">Update</div>
       <div style="font-size:11px;color:var(--text-3);font-weight:600;margin-top:2px;">${fmtSince(s.since)}</div>
 
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 4px;font-size:12px;font-weight:700;">
@@ -1608,6 +1611,30 @@ window.dismissWelcome = function() {
   S.welcomeSummary = null;
   const el = document.getElementById('welcome-card');
   if (el) el.remove();
+};
+
+// Vom Update-Card-Eintrag direkt zum Spiel in der Übersicht (aufgeklappt) springen
+window.openMatchInOverview = async function(matchId) {
+  const m = S.matches.find(x => x.id === matchId);
+  if (!m) return;
+  if (S.view !== 'uebersicht') goTo('uebersicht');
+  // Datumsgruppe aufklappen (beendete Tage sind sonst auto-collapsed → Karte fehlt im DOM)
+  S.collapsedDates[getDateLabel(m.kickoff_time)] = false;
+  if (S.overviewPhase !== m.phase) await setOverviewPhase(m.phase);
+  else await loadOverviewData();
+
+  setTimeout(() => {
+    const card    = document.getElementById(`match-ov-card-${matchId}`);
+    const body    = document.getElementById(`match-ov-body-${matchId}`);
+    const summary = document.getElementById(`match-ov-summary-${matchId}`);
+    const icon    = document.getElementById(`match-ov-icon-${matchId}`);
+    if (body && body.style.display === 'none') {     // aufklappen
+      body.style.display = 'block';
+      if (summary) summary.style.display = 'none';
+      if (icon) icon.style.transform = 'rotate(180deg)';
+    }
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 150);
 };
 
 function renderDashboard(main) {
