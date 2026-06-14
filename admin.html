@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0C1828" />
+  <title>WM 2026 · Admin Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@500&display=swap" rel="stylesheet" />
+  <style>
+    :root{
+      --bg:#0C1828; --bg-2:#101F33; --surface:#13233A; --surface-2:#19304D;
+      --navy:#0C1828; --line:#243750; --line-2:#1B2C44;
+      --text:#EAF0F7; --text-2:#9DB0C7; --text-3:#647890;
+      --accent:#F0BC2C; --accent-2:#FFD45E;
+      --red:#F1664F; --red-bg:#3A1C18; --green:#3FD089; --green-bg:#10301F;
+      --blue:#5B9DFF; --blue-bg:#152844; --purple:#B98BFF;
+    }
+    *,*::before,*::after{box-sizing:border-box;}
+    *{font-family:'DM Sans',sans-serif;-webkit-tap-highlight-color:transparent;}
+    .syne{font-family:'Syne',sans-serif;}
+    .mono{font-family:'DM Mono',monospace;font-variant-numeric:tabular-nums;}
+    html,body{margin:0;height:100%;}
+    body{background:var(--bg);color:var(--text);font-size:14px;}
+    a{color:var(--blue);}
+    ::-webkit-scrollbar{width:9px;height:9px;}
+    ::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;}
+    ::-webkit-scrollbar-track{background:transparent;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+    .fade{animation:fadeUp .22s ease both;}
+    .spinner{width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+
+    /* Layout */
+    .app{display:none;height:100%;grid-template-columns:232px 1fr;grid-template-rows:54px 1fr;
+         grid-template-areas:"side top" "side main";}
+    .topbar{grid-area:top;display:flex;align-items:center;gap:14px;padding:0 18px;
+            background:var(--bg-2);border-bottom:1px solid var(--line-2);}
+    .side{grid-area:side;background:var(--navy);border-right:1px solid var(--line-2);
+          display:flex;flex-direction:column;overflow-y:auto;}
+    .main{grid-area:main;overflow-y:auto;padding:22px;}
+    @media(max-width:760px){
+      .app{grid-template-columns:1fr;grid-template-rows:54px auto 1fr;
+           grid-template-areas:"top" "side" "main";}
+      .side{flex-direction:row;overflow-x:auto;border-right:none;border-bottom:1px solid var(--line-2);}
+      .nav-item{white-space:nowrap;}
+      .main{padding:14px;}
+    }
+
+    /* Sidebar */
+    .brand{padding:16px 18px 12px;border-bottom:1px solid var(--line-2);}
+    .nav{padding:10px 10px;display:flex;flex-direction:column;gap:2px;}
+    .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;
+              color:var(--text-2);cursor:pointer;font-weight:600;font-size:13.5px;border:none;background:none;text-align:left;}
+    .nav-item:hover{background:var(--surface);color:var(--text);}
+    .nav-item.active{background:var(--surface-2);color:#fff;}
+    .nav-item .ic{font-size:16px;width:20px;text-align:center;}
+
+    /* Cards / KPI */
+    .card{background:var(--surface);border:1px solid var(--line-2);border-radius:14px;padding:16px;}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;}
+    .kpi{background:var(--surface);border:1px solid var(--line-2);border-radius:14px;padding:14px 16px;}
+    .kpi .v{font-family:'Syne';font-weight:800;font-size:26px;letter-spacing:-.02em;line-height:1;}
+    .kpi .l{color:var(--text-2);font-size:12px;margin-top:6px;font-weight:600;}
+
+    /* Buttons */
+    .btn{background:var(--surface-2);color:var(--text);border:1px solid var(--line);border-radius:9px;
+         padding:8px 13px;font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;}
+    .btn:hover{background:#21395a;}
+    .btn.primary{background:var(--accent);color:#3A2B05;border-color:transparent;}
+    .btn.primary:hover{background:var(--accent-2);}
+    .btn.danger{background:var(--red-bg);color:var(--red);border-color:#5a261f;}
+    .btn.ghost{background:none;border-color:var(--line);}
+    .btn.sm{padding:5px 9px;font-size:12px;border-radius:7px;}
+    .btn:disabled{opacity:.45;cursor:not-allowed;}
+
+    /* Inputs */
+    input,select,textarea{background:var(--bg-2);color:var(--text);border:1px solid var(--line);
+      border-radius:8px;padding:8px 10px;font-size:13px;outline:none;width:100%;}
+    input:focus,select:focus,textarea:focus{border-color:var(--accent);}
+    label.fld{display:block;font-size:11.5px;color:var(--text-2);font-weight:700;margin:0 0 4px;text-transform:uppercase;letter-spacing:.04em;}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+
+    /* Table */
+    .tbl-wrap{overflow-x:auto;border:1px solid var(--line-2);border-radius:12px;}
+    table{border-collapse:collapse;width:100%;font-size:13px;}
+    th,td{padding:9px 11px;text-align:left;border-bottom:1px solid var(--line-2);white-space:nowrap;}
+    th{background:var(--bg-2);color:var(--text-2);font-size:11px;text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0;}
+    tr:hover td{background:var(--bg-2);}
+    td.num,th.num{text-align:right;font-family:'DM Mono';}
+
+    /* Badges */
+    .badge{display:inline-block;padding:2px 8px;border-radius:100px;font-size:11px;font-weight:700;}
+    .b-green{background:var(--green-bg);color:var(--green);}
+    .b-red{background:var(--red-bg);color:var(--red);}
+    .b-blue{background:var(--blue-bg);color:var(--blue);}
+    .b-gray{background:var(--surface-2);color:var(--text-2);}
+    .b-amber{background:#3A2E0E;color:var(--accent);}
+
+    .pagehead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+    .pagehead h1{font-family:'Syne';font-weight:800;font-size:22px;margin:0;letter-spacing:-.02em;}
+    .pagehead .sub{color:var(--text-2);font-size:12.5px;margin-top:2px;}
+
+    /* Toast */
+    #toasts{position:fixed;bottom:18px;right:18px;display:flex;flex-direction:column;gap:8px;z-index:200;}
+    .toast{padding:11px 15px;border-radius:11px;font-weight:700;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:fadeUp .2s;}
+    .toast.ok{background:var(--green);color:#04200F;}
+    .toast.err{background:var(--red);color:#2A0A05;}
+
+    /* Modal */
+    .modal-bg{position:fixed;inset:0;background:rgba(4,10,18,.74);display:flex;align-items:center;justify-content:center;z-index:150;padding:16px;}
+    .modal{background:var(--surface);border:1px solid var(--line);border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;padding:20px;}
+    .modal h3{font-family:'Syne';font-weight:800;font-size:18px;margin:0 0 14px;}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .hidden{display:none!important;}
+
+    /* Sensitive banner */
+    .sens-banner{background:linear-gradient(90deg,#3A1C18,#2A1410);border:1px solid #5a261f;border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+
+    /* Login */
+    #login{display:flex;align-items:center;justify-content:center;height:100%;padding:18px;}
+    .login-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:28px;max-width:380px;width:100%;}
+
+    .toggle{position:relative;width:42px;height:24px;flex-shrink:0;}
+    .toggle input{opacity:0;width:0;height:0;}
+    .toggle .sl{position:absolute;inset:0;background:var(--line);border-radius:100px;transition:.2s;cursor:pointer;}
+    .toggle .sl:before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;}
+    .toggle input:checked + .sl{background:var(--red);}
+    .toggle input:checked + .sl:before{transform:translateX(18px);}
+
+    .empty{padding:40px;text-align:center;color:var(--text-3);}
+    .mut{color:var(--text-2);}
+    .pill-env{font-size:11px;font-weight:800;padding:3px 9px;border-radius:100px;}
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login">
+  <div class="login-card fade">
+    <div class="syne" style="font-weight:800;font-size:22px;">🛠️ WM 2026 Admin</div>
+    <div class="mut" style="font-size:12.5px;margin:4px 0 20px;">Management & Debug Dashboard</div>
+    <label class="fld">Umgebung</label>
+    <select id="login-env" style="margin-bottom:12px;">
+      <option value="prod">Produktion (live)</option>
+      <option value="dev">Dev / Test</option>
+    </select>
+    <label class="fld">E-Mail</label>
+    <input id="login-email" type="email" placeholder="admin@…" style="margin-bottom:10px;" autocomplete="username"/>
+    <label class="fld">Passwort</label>
+    <input id="login-pw" type="password" placeholder="••••••••" style="margin-bottom:16px;" autocomplete="current-password"/>
+    <button class="btn primary" style="width:100%;justify-content:center;" onclick="doLogin()">Anmelden</button>
+    <div id="login-err" style="color:var(--red);font-size:12.5px;margin-top:12px;min-height:16px;"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app" id="app">
+  <div class="side">
+    <div class="brand">
+      <div class="syne" style="font-weight:800;font-size:16px;">🛠️ WM26 Admin</div>
+      <div id="env-pill" class="pill-env" style="margin-top:7px;display:inline-block;"></div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+  </div>
+
+  <div class="topbar">
+    <button class="btn ghost sm" onclick="refreshAll()" title="Alles neu laden">↻ Neu laden</button>
+    <div id="topbar-info" class="mut" style="font-size:12px;flex:1;"></div>
+    <span id="who" class="mut" style="font-size:12px;"></span>
+    <button class="btn ghost sm" onclick="doLogout()">Abmelden</button>
+  </div>
+
+  <div class="main" id="view"></div>
+</div>
+
+<div id="toasts"></div>
+<div id="modal-host"></div>
+
+<script>
+// ════════════════════════════════════════════
+//  CONFIG
+// ════════════════════════════════════════════
+const ENVS = {
+  prod: {
+    label: 'PRODUKTION', color:'var(--red)',
+    url: 'https://hinedxiclumqsvludqsl.supabase.co',
+    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpbmVkeGljbHVtcXN2bHVkcXNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NTkzNjIsImV4cCI6MjA5NjEzNTM2Mn0.QGETFrPgGft2X-1YJlaueE4is0vXUHQ9PYt_n6tWlq4'
+  },
+  dev: {
+    label: 'DEV / TEST', color:'var(--blue)',
+    url: 'https://kuzxrwzydddykliunhvg.supabase.co',
+    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1enhyd3p5ZGRkeWtsaXVuaHZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NDE0OTMsImV4cCI6MjA5NTQxNzQ5M30.dnIGUpCh2DvPbVi8r-iCdHXKaIIBz_6lbSGTR_ys57U'
+  }
+};
+// Optionaler Admin-Gate (nur UI-Hinweis – die echte Absicherung macht Supabase RLS)
+const ADMIN_EMAILS = ['nils-er@gmx.de'];
+
+// ════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════
+const A = {
+  env: localStorage.getItem('admin_env') || 'prod',
+  db: null, user: null,
+  view: 'overview',
+  showSensitive: false,        // HARTER FILTER für fremde Tipps – default AUS
+  cache: {},                   // {matches, teams, players, profiles, rankings}
+  rtChannel: null, rtLog: []
+};
+
+// ════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+const el = (html) => { const t=document.createElement('template'); t.innerHTML=html.trim(); return t.content.firstChild; };
+const esc = s => (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const now = () => new Date();
+
+function toast(msg, type='ok'){
+  const t = el(`<div class="toast ${type}">${type==='ok'?'✓':'⚠'} ${esc(msg)}</div>`);
+  $('toasts').appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300);},2600);
+}
+function fmtDT(d){ if(!d) return '–'; const x=new Date(d); return x.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+function fmtD(d){ if(!d) return '–'; return new Date(d).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit'}); }
+function fmtT(d){ if(!d) return '–'; return new Date(d).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}); }
+function isLocked(m){ return new Date(m.kickoff_time) <= now(); }                 // Spiel angestoßen
+function isFinished(s){ return s && ['FINISHED','FT','AET','PEN'].includes(String(s).toUpperCase()); }
+function toLocalInput(d){ if(!d) return ''; const x=new Date(d); const off=x.getTimezoneOffset(); const l=new Date(x.getTime()-off*60000); return l.toISOString().slice(0,16); }
+function num(v){ return (v===null||v===undefined||v==='')?null:Number(v); }
+
+function statusBadge(s){
+  if(!s) return '<span class="badge b-gray">–</span>';
+  const u=s.toUpperCase();
+  if(isFinished(u)) return `<span class="badge b-gray">${esc(s)}</span>`;
+  if(['IN_PLAY','LIVE','PLAYING','PAUSED','HALFTIME','HT'].includes(u)) return `<span class="badge b-red">● ${esc(s)}</span>`;
+  if(['SCHEDULED','TIMED','UPCOMING'].includes(u)) return `<span class="badge b-blue">${esc(s)}</span>`;
+  return `<span class="badge b-amber">${esc(s)}</span>`;
+}
+
+// ════════════════════════════════════════════
+//  SUPABASE / AUTH
+// ════════════════════════════════════════════
+function buildClient(env){
+  const c = ENVS[env];
+  return supabase.createClient(c.url, c.key, { auth:{ storageKey:'admin_auth_'+env } });
+}
+
+async function doLogin(){
+  const env = $('login-env').value;
+  const email = $('login-email').value.trim();
+  const pw = $('login-pw').value;
+  $('login-err').textContent = '';
+  if(!email||!pw){ $('login-err').textContent='E-Mail und Passwort eingeben.'; return; }
+  A.env = env; localStorage.setItem('admin_env', env);
+  A.db = buildClient(env);
+  const { data, error } = await A.db.auth.signInWithPassword({ email, password: pw });
+  if(error){ $('login-err').textContent = error.message; return; }
+  A.user = data.user;
+  enterApp();
+}
+
+async function doLogout(){
+  if(A.db) await A.db.auth.signOut();
+  A.user=null; A.cache={}; stopRealtime();
+  $('app').style.display='none'; $('login').style.display='flex';
+}
+
+async function tryRestore(){
+  $('login-env').value = A.env;
+  A.db = buildClient(A.env);
+  const { data } = await A.db.auth.getSession();
+  if(data && data.session){ A.user = data.session.user; enterApp(); }
+}
+
+function enterApp(){
+  $('login').style.display='none';
+  $('app').style.display='grid';
+  const e = ENVS[A.env];
+  const pill = $('env-pill');
+  pill.textContent = e.label;
+  pill.style.background = A.env==='prod' ? 'var(--red-bg)' : 'var(--blue-bg)';
+  pill.style.color = A.env==='prod' ? 'var(--red)' : 'var(--blue)';
+  $('who').textContent = A.user?.email || '';
+  if(A.user && ADMIN_EMAILS.length && !ADMIN_EMAILS.includes((A.user.email||'').toLowerCase())){
+    $('topbar-info').innerHTML = '<span style="color:var(--accent)">⚠ Kein Admin-Konto – Schreibrechte/Datenzugriff per RLS limitiert</span>';
+  }
+  buildNav();
+  refreshAll();
+}
+
+// ════════════════════════════════════════════
+//  DATA LOADING
+// ════════════════════════════════════════════
+async function loadCore(force=false){
+  if(A.cache.matches && !force) return A.cache;
+  const db = A.db;
+  const [mRes,tRes,pRes,prRes,rRes,ssRes] = await Promise.all([
+    db.from('matches').select('*, home_team:teams!home_team_id(id,name,flag_url,group), away_team:teams!away_team_id(id,name,flag_url,group), first_goalscorer:players!first_goalscorer_id(id,name)').order('kickoff_time',{ascending:true}),
+    db.from('teams').select('*').order('name'),
+    db.from('players').select('*').order('name'),
+    db.from('profiles').select('*').order('display_name'),
+    db.from('user_rankings').select('*'),
+    db.from('system_state').select('*').limit(1)
+  ]);
+  const errs=[mRes,tRes,pRes,prRes,rRes].filter(r=>r.error).map(r=>r.error.message);
+  if(errs.length) toast('Ladefehler: '+errs[0],'err');
+  A.cache.matches = mRes.data||[];
+  A.cache.teams   = tRes.data||[];
+  A.cache.players = pRes.data||[];
+  A.cache.profiles= prRes.data||[];
+  A.cache.rankings= rRes.data||[];
+  A.cache.system  = (ssRes.data&&ssRes.data[0])||null;
+  // Lookups
+  A.cache.teamById  = Object.fromEntries(A.cache.teams.map(t=>[t.id,t]));
+  A.cache.playerById= Object.fromEntries(A.cache.players.map(p=>[p.id,p]));
+  A.cache.profById  = Object.fromEntries(A.cache.profiles.map(p=>[p.id,p]));
+  A.cache.rankById  = Object.fromEntries(A.cache.rankings.map(r=>[r.user_id,r]));
+  return A.cache;
+}
+
+async function refreshAll(){
+  $('view').innerHTML = `<div style="display:flex;justify-content:center;padding:60px;"><div class="spinner"></div></div>`;
+  await loadCore(true);
+  $('topbar-info').innerHTML = `<span class="mut">Geladen: ${A.cache.matches.length} Spiele · ${A.cache.profiles.length} Nutzer · ${A.cache.teams.length} Teams · Stand ${fmtT(now())}</span>`;
+  renderView();
+}
+
+// ════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════
+const MODULES = [
+  {id:'overview',  label:'Übersicht',      ic:'📊', fn:viewOverview},
+  {id:'matches',   label:'Spiele',         ic:'⚽', fn:viewMatches},
+  {id:'teams',     label:'Teams',          ic:'🏳️', fn:viewTeams},
+  {id:'players',   label:'Spieler',        ic:'👟', fn:viewPlayers},
+  {id:'users',     label:'Nutzer',         ic:'👥', fn:viewUsers},
+  {id:'bets',      label:'Tipps',          ic:'🔒', fn:viewBets},
+  {id:'extraq',    label:'Extra-Fragen',   ic:'❓', fn:viewExtraQuestions},
+  {id:'extrab',    label:'Extra-Tipps',    ic:'🔒', fn:viewExtraBets},
+  {id:'events',    label:'Events/Aufst.',  ic:'📋', fn:viewEvents},
+  {id:'rankings',  label:'Rankings',       ic:'🏆', fn:viewRankings},
+  {id:'browser',   label:'Tabellen',       ic:'🗄️', fn:viewBrowser},
+  {id:'realtime',  label:'Realtime',       ic:'📡', fn:viewRealtime},
+  {id:'settings',  label:'Einstellungen',  ic:'⚙️', fn:viewSettings},
+];
+function buildNav(){
+  $('nav').innerHTML = MODULES.map(m=>
+    `<button class="nav-item ${m.id===A.view?'active':''}" data-id="${m.id}" onclick="go('${m.id}')"><span class="ic">${m.ic}</span>${m.label}</button>`
+  ).join('');
+}
+function go(id){ A.view=id; buildNav(); renderView(); }
+function renderView(){
+  const m = MODULES.find(x=>x.id===A.view) || MODULES[0];
+  const host = $('view');
+  host.innerHTML='';
+  try { m.fn(host); } catch(e){ host.innerHTML=`<div class="card" style="color:var(--red)">Fehler: ${esc(e.message)}<br><pre style="white-space:pre-wrap;font-size:11px;">${esc(e.stack||'')}</pre></div>`; }
+}
+
+function pageHead(host, title, sub, actionsHtml=''){
+  host.appendChild(el(`<div class="pagehead fade"><div><h1>${title}</h1>${sub?`<div class="sub">${sub}</div>`:''}</div><div class="row">${actionsHtml}</div></div>`));
+}
+
+// ════════════════════════════════════════════
+//  MODULE: ÜBERSICHT
+// ════════════════════════════════════════════
+function viewOverview(host){
+  const c=A.cache;
+  const live = c.matches.filter(m=>isLocked(m)&&!isFinished(m.status));
+  const finished = c.matches.filter(m=>isFinished(m.status));
+  const upcoming = c.matches.filter(m=>!isLocked(m));
+  const next = upcoming[0];
+  const unprocessed = c.matches.filter(m=>isFinished(m.status)&&!m.points_processed);
+  const noGroup = c.teams.filter(t=>!t.group).length;
+  pageHead(host,'Übersicht','Systemstatus & Kennzahlen');
+
+  const kpis=[
+    ['Spiele', c.matches.length, 'var(--text)'],
+    ['Live', live.length, live.length?'var(--red)':'var(--text)'],
+    ['Beendet', finished.length, 'var(--text)'],
+    ['Anstehend', upcoming.length, 'var(--text)'],
+    ['Nutzer', c.profiles.length, 'var(--text)'],
+    ['Teams', c.teams.length, 'var(--text)'],
+    ['Spieler', c.players.length, 'var(--text)'],
+    ['API-Calls', c.system?.count_calls ?? '–', 'var(--text-2)'],
+  ];
+  host.appendChild(el(`<div class="kpis fade" style="margin-bottom:18px;">${kpis.map(([l,v,col])=>
+    `<div class="kpi"><div class="v" style="color:${col}">${v}</div><div class="l">${l}</div></div>`).join('')}</div>`));
+
+  // Hinweise / Health
+  const warns=[];
+  if(unprocessed.length) warns.push(`${unprocessed.length} beendete Spiele ohne <b>points_processed</b> – Punkte evtl. noch nicht vergeben`);
+  if(noGroup) warns.push(`${noGroup} Teams ohne Gruppe`);
+  const teamlessMatches = c.matches.filter(m=>!m.home_team||!m.away_team).length;
+  if(teamlessMatches) warns.push(`${teamlessMatches} Spiele mit fehlendem Team-Verweis`);
+  host.appendChild(el(`<div class="card fade" style="margin-bottom:16px;">
+    <div class="syne" style="font-weight:800;margin-bottom:10px;">Health-Check</div>
+    ${warns.length? warns.map(w=>`<div style="padding:6px 0;color:var(--accent)">⚠ ${w}</div>`).join('')
+                  : '<div style="color:var(--green)">✓ Keine Auffälligkeiten</div>'}
+  </div>`));
+
+  // Live + nächstes Spiel
+  let liveHtml = live.length ? live.map(m=>matchLineRow(m)).join('') : '<div class="empty">Keine laufenden Spiele</div>';
+  host.appendChild(el(`<div class="card fade" style="margin-bottom:16px;">
+    <div class="syne" style="font-weight:800;margin-bottom:10px;">🔴 Laufende Spiele</div>${liveHtml}</div>`));
+
+  host.appendChild(el(`<div class="card fade">
+    <div class="syne" style="font-weight:800;margin-bottom:10px;">⏭️ Nächstes Spiel</div>
+    ${next? matchLineRow(next) : '<div class="empty">Kein anstehendes Spiel</div>'}</div>`));
+}
+function teamName(m,side){ const t=m[side+'_team']; return t?`${t.flag_url&&!t.flag_url.startsWith('http')?t.flag_url+' ':''}${esc(t.name)}`:('#'+m[side+'_team_id']); }
+function matchLineRow(m){
+  const sc = (m.home_score!=null)?`${m.home_score}:${m.away_score}`:'–:–';
+  return `<div class="row" style="justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line-2)">
+    <div style="flex:1">${teamName(m,'home')} <span class="mut">vs</span> ${teamName(m,'away')}</div>
+    <div class="mono" style="width:60px;text-align:center">${sc}</div>
+    <div style="width:140px;text-align:right" class="mut">${fmtDT(m.kickoff_time)}</div>
+    <div style="width:110px;text-align:right">${statusBadge(m.status)}</div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════
+//  MODULE: SPIELE
+// ════════════════════════════════════════════
+A._mFilter = {phase:'', status:'', q:''};
+function viewMatches(host){
+  const c=A.cache;
+  const phases=[...new Set(c.matches.map(m=>m.phase))];
+  pageHead(host,'Spiele', c.matches.length+' Spiele · Scores, Status, Anstoß & Torschütze bearbeiten');
+  const bar = el(`<div class="card fade" style="margin-bottom:14px;">
+    <div class="row">
+      <div style="flex:1;min-width:160px"><label class="fld">Suche</label><input id="m-q" placeholder="Team…" value="${esc(A._mFilter.q)}"></div>
+      <div style="min-width:140px"><label class="fld">Phase</label><select id="m-phase"><option value="">Alle</option>${phases.map(p=>`<option ${A._mFilter.phase===p?'selected':''}>${esc(p)}</option>`).join('')}</select></div>
+      <div style="min-width:140px"><label class="fld">Status</label>
+        <select id="m-status"><option value="">Alle</option>
+          <option value="live" ${A._mFilter.status==='live'?'selected':''}>Live</option>
+          <option value="upcoming" ${A._mFilter.status==='upcoming'?'selected':''}>Anstehend</option>
+          <option value="finished" ${A._mFilter.status==='finished'?'selected':''}>Beendet</option>
+          <option value="unprocessed" ${A._mFilter.status==='unprocessed'?'selected':''}>Beendet, nicht verrechnet</option>
+        </select></div>
+    </div></div>`);
+  host.appendChild(bar);
+  const tblHost = el('<div></div>'); host.appendChild(tblHost);
+  const apply=()=>{
+    A._mFilter={ q:$('m-q').value.toLowerCase(), phase:$('m-phase').value, status:$('m-status').value };
+    drawMatches(tblHost);
+  };
+  $('m-q').oninput=apply; $('m-phase').onchange=apply; $('m-status').onchange=apply;
+  drawMatches(tblHost);
+}
+function filteredMatches(){
+  const f=A._mFilter;
+  return A.cache.matches.filter(m=>{
+    if(f.phase && m.phase!==f.phase) return false;
+    if(f.q){ const s=((m.home_team?.name||'')+' '+(m.away_team?.name||'')).toLowerCase(); if(!s.includes(f.q)) return false; }
+    if(f.status==='live' && !(isLocked(m)&&!isFinished(m.status))) return false;
+    if(f.status==='upcoming' && isLocked(m)) return false;
+    if(f.status==='finished' && !isFinished(m.status)) return false;
+    if(f.status==='unprocessed' && !(isFinished(m.status)&&!m.points_processed)) return false;
+    return true;
+  });
+}
+function drawMatches(tblHost){
+  const rows=filteredMatches();
+  tblHost.innerHTML = `<div class="tbl-wrap fade"><table>
+    <thead><tr><th>ID</th><th>Anstoß</th><th>Phase</th><th>Heim</th><th>Gast</th><th class="num">Ergebnis</th><th>Status</th><th>Torschütze</th><th>✓Pkt</th><th></th></tr></thead>
+    <tbody>${rows.map(m=>{
+      const sc = m.home_score!=null? `${m.home_score}:${m.away_score}` : '–';
+      const et = (m.home_score_extratime!=null)?` <span class="mut">n.V. ${m.home_score_extratime}:${m.away_score_extratime}</span>`:'';
+      const pen= (m.home_score_penalty!=null)?` <span class="mut">i.E. ${m.home_score_penalty}:${m.away_score_penalty}</span>`:'';
+      return `<tr>
+        <td class="mut mono">${m.id}</td>
+        <td>${fmtDT(m.kickoff_time)}</td>
+        <td><span class="badge b-gray">${esc(m.phase)}</span></td>
+        <td>${teamName(m,'home')}</td>
+        <td>${teamName(m,'away')}</td>
+        <td class="num">${sc}${et}${pen}</td>
+        <td>${statusBadge(m.status)}</td>
+        <td class="mut">${m.first_goalscorer?esc(m.first_goalscorer.name):(m.is_goalless?'torlos':'–')}</td>
+        <td>${m.points_processed?'<span class="badge b-green">ja</span>':'<span class="badge b-red">nein</span>'}</td>
+        <td><button class="btn sm" onclick="editMatch(${m.id})">✎</button></td>
+      </tr>`;
+    }).join('')}</tbody></table></div>
+    <div class="mut" style="margin-top:8px;font-size:12px">${rows.length} Spiele</div>`;
+}
+
+async function editMatch(id){
+  const m = A.cache.matches.find(x=>x.id===id); if(!m) return;
+  // Spielerliste beider Teams für Torschützen-Auswahl
+  const teamPlayers = A.cache.players.filter(p=>p.team_id===m.home_team_id||p.team_id===m.away_team_id)
+    .sort((a,b)=>a.name.localeCompare(b.name));
+  const statusOpts = ['SCHEDULED','TIMED','IN_PLAY','PAUSED','FINISHED','AET','PEN','POSTPONED','SUSPENDED','CANCELLED'];
+  const body = `
+    <h3>Spiel #${m.id} bearbeiten</h3>
+    <div class="mut" style="margin-bottom:12px">${teamName(m,'home')} vs ${teamName(m,'away')}</div>
+    <div class="grid2">
+      <div><label class="fld">Heim Tore</label><input id="e-hs" type="number" value="${m.home_score??''}"></div>
+      <div><label class="fld">Gast Tore</label><input id="e-as" type="number" value="${m.away_score??''}"></div>
+      <div><label class="fld">Heim n.V.</label><input id="e-het" type="number" value="${m.home_score_extratime??''}"></div>
+      <div><label class="fld">Gast n.V.</label><input id="e-aet" type="number" value="${m.away_score_extratime??''}"></div>
+      <div><label class="fld">Heim i.E.</label><input id="e-hp" type="number" value="${m.home_score_penalty??''}"></div>
+      <div><label class="fld">Gast i.E.</label><input id="e-ap" type="number" value="${m.away_score_penalty??''}"></div>
+      <div><label class="fld">Status</label><select id="e-status">${statusOpts.map(s=>`<option ${m.status===s?'selected':''}>${s}</option>`).join('')}${statusOpts.includes(m.status)?'':`<option selected>${esc(m.status)}</option>`}</select></div>
+      <div><label class="fld">Phase</label><input id="e-phase" value="${esc(m.phase)}"></div>
+      <div style="grid-column:1/3"><label class="fld">Anstoß</label><input id="e-ko" type="datetime-local" value="${toLocalInput(m.kickoff_time)}"></div>
+      <div style="grid-column:1/3"><label class="fld">Erster Torschütze</label>
+        <select id="e-scorer"><option value="">– keiner –</option>
+          ${teamPlayers.map(p=>`<option value="${p.id}" ${m.first_goalscorer_id===p.id?'selected':''}>${esc(p.name)} (${A.cache.teamById[p.team_id]?.name||''})</option>`).join('')}
+        </select></div>
+    </div>
+    <div class="row" style="margin-top:14px;gap:18px">
+      <label class="row" style="gap:7px"><input type="checkbox" id="e-goalless" ${m.is_goalless?'checked':''} style="width:auto"> torlos (kein Torschütze)</label>
+      <label class="row" style="gap:7px"><input type="checkbox" id="e-proc" ${m.points_processed?'checked':''} style="width:auto"> points_processed</label>
+      <label class="row" style="gap:7px"><input type="checkbox" id="e-rem" ${m.reminder_sent?'checked':''} style="width:auto"> reminder_sent</label>
+    </div>
+  `;
+  openModal(body, async ()=>{
+    const patch = {
+      home_score:num($('e-hs').value), away_score:num($('e-as').value),
+      home_score_extratime:num($('e-het').value), away_score_extratime:num($('e-aet').value),
+      home_score_penalty:num($('e-hp').value), away_score_penalty:num($('e-ap').value),
+      status:$('e-status').value, phase:$('e-phase').value,
+      kickoff_time: $('e-ko').value? new Date($('e-ko').value).toISOString() : m.kickoff_time,
+      first_goalscorer_id: $('e-scorer').value? Number($('e-scorer').value): null,
+      is_goalless: $('e-goalless').checked,
+      points_processed: $('e-proc').checked,
+      reminder_sent: $('e-rem').checked,
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await A.db.from('matches').update(patch).eq('id', m.id);
+    if(error){ toast(error.message,'err'); return false; }
+    Object.assign(m, patch);
+    if(patch.first_goalscorer_id) m.first_goalscorer={id:patch.first_goalscorer_id,name:A.cache.playerById[patch.first_goalscorer_id]?.name}; else m.first_goalscorer=null;
+    toast('Spiel gespeichert'); renderView(); return true;
+  }, 'Spiel speichern');
+}
+
+// ════════════════════════════════════════════
+//  MODULE: TEAMS
+// ════════════════════════════════════════════
+function viewTeams(host){
+  const c=A.cache;
+  pageHead(host,'Teams', c.teams.length+' Teams');
+  host.appendChild(el(`<div class="tbl-wrap fade"><table>
+    <thead><tr><th>ID</th><th>Flagge</th><th>Name</th><th>Gruppe</th><th>api_id</th><th class="num">Spieler</th><th></th></tr></thead>
+    <tbody>${c.teams.map(t=>{
+      const pc=c.players.filter(p=>p.team_id===t.id).length;
+      const flag=t.flag_url? (t.flag_url.startsWith('http')?`<img src="${esc(t.flag_url)}" style="height:16px;border-radius:2px">`:esc(t.flag_url)) : '🏳️';
+      return `<tr><td class="mut mono">${t.id}</td><td>${flag}</td><td>${esc(t.name)}</td>
+        <td>${t.group?`<span class="badge b-blue">${esc(t.group)}</span>`:'<span class="mut">–</span>'}</td>
+        <td class="mut mono">${t.api_id??'–'}</td><td class="num">${pc}</td>
+        <td><button class="btn sm" onclick="editTeam(${t.id})">✎</button></td></tr>`;
+    }).join('')}</tbody></table></div>`));
+}
+function editTeam(id){
+  const t=A.cache.teams.find(x=>x.id===id); if(!t) return;
+  openModal(`<h3>Team #${t.id}</h3>
+    <label class="fld">Name</label><input id="t-name" value="${esc(t.name)}" style="margin-bottom:10px">
+    <label class="fld">Gruppe</label><input id="t-group" value="${esc(t.group||'')}" style="margin-bottom:10px">
+    <label class="fld">Flag (URL oder Emoji)</label><input id="t-flag" value="${esc(t.flag_url||'')}">`,
+    async()=>{
+      const patch={name:$('t-name').value,group:$('t-group').value||null,flag_url:$('t-flag').value||null,updated_at:new Date().toISOString()};
+      const {error}=await A.db.from('teams').update(patch).eq('id',t.id);
+      if(error){toast(error.message,'err');return false;}
+      Object.assign(t,patch); toast('Team gespeichert'); renderView(); return true;
+    });
+}
+
+// ════════════════════════════════════════════
+//  MODULE: SPIELER
+// ════════════════════════════════════════════
+A._pTeam='';
+function viewPlayers(host){
+  const c=A.cache;
+  pageHead(host,'Spieler', c.players.length+' Spieler');
+  host.appendChild(el(`<div class="card fade" style="margin-bottom:12px"><div class="row">
+    <div style="min-width:180px"><label class="fld">Team</label>
+      <select id="p-team"><option value="">Alle Teams</option>${c.teams.map(t=>`<option value="${t.id}" ${A._pTeam==t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
+    <div style="flex:1;min-width:160px"><label class="fld">Suche</label><input id="p-q" placeholder="Name…"></div>
+  </div></div>`));
+  const tHost=el('<div></div>'); host.appendChild(tHost);
+  const draw=()=>{
+    const team=$('p-team').value, q=($('p-q').value||'').toLowerCase();
+    let list=c.players.filter(p=>(!team||p.team_id==team)&&(!q||p.name.toLowerCase().includes(q)));
+    tHost.innerHTML=`<div class="tbl-wrap fade"><table>
+      <thead><tr><th>ID</th><th>Name</th><th>Team</th><th>Position</th><th class="num">Turniertore</th><th></th></tr></thead>
+      <tbody>${list.map(p=>`<tr><td class="mut mono">${p.id}</td><td>${esc(p.name)}</td>
+        <td class="mut">${esc(c.teamById[p.team_id]?.name||'#'+p.team_id)}</td><td class="mut">${esc(p.position||'–')}</td>
+        <td class="num">${p.tournament_goals??0}</td><td><button class="btn sm" onclick="editPlayer(${p.id})">✎</button></td></tr>`).join('')}</tbody>
+      </table></div><div class="mut" style="margin-top:8px;font-size:12px">${list.length} Spieler</div>`;
+  };
+  $('p-team').onchange=()=>{A._pTeam=$('p-team').value;draw();}; $('p-q').oninput=draw; draw();
+}
+function editPlayer(id){
+  const p=A.cache.players.find(x=>x.id===id); if(!p) return;
+  openModal(`<h3>Spieler #${p.id}</h3>
+    <label class="fld">Name</label><input id="pl-name" value="${esc(p.name)}" style="margin-bottom:10px">
+    <label class="fld">Team</label><select id="pl-team" style="margin-bottom:10px">${A.cache.teams.map(t=>`<option value="${t.id}" ${p.team_id===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select>
+    <label class="fld">Position</label><input id="pl-pos" value="${esc(p.position||'')}" style="margin-bottom:10px">
+    <label class="fld">Turniertore</label><input id="pl-goals" type="number" value="${p.tournament_goals??0}">`,
+    async()=>{
+      const patch={name:$('pl-name').value,team_id:Number($('pl-team').value),position:$('pl-pos').value||null,tournament_goals:num($('pl-goals').value)};
+      const {error}=await A.db.from('players').update(patch).eq('id',p.id);
+      if(error){toast(error.message,'err');return false;}
+      Object.assign(p,patch); toast('Spieler gespeichert'); renderView(); return true;
+    });
+}
+
+// ════════════════════════════════════════════
+//  MODULE: NUTZER
+// ════════════════════════════════════════════
+function viewUsers(host){
+  const c=A.cache;
+  pageHead(host,'Nutzer', c.profiles.length+' Profile');
+  const list=[...c.profiles].map(p=>({...p, rank:c.rankById[p.id]}))
+    .sort((a,b)=>(Number(b.rank?.total_points||0))-(Number(a.rank?.total_points||0)));
+  host.appendChild(el(`<div class="tbl-wrap fade"><table>
+    <thead><tr><th>Name</th><th>E-Mail</th><th class="num">Punkte</th><th class="num">Tipps</th><th>Reminder</th><th>Erstellt</th><th>ID</th><th></th></tr></thead>
+    <tbody>${list.map(p=>`<tr>
+      <td>${esc(p.display_name)}</td>
+      <td class="mut">${esc(p.email||'–')}</td>
+      <td class="num">${p.rank?.total_points??0}</td>
+      <td class="num">${p.rank?.total_bets??0}</td>
+      <td>${p.missing_tip_reminder?'<span class="badge b-green">an</span>':'<span class="badge b-gray">aus</span>'}</td>
+      <td class="mut">${fmtD(p.created_at)}</td>
+      <td class="mut mono" style="font-size:11px">${esc(String(p.id).slice(0,8))}…</td>
+      <td><button class="btn sm" onclick="editUser('${p.id}')">✎</button></td></tr>`).join('')}</tbody></table></div>`));
+}
+function editUser(id){
+  const p=A.cache.profiles.find(x=>x.id===id); if(!p) return;
+  openModal(`<h3>Nutzer</h3>
+    <label class="fld">Anzeigename</label><input id="u-name" value="${esc(p.display_name)}" style="margin-bottom:10px">
+    <label class="fld">E-Mail</label><input id="u-email" value="${esc(p.email||'')}" style="margin-bottom:12px">
+    <label class="row" style="gap:8px"><input type="checkbox" id="u-rem" ${p.missing_tip_reminder?'checked':''} style="width:auto"> Erinnerung bei fehlendem Tipp</label>
+    <div class="mut" style="font-size:11px;margin-top:12px">ID: ${esc(p.id)}</div>`,
+    async()=>{
+      const patch={display_name:$('u-name').value,email:$('u-email').value||null,missing_tip_reminder:$('u-rem').checked};
+      const {error}=await A.db.from('profiles').update(patch).eq('id',p.id);
+      if(error){toast(error.message,'err');return false;}
+      Object.assign(p,patch); toast('Nutzer gespeichert'); renderView(); return true;
+    });
+}
+
+// ════════════════════════════════════════════
+//  MODULE: TIPPS (SENSITIV – HARTER FILTER)
+// ════════════════════════════════════════════
+function sensitiveBanner(){
+  return `<div class="sens-banner fade">
+    <div style="font-size:20px">🔒</div>
+    <div style="flex:1;min-width:200px">
+      <div style="font-weight:800">Spielrelevante Daten – fremde Tipps geschützt</div>
+      <div class="mut" style="font-size:12px">Fremde Tipps werden <b>ausschließlich für bereits angestoßene Spiele</b> angezeigt (Anstoß ≤ jetzt) und nur, wenn der Schalter aktiv ist. Eigene Tipps & Aggregat-Zahlen sind immer sichtbar.</div>
+    </div>
+    <label class="row" style="gap:9px;font-weight:700">
+      <span>Fremde Tipps (nur angestoßen)</span>
+      <span class="toggle"><input type="checkbox" id="sens-toggle" ${A.showSensitive?'checked':''} onchange="A.showSensitive=this.checked;renderView();"><span class="sl"></span></span>
+    </label>
+  </div>`;
+}
+
+async function viewBets(host){
+  pageHead(host,'Tipps 🔒','Eigene Tipps frei · fremde Tipps nur hinter hartem Filter');
+  host.appendChild(el(sensitiveBanner()));
+  const body=el(`<div><div style="display:flex;justify-content:center;padding:40px"><div class="spinner"></div></div></div>`);
+  host.appendChild(body);
+  const c=A.cache;
+
+  // 1) Eigene Tipps (immer sichtbar)
+  const myId=A.user.id;
+  const { data:myBets } = await A.db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name)').eq('user_id',myId);
+
+  // 2) Aggregat: wie viele Tipps pro Spiel (NUR Zahlen, keine Werte) – über alle Spiele erlaubt
+  const { data:agg } = await A.db.from('bets').select('match_id').limit(20000);
+  const countByMatch={}; (agg||[]).forEach(b=>countByMatch[b.match_id]=(countByMatch[b.match_id]||0)+1);
+
+  // 3) Fremde Tipps – HARTER FILTER: nur angestoßene Spiele, nur wenn Schalter an
+  let foreign=[];
+  if(A.showSensitive){
+    const lockedIds = c.matches.filter(m=>isLocked(m)).map(m=>m.id);
+    if(lockedIds.length){
+      const { data:fb, error } = await A.db.from('bets')
+        .select('*, goalscorer:players!first_goalscorer_id(id,name)')
+        .in('match_id', lockedIds).neq('user_id', myId);
+      if(error) toast(error.message,'err');
+      foreign = fb||[];
+    }
+  }
+
+  body.innerHTML='';
+  const myByMatch=Object.fromEntries((myBets||[]).map(b=>[b.match_id,b]));
+
+  // Aggregat-Übersicht (immer)
+  const totalUsers=c.profiles.length;
+  body.appendChild(el(`<div class="card fade" style="margin-bottom:14px">
+    <div class="syne" style="font-weight:800;margin-bottom:10px">Tipp-Abdeckung (nur Zahlen)</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Spiel</th><th>Anstoß</th><th>Status</th><th class="num">Tipps abgegeben</th><th>Mein Tipp</th></tr></thead>
+      <tbody>${c.matches.map(m=>{
+        const my=myByMatch[m.id];
+        const myStr = my? (my.is_goalless?'torlos':`${my.home_score??'–'}:${my.away_score??'–'}${my.is_boosted?' ⚡':''}`):'<span class="mut">–</span>';
+        return `<tr><td>${teamName(m,'home')} vs ${teamName(m,'away')}</td><td class="mut">${fmtDT(m.kickoff_time)}</td>
+          <td>${isLocked(m)?(isFinished(m.status)?'<span class="badge b-gray">beendet</span>':'<span class="badge b-red">angestoßen</span>'):'<span class="badge b-blue">offen</span>'}</td>
+          <td class="num">${countByMatch[m.id]||0} / ${totalUsers}</td><td class="mono">${myStr}</td></tr>`;
+      }).join('')}</tbody></table></div></div>`));
+
+  // Fremde Tipps Tabelle (nur wenn aktiv)
+  if(A.showSensitive){
+    if(!foreign.length){
+      body.appendChild(el(`<div class="card fade"><div class="empty">Keine fremden Tipps für angestoßene Spiele vorhanden.</div></div>`));
+    } else {
+      const matchById=Object.fromEntries(c.matches.map(m=>[m.id,m]));
+      foreign.sort((a,b)=> new Date(matchById[b.match_id]?.kickoff_time||0)-new Date(matchById[a.match_id]?.kickoff_time||0));
+      body.appendChild(el(`<div class="card fade">
+        <div class="syne" style="font-weight:800;margin-bottom:10px">Fremde Tipps – angestoßene Spiele (${foreign.length})</div>
+        <div class="tbl-wrap"><table><thead><tr><th>Nutzer</th><th>Spiel</th><th class="num">Tipp</th><th>Torschütze</th><th class="num">Punkte</th><th>⚡</th></tr></thead>
+        <tbody>${foreign.map(b=>{
+          const m=matchById[b.match_id];
+          return `<tr><td>${esc(c.profById[b.user_id]?.display_name||b.user_id.slice(0,8))}</td>
+            <td class="mut">${m?teamName(m,'home')+' vs '+teamName(m,'away'):'#'+b.match_id}</td>
+            <td class="num mono">${b.is_goalless?'torlos':`${b.home_score??'–'}:${b.away_score??'–'}`}</td>
+            <td class="mut">${b.goalscorer?esc(b.goalscorer.name):'–'}</td>
+            <td class="num">${b.points_awarded??'–'}</td><td>${b.is_boosted?'⚡':''}</td></tr>`;
+        }).join('')}</tbody></table></div></div>`));
+    }
+  }
+}
+
+// ════════════════════════════════════════════
+//  MODULE: EXTRA-FRAGEN
+// ════════════════════════════════════════════
+async function viewExtraQuestions(host){
+  pageHead(host,'Extra-Fragen','Sonderwetten verwalten', `<button class="btn primary sm" onclick="editExtraQ()">+ Neue Frage</button>`);
+  const wrap=el('<div><div style="display:flex;justify-content:center;padding:40px"><div class="spinner"></div></div></div>'); host.appendChild(wrap);
+  const { data:qs, error } = await A.db.from('extra_questions').select('*').order('deadline');
+  if(error){ wrap.innerHTML=`<div class="card" style="color:var(--red)">${esc(error.message)}</div>`; return; }
+  const { data:ebs } = await A.db.from('extra_bets').select('question_id');
+  const cnt={}; (ebs||[]).forEach(e=>cnt[e.question_id]=(cnt[e.question_id]||0)+1);
+  wrap.innerHTML = `<div class="tbl-wrap fade"><table>
+    <thead><tr><th>ID</th><th>Frage</th><th>Typ</th><th class="num">Pkt</th><th>Deadline</th><th>Richtige Antw.</th><th class="num">Tipps</th><th></th></tr></thead>
+    <tbody>${(qs||[]).map(q=>`<tr>
+      <td class="mut mono">${q.id}</td><td style="white-space:normal;max-width:280px">${esc(q.question_text)}</td>
+      <td><span class="badge b-gray">${esc(q.answer_type)}</span></td><td class="num">${q.points}</td>
+      <td class="mut">${fmtDT(q.deadline)} ${new Date(q.deadline)<now()?'<span class="badge b-red">zu</span>':'<span class="badge b-green">offen</span>'}</td>
+      <td>${q.correct_answer?esc(q.correct_answer):'<span class="mut">–</span>'}</td>
+      <td class="num">${cnt[q.id]||0}</td>
+      <td><button class="btn sm" onclick='editExtraQ(${q.id})'>✎</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty">Keine Fragen</td></tr>'}</tbody></table></div>`;
+}
+async function editExtraQ(id){
+  let q={question_text:'',points:5,answer_type:'text',correct_answer:'',deadline:''};
+  if(id){ const {data}=await A.db.from('extra_questions').select('*').eq('id',id).single(); if(data) q=data; }
+  openModal(`<h3>${id?'Frage #'+id:'Neue Extra-Frage'}</h3>
+    <label class="fld">Fragetext</label><textarea id="q-text" rows="2" style="margin-bottom:10px">${esc(q.question_text)}</textarea>
+    <div class="grid2">
+      <div><label class="fld">Punkte</label><input id="q-pts" type="number" value="${q.points}"></div>
+      <div><label class="fld">Antworttyp</label><select id="q-type">${['text','number','boolean','player','team'].map(t=>`<option ${q.answer_type===t?'selected':''}>${t}</option>`).join('')}${['text','number','boolean','player','team'].includes(q.answer_type)?'':`<option selected>${esc(q.answer_type)}</option>`}</select></div>
+    </div>
+    <label class="fld" style="margin-top:10px">Deadline</label><input id="q-dl" type="datetime-local" value="${toLocalInput(q.deadline)}" style="margin-bottom:10px">
+    <label class="fld">Richtige Antwort (zum Auswerten)</label><input id="q-ans" value="${esc(q.correct_answer||'')}">`,
+    async()=>{
+      const patch={question_text:$('q-text').value,points:num($('q-pts').value),answer_type:$('q-type').value,
+        correct_answer:$('q-ans').value||null, deadline: $('q-dl').value? new Date($('q-dl').value).toISOString():q.deadline};
+      if(!patch.question_text||!patch.deadline){toast('Text & Deadline nötig','err');return false;}
+      const res = id? await A.db.from('extra_questions').update(patch).eq('id',id)
+                    : await A.db.from('extra_questions').insert(patch);
+      if(res.error){toast(res.error.message,'err');return false;}
+      toast(id?'Frage gespeichert':'Frage angelegt'); renderView(); return true;
+    }, undefined, id? `<button class="btn danger sm" onclick="delExtraQ(${id})">Löschen</button>`:'');
+}
+async function delExtraQ(id){
+  if(!confirm('Frage #'+id+' wirklich löschen?')) return;
+  const {error}=await A.db.from('extra_questions').delete().eq('id',id);
+  if(error){toast(error.message,'err');return;}
+  closeModal(); toast('Gelöscht'); renderView();
+}
+
+// ════════════════════════════════════════════
+//  MODULE: EXTRA-TIPPS (SENSITIV)
+// ════════════════════════════════════════════
+async function viewExtraBets(host){
+  pageHead(host,'Extra-Tipps 🔒','Fremde Antworten nur nach Deadline sichtbar');
+  host.appendChild(el(`<div class="sens-banner fade">
+    <div style="font-size:20px">🔒</div>
+    <div style="flex:1;min-width:200px"><div style="font-weight:800">Geschützt</div>
+      <div class="mut" style="font-size:12px">Fremde Extra-Tipps werden nur für Fragen angezeigt, deren <b>Deadline abgelaufen</b> ist – und nur bei aktivem Schalter.</div></div>
+    <label class="row" style="gap:9px;font-weight:700"><span>Fremde Tipps (nur nach Deadline)</span>
+      <span class="toggle"><input type="checkbox" id="sens-toggle" ${A.showSensitive?'checked':''} onchange="A.showSensitive=this.checked;renderView();"><span class="sl"></span></span></label>
+  </div>`));
+  const wrap=el('<div><div style="display:flex;justify-content:center;padding:40px"><div class="spinner"></div></div></div>'); host.appendChild(wrap);
+
+  const { data:qs } = await A.db.from('extra_questions').select('*').order('deadline');
+  const qById=Object.fromEntries((qs||[]).map(q=>[q.id,q]));
+  const myId=A.user.id;
+
+  // Eigene immer
+  const { data:mine } = await A.db.from('extra_bets').select('*').eq('user_id',myId);
+  // Aggregatzahlen
+  const { data:agg } = await A.db.from('extra_bets').select('question_id');
+  const cnt={}; (agg||[]).forEach(e=>cnt[e.question_id]=(cnt[e.question_id]||0)+1);
+
+  let foreign=[];
+  if(A.showSensitive){
+    const closedIds=(qs||[]).filter(q=>new Date(q.deadline)<now()).map(q=>q.id);
+    if(closedIds.length){
+      const { data:fb, error } = await A.db.from('extra_bets').select('*').in('question_id',closedIds).neq('user_id',myId);
+      if(error) toast(error.message,'err'); foreign=fb||[];
+    }
+  }
+
+  const myByQ=Object.fromEntries((mine||[]).map(b=>[b.question_id,b]));
+  wrap.innerHTML=`<div class="card fade" style="margin-bottom:14px"><div class="syne" style="font-weight:800;margin-bottom:10px">Fragen & eigene Antworten</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Frage</th><th>Deadline</th><th class="num">Tipps</th><th>Meine Antwort</th></tr></thead>
+    <tbody>${(qs||[]).map(q=>`<tr><td style="white-space:normal;max-width:300px">${esc(q.question_text)}</td>
+      <td class="mut">${fmtDT(q.deadline)} ${new Date(q.deadline)<now()?'<span class="badge b-red">zu</span>':'<span class="badge b-green">offen</span>'}</td>
+      <td class="num">${cnt[q.id]||0}</td><td class="mono">${myByQ[q.id]?esc(myByQ[q.id].bet_value):'<span class="mut">–</span>'}</td></tr>`).join('')}</tbody></table></div></div>`;
+
+  if(A.showSensitive){
+    if(!foreign.length){ wrap.appendChild(el(`<div class="card fade"><div class="empty">Keine fremden Tipps für abgelaufene Fragen.</div></div>`)); }
+    else {
+      wrap.appendChild(el(`<div class="card fade"><div class="syne" style="font-weight:800;margin-bottom:10px">Fremde Antworten – abgelaufene Fragen (${foreign.length})</div>
+        <div class="tbl-wrap"><table><thead><tr><th>Nutzer</th><th>Frage</th><th>Antwort</th><th class="num">Punkte</th></tr></thead>
+        <tbody>${foreign.map(b=>`<tr><td>${esc(A.cache.profById[b.user_id]?.display_name||b.user_id.slice(0,8))}</td>
+          <td class="mut" style="white-space:normal;max-width:260px">${esc(qById[b.question_id]?.question_text||'#'+b.question_id)}</td>
+          <td class="mono">${esc(b.bet_value)}</td><td class="num">${b.points_awarded??'–'}</td></tr>`).join('')}</tbody></table></div></div>`));
+    }
+  }
+}
+
+// ════════════════════════════════════════════
+//  MODULE: EVENTS / AUFSTELLUNGEN
+// ════════════════════════════════════════════
+async function viewEvents(host){
+  pageHead(host,'Events & Aufstellungen','Tor-/Karten-Events und Lineups pro Spiel');
+  const playedFirst=[...A.cache.matches].filter(m=>isLocked(m)).reverse();
+  const opts = playedFirst.map(m=>`<option value="${m.id}">${fmtD(m.kickoff_time)} · ${esc(m.home_team?.name||'')} vs ${esc(m.away_team?.name||'')}</option>`).join('');
+  host.appendChild(el(`<div class="card fade" style="margin-bottom:12px"><label class="fld">Spiel wählen</label><select id="ev-match"><option value="">– Spiel –</option>${opts}</select></div>`));
+  const out=el('<div></div>'); host.appendChild(out);
+  $('ev-match').onchange=async()=>{
+    const id=$('ev-match').value; if(!id){out.innerHTML='';return;}
+    out.innerHTML=`<div style="display:flex;justify-content:center;padding:30px"><div class="spinner"></div></div>`;
+    const [evRes,luRes]=await Promise.all([
+      A.db.from('match_events').select('*, player:players(name), team:teams(name)').eq('match_id',id).order('time_minute'),
+      A.db.from('match_lineups').select('*, player:players(name,position), match:matches(home_team_id,away_team_id)').eq('match_id',id)
+    ]);
+    const ev=evRes.data||[], lu=luRes.data||[];
+    out.innerHTML=`
+      <div class="card fade" style="margin-bottom:14px"><div class="syne" style="font-weight:800;margin-bottom:10px">Events (${ev.length})</div>
+        ${ev.length?`<div class="tbl-wrap"><table><thead><tr><th>Min</th><th>Typ</th><th>Detail</th><th>Spieler</th><th>Team</th></tr></thead>
+          <tbody>${ev.map(e=>`<tr><td class="mono">${e.time_minute}${e.time_extra?'+'+e.time_extra:''}'</td><td>${esc(e.event_type)}</td><td class="mut">${esc(e.event_detail||'')}</td><td>${esc(e.player?.name||'')}</td><td class="mut">${esc(e.team?.name||'')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Keine Events</div>'}</div>
+      <div class="card fade"><div class="syne" style="font-weight:800;margin-bottom:10px">Aufstellung (${lu.length})</div>
+        ${lu.length?`<div class="tbl-wrap"><table><thead><tr><th>Spieler</th><th>Position</th><th>Start</th><th>Status</th></tr></thead>
+          <tbody>${lu.map(l=>`<tr><td>${esc(l.player?.name||'#'+l.player_id)}</td><td class="mut">${esc(l.player?.position||'')}</td><td>${l.is_starter?'<span class="badge b-green">Startelf</span>':'<span class="badge b-gray">Bank</span>'}</td><td class="mut">${esc(l.status||'')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Keine Aufstellung</div>'}</div>`;
+  };
+}
+
+// ════════════════════════════════════════════
+//  MODULE: RANKINGS
+// ════════════════════════════════════════════
+function viewRankings(host){
+  pageHead(host,'Rankings','View user_rankings');
+  const c=A.cache;
+  const list=[...c.rankings].map(r=>({...r,name:c.profById[r.user_id]?.display_name||r.user_id}))
+    .sort((a,b)=>Number(b.total_points||0)-Number(a.total_points||0));
+  host.appendChild(el(`<div class="tbl-wrap fade"><table><thead><tr><th>#</th><th>Nutzer</th><th class="num">Punkte</th><th class="num">Tipps</th></tr></thead>
+    <tbody>${list.map((r,i)=>`<tr><td class="mut mono">${i+1}</td><td>${esc(r.name)}</td><td class="num" style="font-weight:800">${r.total_points??0}</td><td class="num">${r.total_bets??0}</td></tr>`).join('')||'<tr><td colspan=4 class="empty">Keine Daten</td></tr>'}</tbody></table></div>`));
+}
+
+// ════════════════════════════════════════════
+//  MODULE: TABELLEN-BROWSER (read-only)
+// ════════════════════════════════════════════
+const SAFE_TABLES=['matches','teams','players','profiles','extra_questions','match_events','match_lineups','user_rankings','system_state','vw_player_tournament_goals'];
+const PROTECTED_TABLES=['bets','extra_bets'];
+A._brTable='matches';
+function viewBrowser(host){
+  pageHead(host,'Tabellen-Browser','Read-only Abfrage beliebiger Tabellen (RLS gilt)');
+  host.appendChild(el(`<div class="card fade" style="margin-bottom:12px"><div class="row">
+    <div style="min-width:200px"><label class="fld">Tabelle</label>
+      <select id="br-table">${SAFE_TABLES.map(t=>`<option ${A._brTable===t?'selected':''}>${t}</option>`).join('')}
+        <optgroup label="🔒 geschützt (RLS-gefiltert)">${PROTECTED_TABLES.map(t=>`<option>${t}</option>`).join('')}</optgroup></select></div>
+    <div style="width:110px"><label class="fld">Limit</label><input id="br-limit" type="number" value="100"></div>
+    <div style="flex:1;min-width:160px"><label class="fld">order by</label><input id="br-order" placeholder="z.B. id"></div>
+    <div style="align-self:flex-end"><button class="btn primary" onclick="runBrowser()">Abfragen</button></div>
+  </div>
+  <div class="mut" style="font-size:11.5px;margin-top:8px">Nur Lesezugriff. Für <b>bets/extra_bets</b> liefert die DB per RLS nur erlaubte Zeilen (eigene + angestoßene/abgelaufene).</div></div>`));
+  host.appendChild(el('<div id="br-out"></div>'));
+}
+async function runBrowser(){
+  A._brTable=$('br-table').value;
+  const out=$('br-out'); out.innerHTML=`<div style="display:flex;justify-content:center;padding:30px"><div class="spinner"></div></div>`;
+  let q=A.db.from(A._brTable).select('*').limit(Math.min(num($('br-limit').value)||100,1000));
+  const ord=$('br-order').value.trim(); if(ord) q=q.order(ord);
+  const {data,error}=await q;
+  if(error){ out.innerHTML=`<div class="card" style="color:var(--red)">${esc(error.message)}</div>`; return; }
+  if(!data||!data.length){ out.innerHTML=`<div class="card"><div class="empty">0 Zeilen</div></div>`; return; }
+  const cols=Object.keys(data[0]);
+  out.innerHTML=`<div class="tbl-wrap fade"><table><thead><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead>
+    <tbody>${data.map(r=>`<tr>${cols.map(c=>{let v=r[c];if(v&&typeof v==='object')v=JSON.stringify(v);return `<td class="mut">${esc(String(v??'')).slice(0,80)}</td>`;}).join('')}</tr>`).join('')}</tbody></table></div>
+    <div class="mut" style="margin-top:8px;font-size:12px">${data.length} Zeilen · ${cols.length} Spalten</div>`;
+}
+
+// ════════════════════════════════════════════
+//  MODULE: REALTIME
+// ════════════════════════════════════════════
+function viewRealtime(host){
+  pageHead(host,'Realtime-Monitor','Live DB-Änderungen (matches, bets …)',
+    `<button class="btn ${A.rtChannel?'danger':'primary'} sm" onclick="toggleRealtime()">${A.rtChannel?'■ Stoppen':'● Starten'}</button>`);
+  host.appendChild(el(`<div class="card fade"><div id="rt-status" class="mut" style="margin-bottom:10px">${A.rtChannel?'<span style="color:var(--green)">● verbunden</span>':'gestoppt'}</div>
+    <div id="rt-log" style="font-family:'DM Mono';font-size:12px;max-height:60vh;overflow-y:auto">${A.rtLog.length?A.rtLog.map(rtLine).join(''):'<div class="empty">Noch keine Events</div>'}</div></div>`));
+}
+function rtLine(e){ return `<div style="padding:5px 0;border-bottom:1px solid var(--line-2)"><span class="mut">${e.t}</span> <span class="badge b-${e.event==='INSERT'?'green':e.event==='DELETE'?'red':'blue'}">${e.event}</span> <b>${e.table}</b> ${esc(e.summary)}</div>`; }
+function toggleRealtime(){ A.rtChannel? stopRealtime() : startRealtime(); renderView(); }
+function startRealtime(){
+  A.rtChannel = A.db.channel('admin-rt')
+    .on('postgres_changes',{event:'*',schema:'public',table:'matches'},p=>logRt('matches',p))
+    .on('postgres_changes',{event:'*',schema:'public',table:'bets'},p=>logRt('bets',p))
+    .on('postgres_changes',{event:'*',schema:'public',table:'match_events'},p=>logRt('match_events',p))
+    .subscribe();
+}
+function stopRealtime(){ if(A.rtChannel){ A.db.removeChannel(A.rtChannel); A.rtChannel=null; } }
+function logRt(table,p){
+  const row=p.new||p.old||{};
+  let summary='';
+  if(table==='matches') summary=`#${row.id} ${row.home_score??'-'}:${row.away_score??'-'} ${row.status||''}`;
+  else if(table==='bets') summary=`match #${row.match_id}`;          // KEINE Tipp-Werte loggen
+  else summary='#'+(row.id||'');
+  A.rtLog.unshift({t:fmtT(now()),event:p.eventType,table,summary});
+  if(A.rtLog.length>200) A.rtLog.pop();
+  if(A.view==='realtime'){ const l=$('rt-log'); if(l) l.innerHTML=A.rtLog.map(rtLine).join(''); }
+}
+
+// ════════════════════════════════════════════
+//  MODULE: EINSTELLUNGEN
+// ════════════════════════════════════════════
+function viewSettings(host){
+  pageHead(host,'Einstellungen','Umgebung, Session & Info');
+  const e=ENVS[A.env];
+  host.appendChild(el(`<div class="card fade" style="margin-bottom:14px">
+    <div class="syne" style="font-weight:800;margin-bottom:12px">Umgebung</div>
+    <div class="row" style="margin-bottom:12px">
+      <span class="pill-env" style="background:${A.env==='prod'?'var(--red-bg)':'var(--blue-bg)'};color:${A.env==='prod'?'var(--red)':'var(--blue)'}">${e.label}</span>
+      <span class="mut">${e.url}</span>
+    </div>
+    <div class="row">
+      <button class="btn ${A.env==='prod'?'primary':''}" onclick="switchEnv('prod')">Produktion</button>
+      <button class="btn ${A.env==='dev'?'primary':''}" onclick="switchEnv('dev')">Dev / Test</button>
+    </div>
+    <div class="mut" style="font-size:12px;margin-top:10px">Umschalten erfordert erneutes Anmelden in der gewählten Umgebung.</div>
+  </div>`));
+  host.appendChild(el(`<div class="card fade" style="margin-bottom:14px">
+    <div class="syne" style="font-weight:800;margin-bottom:10px">Session</div>
+    <div class="mut" style="font-size:13px;line-height:1.8">
+      <div>E-Mail: <b>${esc(A.user?.email||'–')}</b></div>
+      <div>User-ID: <span class="mono">${esc(A.user?.id||'–')}</span></div>
+      <div>Admin-Konto: ${ADMIN_EMAILS.includes((A.user?.email||'').toLowerCase())?'<span class="badge b-green">ja</span>':'<span class="badge b-amber">nein (RLS-limitiert)</span>'}</div>
+    </div></div>`));
+  host.appendChild(el(`<div class="card fade">
+    <div class="syne" style="font-weight:800;margin-bottom:10px">🔒 Datenschutz-Logik</div>
+    <div class="mut" style="font-size:13px;line-height:1.7">
+      Fremde Tipps (<code>bets</code>) werden ausschließlich für <b>angestoßene Spiele</b> geladen, fremde Extra-Tipps nur nach <b>abgelaufener Deadline</b> – beides nur bei aktivem Schalter.
+      Zusätzlich greift serverseitig die Supabase <b>RLS</b>: selbst bei manueller Abfrage liefert die DB keine offenen fremden Tipps.
+      Im Realtime-Log werden bewusst <b>keine Tipp-Werte</b> protokolliert.
+    </div></div>`));
+}
+async function switchEnv(env){
+  if(env===A.env) return;
+  A.env=env; localStorage.setItem('admin_env',env);
+  await doLogout();
+  $('login-env').value=env;
+  toast('Bitte in '+ENVS[env].label+' anmelden');
+}
+
+// ════════════════════════════════════════════
+//  MODAL
+// ════════════════════════════════════════════
+let _modalSave=null;
+function openModal(bodyHtml, onSave, saveLabel='Speichern', extraBtns=''){
+  _modalSave=onSave;
+  $('modal-host').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()">
+    <div class="modal fade">${bodyHtml}
+      <div class="row" style="justify-content:space-between;margin-top:18px">
+        <div>${extraBtns}</div>
+        <div class="row"><button class="btn ghost" onclick="closeModal()">Abbrechen</button>
+          ${onSave?`<button class="btn primary" id="modal-save">${saveLabel}</button>`:''}</div>
+      </div></div></div>`;
+  const sb=$('modal-save');
+  if(sb) sb.onclick=async()=>{ sb.disabled=true; sb.textContent='…'; const ok=await _modalSave(); if(ok!==false) closeModal(); else { sb.disabled=false; sb.textContent=saveLabel; } };
+}
+function closeModal(){ $('modal-host').innerHTML=''; _modalSave=null; }
+
+// ════════════════════════════════════════════
+//  BOOT
+// ════════════════════════════════════════════
+tryRestore();
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+$('login-pw').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+</script>
+</body>
+</html>
