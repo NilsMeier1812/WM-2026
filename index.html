@@ -9,6 +9,17 @@
   <title>WM 2026 Tipprunde</title>
   <link rel="manifest" href="manifest.json">
 
+  <!-- Theme früh setzen (vor dem ersten Paint → kein Flash) -->
+  <script>
+    (function(){
+      try {
+        var pref = localStorage.getItem('wm_theme') || 'system';
+        var dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      } catch(e){}
+    })();
+  </script>
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -36,7 +47,52 @@
       --text-3:       #9CA3AF;
       --border:       #D3CCBA;
       --border-light: #E5DFD2;
+      /* Sekundär-Flächen (vorher inline hardcodiert) */
+      --surface-2:    #F4F0E8;
+      --surface-3:    #F8F6F2;
+      --surface-4:    #F1F0EC;
+      --surface-hover:#F7F4EE;
+      --hairline:     #F5F2EC;
+      --tint-blue:    #EEF3FF;
+      --gold-bg:      #FEF3C7;
+      --mc-live-bg:   #FEF2F0;
+      --skel-1:       #E5DFCF;
+      --skel-2:       #F0EBE0;
     }
+
+    /* ═══════════════════════════════════
+       DARK MODE
+    ═══════════════════════════════════ */
+    :root[data-theme="dark"] {
+      --bg:           #0A0F15;
+      --surface:      #1A222D;
+      --navy:         #0C1828;   /* Chrome (Header/Nav) bleibt dunkel-navy */
+      --navy-2:       #172337;
+      --accent:       #F0BC2C;
+      --accent-text:  #7A5A0E;
+      --red:          #F2776B;
+      --red-bg:       #371E1C;
+      --green:        #35C36F;
+      --green-bg:     #12291E;
+      --blue:         #5B8DEF;
+      --blue-bg:      #1C2A44;
+      --text:         #E7EAEE;
+      --text-2:       #98A2AE;
+      --text-3:       #69737E;
+      --border:       #333D4A;
+      --border-light: #2A333E;
+      --surface-2:    #232C38;
+      --surface-3:    #1E2730;
+      --surface-4:    #232C38;
+      --surface-hover:#28323E;
+      --hairline:     #283039;
+      --tint-blue:    #1C2A44;
+      --gold-bg:      #E9CE7A;   /* helles Gold-Badge poppt auf Dunkel */
+      --mc-live-bg:   #371E1C;
+      --skel-1:       #232C38;
+      --skel-2:       #2E3845;
+    }
+    :root[data-theme="dark"] body { color-scheme: dark; }
 
     /* ═══════════════════════════════════
        BASE
@@ -242,11 +298,11 @@
     }
     .pill-live   { background:var(--red-bg);   color:var(--red);   }
     .pill-getippt{ background:var(--blue-bg);  color:var(--blue); }
-    .pill-offen  { background:#F1F0EC;         color:var(--text-2);}
-    .pill-done   { background:#F1F0EC;         color:var(--text-2);}
-    .pill-gold   { background:#FEF3C7;         color:var(--accent-text); }
-    .pill-countdown        { background:#F1F0EC;         color:var(--text-2); }
-    .pill-countdown-warn   { background:#FEF3C7;         color:var(--accent-text); }
+    .pill-offen  { background:var(--surface-4);         color:var(--text-2);}
+    .pill-done   { background:var(--surface-4);         color:var(--text-2);}
+    .pill-gold   { background:var(--gold-bg);         color:var(--accent-text); }
+    .pill-countdown        { background:var(--surface-4);         color:var(--text-2); }
+    .pill-countdown-warn   { background:var(--gold-bg);         color:var(--accent-text); }
     .pill-countdown-urgent { background:var(--red-bg);   color:var(--red); animation:blink 1.6s ease-in-out infinite; }
     .live-dot    { width:6px; height:6px; border-radius:50%; background:var(--red); display:inline-block; }
 
@@ -265,11 +321,11 @@
     .mc-header {
       display:flex; justify-content:space-between; align-items:center;
       padding:9px 16px 8px;
-      background:#F8F6F2;
+      background:var(--surface-3);
       border-bottom:1px solid var(--border-light);
       font-size:11px;
     }
-    .mc-live .mc-header { background:#FEF2F0; border-bottom-color:rgba(217,55,42,.15); }
+    .mc-live .mc-header { background:var(--mc-live-bg); border-bottom-color:rgba(217,55,42,.15); }
 
     .mc-body { padding:18px 16px 16px; }
 
@@ -313,7 +369,7 @@
 
     .scorer-btn {
       width:100%; padding:11px 14px;
-      background:#F4F0E8;
+      background:var(--surface-2);
       border:1.5px solid var(--border);
       border-radius:10px;
       display:flex; justify-content:space-between; align-items:center;
@@ -325,7 +381,7 @@
 
     .bet-result {
       display:flex; justify-content:space-between; align-items:center;
-      background:#F4F0E8; border:1px solid var(--border-light);
+      background:var(--surface-2); border:1px solid var(--border-light);
       border-radius:10px; padding:10px 14px; margin-top:12px;
     }
     .bet-result-label {
@@ -344,7 +400,7 @@
     .ov-row {
       display:flex; align-items:center;
       padding:9px 12px; font-size:11.5px;
-      border-bottom:1px solid #F5F2EC;
+      border-bottom:1px solid var(--hairline);
       transition:background .1s;
     }
     .ov-row:last-child { border-bottom:none; }
@@ -367,7 +423,7 @@
       padding:10px 12px; border-radius:10px;
       transition:background .1s;
     }
-    .lb-row:hover { background:#F7F4EE; }
+    .lb-row:hover { background:var(--surface-2); }
     .lb-row.me { background:rgba(37,99,235,.07); }
 
     /* ═══════════════════════════════════
@@ -387,14 +443,14 @@
     }
     .auth-input {
       width:100%; padding:12px 14px;
-      background:#F4F0E8;
+      background:var(--surface-2);
       border:1.5px solid var(--border);
       border-radius:10px;
       font-size:14px; font-weight:500;
       outline:none;
       transition:border-color .15s, background .15s;
     }
-    .auth-input:focus { border-color:var(--navy); background:#fff; }
+    .auth-input:focus { border-color:var(--text); background:var(--surface); }
 
     /* Punkteverlaufs-Graph */
     .chart-card { padding:18px 16px; }
@@ -406,7 +462,7 @@
     .chart-legend-item.is-hidden .chart-legend-name { text-decoration:line-through; }
     .chart-legend-swatch { width:14px; height:3px; border-radius:2px; flex-shrink:0; }
     .chart-legend-ctrl { font-size:10px; font-weight:700; color:var(--text-3); background:var(--border-light); border:none; border-radius:6px; padding:3px 9px; cursor:pointer; letter-spacing:.02em; }
-    .chart-legend-ctrl:hover { color:var(--navy); }
+    .chart-legend-ctrl:hover { color:var(--text); }
     
     /* ═══════════════════════════════════
        MISC
@@ -454,7 +510,7 @@
       to   { background-position:  600px 0; }
     }
     .skel {
-      background: linear-gradient(90deg, #E5DFCF 0%, #F0EBE0 50%, #E5DFCF 100%);
+      background: linear-gradient(90deg, var(--skel-1) 0%, var(--skel-2) 50%, var(--skel-1) 100%);
       background-size: 600px 100%;
       animation: shimmer 1.4s ease-in-out infinite;
       border-radius:8px;
@@ -462,6 +518,11 @@
 
     input[type=text]::-webkit-inner-spin-button,
     input[type=text]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+
+    /* Theme-Umschalter (Hell|Dunkel|System) */
+    .theme-seg { display:flex; background:var(--surface); border:1px solid var(--border); border-radius:9px; padding:2px; gap:2px; flex-shrink:0; }
+    .theme-opt { border:none; background:transparent; color:var(--text-2); font-size:11px; font-weight:700; padding:6px 9px; border-radius:7px; cursor:pointer; font-family:'DM Sans',sans-serif; transition:background .15s, color .15s; }
+    .theme-opt-on { background:var(--navy); color:#fff; }
 
     /* ═══════════════════════════════════
        BILD-EXPORT (Long-Press auf Übersichts-Kachel)
@@ -488,7 +549,7 @@
     }
     .img-sheet-actions button:active { opacity:.7; }
     .img-sheet-actions .ish-primary { background:var(--navy); color:#fff; }
-    .img-sheet-actions .ish-second  { background:#F4F0E8; color:var(--text-2); }
+    .img-sheet-actions .ish-second  { background:var(--surface-2); color:var(--text-2); }
     .img-sheet-close {
       background:none; border:none; cursor:pointer; color:var(--text-3);
       font-size:13px; font-weight:700; padding:4px; font-family:'DM Sans',sans-serif;
@@ -517,8 +578,8 @@
   </div>
 
   <div class="auth-card w-full max-w-sm fade-up" style="animation-delay:.1s">
-    <div style="display:flex; background:#F4F0E8; border-radius:10px; padding:3px; gap:3px; margin-bottom:20px;">
-      <button id="tab-login"    onclick="switchTab('login')"    style="flex:1; padding:9px; border-radius:8px; font-size:13px; font-weight:700; background:#fff; color:var(--navy); box-shadow:0 1px 4px rgba(0,0,0,.08); border:none; cursor:pointer; transition:all .15s;">Anmelden</button>
+    <div style="display:flex; background:var(--surface-2); border-radius:10px; padding:3px; gap:3px; margin-bottom:20px;">
+      <button id="tab-login"    onclick="switchTab('login')"    style="flex:1; padding:9px; border-radius:8px; font-size:13px; font-weight:700; background:var(--surface); color:var(--text); box-shadow:0 1px 4px rgba(0,0,0,.08); border:none; cursor:pointer; transition:all .15s;">Anmelden</button>
       <button id="tab-register" onclick="switchTab('register')" style="flex:1; padding:9px; border-radius:8px; font-size:13px; font-weight:700; background:transparent; color:var(--text-2); border:none; cursor:pointer; transition:all .15s;">Registrieren</button>
     </div>
 
@@ -602,7 +663,7 @@
   <div style="background:var(--surface); border-radius:24px 24px 0 0; max-height:88vh; display:flex; flex-direction:column; width:100%; max-width:480px; margin:0 auto; box-shadow:0 -8px 40px rgba(0,0,0,.25);" class="fade-up">
     <div style="padding:16px 18px 14px; border-bottom:1px solid var(--border-light); display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
       <h3 class="syne" style="font-size:17px; font-weight:800; letter-spacing:-.01em;">Torschütze wählen</h3>
-      <button onclick="closeScorer()" style="width:32px; height:32px; background:#F4F0E8; border-radius:100px; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-2);">
+      <button onclick="closeScorer()" style="width:32px; height:32px; background:var(--surface-2); border-radius:100px; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-2);">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </div>
@@ -633,6 +694,34 @@ const SUPABASE_ANON_KEY = IS_DEV
 
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ──────────────────────────────────────────
+// THEME (Hell | Dunkel | System)
+// ──────────────────────────────────────────
+function getThemePref() { try { return localStorage.getItem('wm_theme') || 'system'; } catch(e){ return 'system'; } }
+function _resolveTheme(pref) {
+  return (pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) ? 'dark' : 'light';
+}
+function applyTheme() {
+  const eff = _resolveTheme(getThemePref());
+  document.documentElement.setAttribute('data-theme', eff);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', '#0C1828'); // Header bleibt navy in beiden Modi
+}
+window.setTheme = function(pref) {
+  try { localStorage.setItem('wm_theme', pref); } catch(e){}
+  applyTheme();
+  document.querySelectorAll('[data-theme-opt]').forEach(b => {
+    b.classList.toggle('theme-opt-on', b.dataset.themeOpt === pref);
+  });
+};
+// Auf Systemwechsel reagieren, solange "System" gewählt ist
+try {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (getThemePref() === 'system') applyTheme();
+  });
+} catch(e){}
+applyTheme();
 
 // ──────────────────────────────────────────
 // STATE
@@ -946,8 +1035,8 @@ function renderStreaksCard(s) {
   }
 
   const recordCard = (value, label, sub = '') => `
-    <div style="background:#F4F0E8; border:1px solid var(--border-light); border-radius:12px; padding:14px 13px;">
-      <div class="syne" style="font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--navy);line-height:1;">${value}</div>
+    <div style="background:var(--surface-2); border:1px solid var(--border-light); border-radius:12px; padding:14px 13px;">
+      <div class="syne" style="font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--text);line-height:1;">${value}</div>
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);margin-top:8px;line-height:1.25;">${label}</div>
       ${sub ? `<div style="font-size:10px;color:var(--text-3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub}</div>` : ''}
     </div>`;
@@ -1092,7 +1181,7 @@ function renderH2H(otherUserId, otherBets, container) {
 
         const cardBg = myPts > otherPts ? 'rgba(37,99,235,.05)' 
                     : otherPts > myPts ? 'rgba(217,55,42,.05)' 
-                    : '#F4F0E8';
+                    : 'var(--surface-2)';
         const cardBorder = myPts > otherPts ? 'var(--blue)' 
                         : otherPts > myPts ? 'var(--red)' 
                         : 'var(--border-light)';
@@ -1125,7 +1214,7 @@ function renderH2H(otherUserId, otherBets, container) {
         };
 
         const playerCell = (name, nameColor, bet, pts) => `
-          <div class="${bet.is_boosted === true ? 'boosted-bg' : ''}" style="display:flex; flex-direction:column; gap:4px; padding:7px 10px; background:#fff; border-radius:7px; overflow:hidden;">
+          <div class="${bet.is_boosted === true ? 'boosted-bg' : ''}" style="display:flex; flex-direction:column; gap:4px; padding:7px 10px; background:var(--surface); border-radius:7px; overflow:hidden;">
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
               <span style="color:${nameColor}; font-weight:700; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60px;">${name}</span>
               <span class="mono" style="font-weight:600;">${bet.home_score ?? '-'}:${bet.away_score ?? '-'}</span>
@@ -1179,7 +1268,7 @@ function renderH2H(otherUserId, otherBets, container) {
 
   content.innerHTML = `
     <!-- Header mit Namen + Gesamtpunkten -->
-    <div style="display:flex; align-items:stretch; justify-content:space-between; padding:18px 16px 16px; gap:12px; background:#F8F6F2; border-bottom:1px solid var(--border-light);">
+    <div style="display:flex; align-items:stretch; justify-content:space-between; padding:18px 16px 16px; gap:12px; background:var(--surface-3); border-bottom:1px solid var(--border-light);">
       <div style="flex:1; text-align:center;">
         <div style="font-size:10px; color:var(--text-2); font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">DU</div>
         <div class="syne" style="font-size:28px; font-weight:800; color:var(--blue); letter-spacing:-.02em; line-height:1;">${mePlayer?.total_points ?? 0}</div>
@@ -1188,7 +1277,7 @@ function renderH2H(otherUserId, otherBets, container) {
       <div style="display:flex; align-items:center; font-size:14px; font-weight:800; color:var(--text-3);">vs</div>
       <div style="flex:1; text-align:center;">
         <div style="font-size:10px; color:var(--text-2); font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">SPIELER</div>
-        <div class="syne" style="font-size:28px; font-weight:800; color:var(--navy); letter-spacing:-.02em; line-height:1;">${otherPlayer?.total_points ?? 0}</div>
+        <div class="syne" style="font-size:28px; font-weight:800; color:var(--text); letter-spacing:-.02em; line-height:1;">${otherPlayer?.total_points ?? 0}</div>
         <div style="font-size:11px; color:var(--text-2); font-weight:600; margin-top:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${otherPlayer?.display_name || ''}</div>
       </div>
     </div>
@@ -1268,7 +1357,7 @@ function togglePw() { const i=$('inp-password'); i.type=i.type==='password'?'tex
 // ──────────────────────────────────────────
 function switchTab(mode) {
   S.authMode = mode;
-  const onStyle  = 'background:#fff; color:var(--navy); box-shadow:0 1px 4px rgba(0,0,0,.08);';
+  const onStyle  = 'background:var(--surface); color:var(--text); box-shadow:0 1px 4px rgba(0,0,0,.08);';
   const offStyle = 'background:transparent; color:var(--text-2);';
   $('tab-login').style.cssText    += mode==='login'    ? onStyle : offStyle;
   $('tab-register').style.cssText += mode==='register' ? onStyle : offStyle;
@@ -1726,7 +1815,7 @@ function welcomeSummaryCard(s) {
   const n = s.games.length;
   return `
     <div id="welcome-card" class="card fade-in" style="padding:16px;border-left:3px solid var(--accent);position:relative;">
-      <button onclick="dismissWelcome()" aria-label="Schließen" style="position:absolute;top:12px;right:12px;width:26px;height:26px;border:none;background:#F4F0E8;border-radius:100px;color:var(--text-2);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+      <button onclick="dismissWelcome()" aria-label="Schließen" style="position:absolute;top:12px;right:12px;width:26px;height:26px;border:none;background:var(--surface-2);border-radius:100px;color:var(--text-2);cursor:pointer;display:flex;align-items:center;justify-content:center;">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
       <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;">Update</div>
@@ -1834,11 +1923,11 @@ function renderDashboard(main) {
         action=`<button onclick="jumpToMatch('${m.phase}',${m.id})" style="width:100%;margin-top:12px;background:var(--green);color:#fff;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;padding:11px;border-radius:10px;border:none;cursor:pointer;letter-spacing:.02em;">Jetzt tippen</button>`;
       } else if (bet) {
         let displayScorer = bet.is_goalless === true ? `🚫 Kein Tor` : (bet.first_goalscorer_id ? `⚽ ${bet.goalscorer?.name}` : '–');
-        action=`<div style="margin-top:12px;background:#F4F0E8;padding:10px 14px;border-radius:10px;border:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;">
+        action=`<div style="margin-top:12px;background:var(--surface-2);padding:10px 14px;border-radius:10px;border:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;">
           <div class="syne" style="font-size:20px;font-weight:800;letter-spacing:-.02em;">${bet.home_score??'–'}:${bet.away_score??'–'}</div>
           <div style="font-size:11px;color:var(--text-2);font-weight:600;text-align:right;max-width:60%;">${displayScorer}</div>
         </div>`;
-        if (!isLocked(m)) action+=`<button onclick="jumpToMatch('${m.phase}',${m.id})" style="width:100%;margin-top:8px;background:#F4F0E8;color:var(--text-2);font-size:12px;font-weight:700;padding:8px;border-radius:8px;border:none;cursor:pointer;">Tipp ändern</button>`;
+        if (!isLocked(m)) action+=`<button onclick="jumpToMatch('${m.phase}',${m.id})" style="width:100%;margin-top:8px;background:var(--surface-2);color:var(--text-2);font-size:12px;font-weight:700;padding:8px;border-radius:8px;border:none;cursor:pointer;">Tipp ändern</button>`;
       }
 
       const sep = activeMatches.length>1 ? `<div style="border-bottom:1px solid var(--border-light);margin-bottom:14px;padding-bottom:14px;"></div>` : '';
@@ -1970,7 +2059,7 @@ window.setBettingPhase = function(p) {
       ${renderPhaseTabsContainer(p, 'setBettingPhase')}
       <div id="betting-content" style="padding:16px;padding-bottom:32px;display:flex;flex-direction:column;gap:14px;">
         ${p === 'Bonusfragen'
-          ? `<div style="display:flex;justify-content:center;padding:40px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`
+          ? `<div style="display:flex;justify-content:center;padding:40px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--text);border-color:var(--border);"></div></div>`
           : skeletonCards(3)}
       </div>
     </div>`;
@@ -2072,7 +2161,7 @@ function betCard(m) {
       tipLine = `<span class="mono" style="font-weight:700;">${bet.home_score ?? '-'}:${bet.away_score ?? '-'}</span> <span style="color:var(--text-3);">·</span> ${scorerHtml}`;
     }
 
-    const betResultBg = isBoosted ? 'background:#FEF3C7; border-color:var(--accent);' : 'background:#F4F0E8; border-color:var(--border-light);';
+    const betResultBg = isBoosted ? 'background:var(--gold-bg); border-color:var(--accent);' : 'background:var(--surface-2); border-color:var(--border-light);';
 
     return `
       <div id="match-card-${m.id}" class="mc ${isLive ? 'mc-live' : ''}" style="scroll-margin-top:140px;">
@@ -2159,9 +2248,9 @@ function betCard(m) {
   } else if (isBoosted) {
     boostBtnStyle = 'background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:800; cursor:pointer;';
   } else if (isBoostDisabled) {
-    boostBtnStyle = 'background:#F1F0EC; color:var(--text-3); border-color:transparent; font-weight:700; opacity:0.6; cursor:not-allowed;';
+    boostBtnStyle = 'background:var(--surface-4); color:var(--text-3); border-color:transparent; font-weight:700; opacity:0.6; cursor:not-allowed;';
   } else {
-    boostBtnStyle = 'background:#F4F0E8; color:var(--text-2); border-color:var(--border); font-weight:700; cursor:pointer;';
+    boostBtnStyle = 'background:var(--surface-2); color:var(--text-2); border-color:var(--border); font-weight:700; cursor:pointer;';
   }
 
   const boostText = isPendingRemoval ? 'Entfernen?' : '2x Punkte';
@@ -2370,7 +2459,7 @@ async function openScorer(matchId) {
     const goals = p.tournament_goals > 0
       ? `<span style="display:flex; align-items:center; gap:3px; flex-shrink:0; line-height:1;"><span class="syne" style="font-size:16px; font-weight:800; color:var(--text);">${p.tournament_goals}</span><span style="font-size:12px;">⚽</span></span>`
       : '';
-    const bg = isStarter ? '#EEF3FF' : '#fff';
+    const bg = isStarter ? 'var(--tint-blue)' : '#fff';
     const border = isStarter ? '1.5px solid var(--navy)' : '1.5px solid var(--border-light)';
     const fw = isStarter ? 700 : 600;
     return `
@@ -2701,7 +2790,7 @@ async function loadOverviewData() {
   if (!cards) return;
 
   if (S.overviewPhase === 'Bonusfragen') {
-    cards.innerHTML = `<div class="card" style="height:200px;display:flex;align-items:center;justify-content:center;"><div class="spinner" style="width:24px;height:24px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
+    cards.innerHTML = `<div class="card" style="height:200px;display:flex;align-items:center;justify-content:center;"><div class="spinner" style="width:24px;height:24px;border-top-color:var(--text);border-color:var(--border);"></div></div>`;
     renderBonusOverview(cards);
     return;
   }
@@ -2827,7 +2916,7 @@ function buildOverviewMatchCardHTML(m, matchBets) {
           const isExact = (bh === fnH && ba === fnA);
           const isTrend = !isExact && ((bh>ba && fnH>fnA) || (bh<ba && fnH<fnA) || (bh===ba && fnH===fnA));
           if (isExact) scoreStyle += 'background:var(--green-bg); color:var(--green); padding:2px 6px; border-radius:6px;';
-          else if (isTrend) scoreStyle += 'background:#FEF3C7; color:var(--accent-text); padding:2px 6px; border-radius:6px;';
+          else if (isTrend) scoreStyle += 'background:var(--gold-bg); color:var(--accent-text); padding:2px 6px; border-radius:6px;';
           else scoreStyle += 'color:var(--text-3); text-decoration:line-through; font-weight:500;';
         }
         scoreBadge = `<span style="${scoreStyle}">${bh}:${ba}</span>`;
@@ -2860,7 +2949,7 @@ function buildOverviewMatchCardHTML(m, matchBets) {
       }
     } else {
       if (hasHome) scoreBadge = `<span style="font-weight:800; font-family:'DM Mono', monospace; font-size:12px;">?:?</span>`;
-      if (hasBet) scorerBadge = `<span style="background:#F1F0EC;color:var(--text-3);padding:2px 6px;border-radius:4px;font-size:11px;">Verdeckt</span>`;
+      if (hasBet) scorerBadge = `<span style="background:var(--surface-4);color:var(--text-3);padding:2px 6px;border-radius:4px;font-size:11px;">Verdeckt</span>`;
     }
     return `<div class="ov-row ${isMe ? 'me' : ''} ${isBoostedRow ? 'boosted-bg' : ''}">
       <span style="width:28%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isMe?700:600};color:${isMe?'var(--blue)':'var(--text)'};">${player.display_name||'?'}</span>
@@ -3091,7 +3180,7 @@ function renderSubView_Diagramm(c) {
     <div style="padding:16px;">
       <div id="points-chart" class="card chart-card">
         <div style="display:flex;justify-content:center;padding:60px 0;">
-          <div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div>
+          <div class="spinner" style="width:22px;height:22px;border-top-color:var(--text);border-color:var(--border);"></div>
         </div>
       </div>
     </div>`;
@@ -3125,7 +3214,7 @@ async function renderSubView_H2H(c) {
     </div>
     <div id="h2h-content" style="">
       <div style="display:flex; justify-content:center; padding:60px 0;">
-        <div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div>
+        <div class="spinner" style="width:22px;height:22px;border-top-color:var(--text);border-color:var(--border);"></div>
       </div>
     </div>`;
 
@@ -3141,7 +3230,7 @@ async function loadH2HInline(otherUserId) {
   const container = $('h2h-content');
   if (!container) return;
 
-  container.innerHTML = `<div style="display:flex; justify-content:center; padding:60px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
+  container.innerHTML = `<div style="display:flex; justify-content:center; padding:60px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--text);border-color:var(--border);"></div></div>`;
 
   if (!S.h2hCache) S.h2hCache = {};
   let otherBets = S.h2hCache[otherUserId];
@@ -3164,7 +3253,7 @@ async function loadH2HInline(otherUserId) {
 async function loadTabelleData(filterType) {
   const c=$('table-content');
   if (!c) return;
-  c.innerHTML=`<div style="display:flex;justify-content:center;padding:40px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
+  c.innerHTML=`<div style="display:flex;justify-content:center;padding:40px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--text);border-color:var(--border);"></div></div>`;
 
   if (!S.allBetsCache && filterType!=='total') {
     const {data,error}=await db.from('bets')
@@ -3408,7 +3497,7 @@ window.setChartLines = function(mode) {
 // BONUS (inside Tippen)
 // ──────────────────────────────────────────
 async function renderBonusInsideBetting(container) {
-  container.innerHTML=`<div style="display:flex;justify-content:center;padding:40px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
+  container.innerHTML=`<div style="display:flex;justify-content:center;padding:40px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--text);border-color:var(--border);"></div></div>`;
   const [qRes,bRes]=await Promise.all([
     db.from('extra_questions').select('*').order('id',{ascending:true}),
     db.from('extra_bets').select('*').eq('user_id',S.user.id)
@@ -3438,7 +3527,7 @@ async function renderBonusInsideBetting(container) {
   // Fragen für saveBonus zwischenspeichern (zum Ermitteln des answer_type)
   S.bonusQuestions=questions;
 
-  const selectStyle=locked=>`width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;background:var(--surface);font-size:14px;font-weight:600;outline:none;appearance:none;${locked?'opacity:.6;background:#F4F0E8;':''}cursor:${locked?'default':'pointer'};`;
+  const selectStyle=locked=>`width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;background:var(--surface);font-size:14px;font-weight:600;outline:none;appearance:none;${locked?'opacity:.6;background:var(--surface-2);':''}cursor:${locked?'default':'pointer'};`;
   const teamFlag=t=>(!t.flag_url||t.flag_url.startsWith('http')||t.flag_url.startsWith('/'))?'':t.flag_url+' ';
   const teamOption=(t,selId)=>`<option value="${t.id}"${String(selId)===String(t.id)?' selected':''}>${teamFlag(t)}${t.name}</option>`;
 
@@ -3481,14 +3570,14 @@ async function renderBonusInsideBetting(container) {
       </select>`;
     } else {
       inputHtml=`<input id="q-${q.id}" type="text" value="${myBet}" placeholder="Deine Antwort …" ${locked?'disabled':''}
-        style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;background:${locked?'#F4F0E8':'var(--surface)'};font-size:14px;font-weight:600;outline:none;${locked?'opacity:.6;':''}" />`;
+        style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;background:${locked?'var(--surface-2)':'var(--surface)'};font-size:14px;font-weight:600;outline:none;${locked?'opacity:.6;':''}" />`;
     }
 
     const badge=locked
       ? (ptsAw!==null&&ptsAw!==undefined
           ? `<span class="pill pill-gold">${ptsAw} Pkt</span>`
           : `<span class="pill pill-done">Abgelaufen</span>`)
-      : `<span class="pill" style="background:#F1F0EC;color:var(--text-2);">+${q.points} Pkt</span>`;
+      : `<span class="pill" style="background:var(--surface-4);color:var(--text-2);">+${q.points} Pkt</span>`;
 
     return `<div class="card" style="padding:18px 16px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px;">
@@ -3682,6 +3771,7 @@ function renderProfile(main) {
   const pts = S.liveLeaderboard.find(x => x.id === S.user.id)?.total_points ?? 0;
   const total = S.liveLeaderboard.length;
   const isReminderActive = p?.missing_tip_reminder === true;
+  const themePref = getThemePref();
 
   // NEU: Streaks berechnen
   const streaks = calculateStreaks();
@@ -3703,12 +3793,12 @@ function renderProfile(main) {
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div style="background:#F4F0E8;border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border-light);">
-            <div class="syne" style="font-size:36px;font-weight:800;letter-spacing:-.03em;color:var(--navy);" id="prof-pts">${pts}</div>
+          <div style="background:var(--surface-2);border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border-light);">
+            <div class="syne" style="font-size:36px;font-weight:800;letter-spacing:-.03em;color:var(--text);" id="prof-pts">${pts}</div>
             <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);margin-top:6px;">Punkte</div>
           </div>
-          <div style="background:#F4F0E8;border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border-light);">
-            <div class="syne" style="font-size:36px;font-weight:800;letter-spacing:-.03em;color:var(--navy);"><span id="prof-rank" class="syne">${rank}</span><span class="syne" style="font-size:16px;color:var(--text-3);">/<span id="prof-total" class="syne">${total}</span></span></div>
+          <div style="background:var(--surface-2);border-radius:12px;padding:16px;text-align:center;border:1px solid var(--border-light);">
+            <div class="syne" style="font-size:36px;font-weight:800;letter-spacing:-.03em;color:var(--text);"><span id="prof-rank" class="syne">${rank}</span><span class="syne" style="font-size:16px;color:var(--text-3);">/<span id="prof-total" class="syne">${total}</span></span></div>
             <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);margin-top:6px;">Platz</div>
           </div>
         </div>
@@ -3719,13 +3809,24 @@ function renderProfile(main) {
 
       <!-- Card 3: Settings & Logout -->
       <div class="card" style="padding:20px 18px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;background:#F4F0E8;border:1px solid var(--border-light);border-radius:12px;padding:14px 16px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--surface-2);border:1px solid var(--border-light);border-radius:12px;padding:14px 16px;margin-bottom:12px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);">Erscheinungsbild</div>
+            <div style="font-size:11px;color:var(--text-2);margin-top:2px;">Hell, Dunkel oder System</div>
+          </div>
+          <div class="theme-seg">
+            <button data-theme-opt="light"  class="theme-opt ${themePref==='light'?'theme-opt-on':''}"  onclick="setTheme('light')">Hell</button>
+            <button data-theme-opt="dark"   class="theme-opt ${themePref==='dark'?'theme-opt-on':''}"   onclick="setTheme('dark')">Dunkel</button>
+            <button data-theme-opt="system" class="theme-opt ${themePref==='system'?'theme-opt-on':''}" onclick="setTheme('system')">System</button>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface-2);border:1px solid var(--border-light);border-radius:12px;padding:14px 16px;margin-bottom:14px;">
           <div>
             <div style="font-size:14px;font-weight:700;color:var(--text);">Email Reminder</div>
             <div style="font-size:11px;color:var(--text-2);margin-top:2px;">Erinnerung bei fehlenden Tipps</div>
           </div>
           <button id="toggle-reminder" onclick="toggleReminderBtn()" style="position:relative;width:44px;height:24px;background:${isReminderActive ? 'var(--green)' : 'var(--text-3)'};border-radius:100px;border:none;cursor:pointer;transition:background .2s;flex-shrink:0;">
-            <div style="position:absolute;top:2px;left:${isReminderActive ? '22px' : '2px'};width:20px;height:20px;background:#fff;border-radius:50%;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.15);"></div>
+            <div style="position:absolute;top:2px;left:${isReminderActive ? '22px' : '2px'};width:20px;height:20px;background:var(--surface);border-radius:50%;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.15);"></div>
           </button>
         </div>
 
