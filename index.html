@@ -1276,7 +1276,22 @@ async function fetchData(showLoadingState=true, silent = false) {
     if (teamsRes.error) throw teamsRes.error;
     if (rankRes.error)  throw rankRes.error;
 
-    S.matches = matchRes.data || [];
+    // Schutz gegen "Daten weg" beim Zurückkehren aus dem Hintergrund:
+    // Der Fetch kann losgehen, bevor die Supabase-Session im Speicher rehydriert ist
+    // → Request läuft als anon → "matches" (nur für 'authenticated' lesbar) kommt LEER
+    // zurück (0 Zeilen, KEIN Error). Eine solche leere Antwort darf den vorhandenen
+    // Stand niemals überschreiben. Stattdessen Session sichern und kurz erneut versuchen.
+    const freshMatches = matchRes.data || [];
+    if (freshMatches.length === 0 && S.matches.length > 0) {
+      await db.auth.getSession();
+      if (!S._emptyRefetch) {
+        S._emptyRefetch = true;
+        setTimeout(() => { S._emptyRefetch = false; if (S.user) fetchData(showLoadingState, silent); }, 700);
+      }
+      return; // alten, guten Stand behalten – nichts neu rendern
+    }
+
+    S.matches = freshMatches;
     S.teams   = teamsRes.data || [];
     S.bets    = {};
     (betRes.data||[]).forEach(b => S.bets[b.match_id]=b);
@@ -3776,8 +3791,11 @@ function _scheduleAutoReload() {
   }, 5 * 60 * 1000);
 }
 
-document.addEventListener('visibilitychange', () => {
+document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible' && S.user) {
+    // Erst die Session rehydrieren/auffrischen, DANN laden – sonst läuft der Fetch
+    // evtl. als anon und liefert keine Spiele (matches sind nur für authenticated lesbar).
+    try { await db.auth.getSession(); } catch (e) {}
     fetchData(false, true);
     _scheduleAutoReload();
   } else {
