@@ -462,6 +462,38 @@
 
     input[type=text]::-webkit-inner-spin-button,
     input[type=text]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+
+    /* ═══════════════════════════════════
+       BILD-EXPORT (Long-Press auf Übersichts-Kachel)
+    ═══════════════════════════════════ */
+    .img-sheet-overlay {
+      position:fixed; inset:0; z-index:200; background:rgba(12,24,40,.55);
+      display:flex; align-items:center; justify-content:center; padding:24px;
+      animation:fadeIn .15s ease both; backdrop-filter:blur(2px);
+    }
+    .img-sheet {
+      background:var(--surface); border-radius:18px; padding:16px;
+      width:100%; max-width:420px; box-shadow:0 12px 40px rgba(0,0,0,.3);
+      display:flex; flex-direction:column; gap:14px; animation:fadeUp .2s ease both;
+    }
+    .img-sheet-preview {
+      width:100%; height:auto; max-height:52vh; object-fit:contain;
+      border-radius:10px; border:1px solid var(--border-light); display:block;
+    }
+    .img-sheet-actions { display:flex; gap:8px; }
+    .img-sheet-actions button {
+      flex:1; padding:12px 8px; border-radius:11px; border:none; cursor:pointer;
+      font-family:'Syne',sans-serif; font-size:13px; font-weight:700; letter-spacing:.01em;
+      display:flex; align-items:center; justify-content:center; gap:6px; transition:opacity .15s;
+    }
+    .img-sheet-actions button:active { opacity:.7; }
+    .img-sheet-actions .ish-primary { background:var(--navy); color:#fff; }
+    .img-sheet-actions .ish-second  { background:#F4F0E8; color:var(--text-2); }
+    .img-sheet-close {
+      background:none; border:none; cursor:pointer; color:var(--text-3);
+      font-size:13px; font-weight:700; padding:4px; font-family:'DM Sans',sans-serif;
+    }
+    .img-sheet-actions svg { width:15px; height:15px; }
   </style>
 </head>
 <body style="height:100dvh; overflow:hidden;">
@@ -2435,6 +2467,10 @@ function renderOverviewShell(main) {
   main.innerHTML=`
     <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;">
       ${renderPhaseTabsContainer(S.overviewPhase, 'setOverviewPhase')}
+      <div style="padding:8px 16px 0;font-size:10px;color:var(--text-3);font-weight:600;display:flex;align-items:center;gap:5px;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Lange auf eine Kachel drücken → als Bild teilen
+      </div>
       <div id="ov-cards" style="padding:16px;padding-bottom:32px;display:flex;flex-direction:column;gap:14px;" class="fade-up"></div>
     </div>`;
 }
@@ -2529,6 +2565,124 @@ window.toggleMatchOverview = function(matchId) {
   if (summary) summary.style.display = expand ? 'none' : 'block';
   if (icon) icon.style.transform = expand ? 'rotate(180deg)' : 'rotate(0deg)';
 };
+
+// ═══════════════════════════════════════════
+// BILD-EXPORT: Long-Press auf eine Übersichts-Kachel → Vorschau (Teilen/Kopieren/Speichern)
+// ═══════════════════════════════════════════
+let _h2iPromise = null;
+function _loadHtmlToImage() {
+  if (window.htmlToImage) return Promise.resolve();
+  if (_h2iPromise) return _h2iPromise;
+  _h2iPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js';
+    s.onload = resolve;
+    s.onerror = () => { _h2iPromise = null; reject(new Error('Lib konnte nicht geladen werden')); };
+    document.head.appendChild(s);
+  });
+  return _h2iPromise;
+}
+
+async function exportOverviewCard(card) {
+  const matchId = card.id.replace('match-ov-card-', '');
+  const body = document.getElementById(`match-ov-body-${matchId}`);
+  const summary = document.getElementById(`match-ov-summary-${matchId}`);
+  // Für das Bild immer den vollen Inhalt zeigen (auch wenn die Karte eingeklappt ist)
+  const wasCollapsed = body && body.style.display === 'none';
+  if (wasCollapsed) { body.style.display = 'block'; if (summary) summary.style.display = 'none'; }
+  const restore = () => { if (wasCollapsed) { body.style.display = 'none'; if (summary) summary.style.display = 'block'; } };
+
+  try {
+    showToast('Erstelle Bild …');
+    await _loadHtmlToImage();
+    const surface = (getComputedStyle(document.body).getPropertyValue('--surface') || '#fff').trim();
+    const blob = await htmlToImage.toBlob(card, { pixelRatio: 2, backgroundColor: surface, cacheBust: true });
+    restore();
+    if (!blob) throw new Error('leeres Bild');
+    showImageSheet(blob, `wm-tipp-${matchId}.png`);
+  } catch (e) {
+    restore();
+    showToast('Bild-Export fehlgeschlagen', 'error');
+  }
+}
+
+function showImageSheet(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const file = new File([blob], filename, { type: 'image/png' });
+  const overlay = document.createElement('div');
+  overlay.className = 'img-sheet-overlay';
+  overlay.innerHTML = `
+    <div class="img-sheet">
+      <img class="img-sheet-preview" src="${url}" alt="Vorschau" />
+      <div class="img-sheet-actions">
+        <button class="ish-primary" data-act="share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>Teilen</button>
+        <button class="ish-second" data-act="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Kopieren</button>
+        <button class="ish-second" data-act="save"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Speichern</button>
+      </div>
+      <button class="img-sheet-close" data-act="close">Schließen</button>
+    </div>`;
+  const close = () => { overlay.remove(); setTimeout(() => URL.revokeObjectURL(url), 500); };
+
+  overlay.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) { if (e.target === overlay) close(); return; }
+    const act = btn.dataset.act;
+    if (act === 'close') return close();
+    if (act === 'share') {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: 'WM-Tipp' }); close(); }
+        catch (err) { if (err.name !== 'AbortError') showToast('Teilen abgebrochen', 'error'); }
+      } else showToast('Teilen wird hier nicht unterstützt', 'error');
+    } else if (act === 'copy') {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        showToast('In Zwischenablage kopiert'); close();
+      } catch (err) { showToast('Kopieren nicht unterstützt – nutze Speichern', 'error'); }
+    } else if (act === 'save') {
+      const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+      showToast('Bild gespeichert'); close();
+    }
+  });
+  document.body.appendChild(overlay);
+}
+
+// Long-Press-Erkennung (Touch) + Rechtsklick (Desktop) auf Übersichts-Kacheln
+(function setupCardLongPress() {
+  let timer = null, fired = false, startXY = null;
+  const cardFrom = (el) => el && el.closest ? el.closest('[id^="match-ov-card-"]') : null;
+  const reset = () => { clearTimeout(timer); timer = null; startXY = null; };
+
+  document.addEventListener('touchstart', (e) => {
+    const card = cardFrom(e.target);
+    if (!card || e.touches.length !== 1) return;
+    fired = false;
+    const t = e.touches[0]; startXY = { x: t.clientX, y: t.clientY };
+    timer = setTimeout(() => {
+      fired = true;
+      if (navigator.vibrate) navigator.vibrate(25);
+      exportOverviewCard(card);
+    }, 500);
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!timer || !startXY) return;
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - startXY.x) > 12 || Math.abs(t.clientY - startXY.y) > 12) reset();
+  }, { passive: true });
+
+  // Nach erfolgtem Long-Press den daraus folgenden Klick (Karte umklappen) unterdrücken
+  document.addEventListener('touchend', (e) => {
+    if (fired) { e.preventDefault(); fired = false; }
+    reset();
+  }, { passive: false });
+  document.addEventListener('touchcancel', () => { fired = false; reset(); }, { passive: true });
+
+  // Desktop: Rechtsklick auf Kachel → Export
+  document.addEventListener('contextmenu', (e) => {
+    const card = cardFrom(e.target);
+    if (card) { e.preventDefault(); exportOverviewCard(card); }
+  });
+})();
 
 // Lädt die Tipps ALLER Spieler (phasenübergreifend) neu in den Übersicht-Cache,
 // ohne die Ansicht zu leeren. Eine verdächtig leere Antwort ersetzt den Cache nicht.
