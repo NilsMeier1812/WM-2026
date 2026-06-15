@@ -258,6 +258,32 @@ function buildClient(env){
   return supabase.createClient(c.url, c.key, { auth:{ storageKey:'admin_auth_'+env } });
 }
 
+// ── Admin-Proxy (service_role serverseitig) ───────────────────
+// Schreibvorgänge laufen über die Vercel-Function /api/admin.
+// Lesen bleibt auf dem Anon-Key (RLS schützt fremde Tipps).
+function proxyUrl(){ return localStorage.getItem('admin_proxy_url') || '/api/admin'; }
+async function adminCall(action, payload){
+  const { data:{ session } } = await A.db.auth.getSession();
+  if(!session) throw new Error('Keine aktive Session');
+  const res = await fetch(proxyUrl(), {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+session.access_token },
+    body: JSON.stringify({ env:A.env, action, ...payload })
+  });
+  let json=null; try{ json=await res.json(); }catch(e){}
+  if(!res.ok) throw new Error((json&&json.error) || ('Proxy HTTP '+res.status+' – ist /api/admin deployed?'));
+  return json;
+}
+// Gibt {error} zurück (wie supabase) – vereinfacht die Edit-Handler.
+async function adminWrite(table, action, payload){
+  try { await adminCall(action, { table, ...payload }); return {error:null}; }
+  catch(e){ return {error:e}; }
+}
+async function proxyHealth(){
+  try{ const r=await fetch(proxyUrl(),{method:'GET'}); if(!r.ok) return {ok:false}; return await r.json(); }
+  catch(e){ return {ok:false, err:e.message}; }
+}
+
 async function doLogin(){
   const env = $('login-env').value;
   const email = $('login-email').value.trim();
@@ -559,7 +585,7 @@ async function editMatch(id){
       reminder_sent: $('e-rem').checked,
       updated_at: new Date().toISOString()
     };
-    const { error } = await A.db.from('matches').update(patch).eq('id', m.id);
+    const { error } = await adminWrite('matches','update',{ id:m.id, values:patch });
     if(error){ toast(error.message,'err'); return false; }
     Object.assign(m, patch);
     if(patch.first_goalscorer_id) m.first_goalscorer={id:patch.first_goalscorer_id,name:A.cache.playerById[patch.first_goalscorer_id]?.name}; else m.first_goalscorer=null;
@@ -592,7 +618,7 @@ function editTeam(id){
     <label class="fld">Flag (URL oder Emoji)</label><input id="t-flag" value="${esc(t.flag_url||'')}">`,
     async()=>{
       const patch={name:$('t-name').value,group:$('t-group').value||null,flag_url:$('t-flag').value||null,updated_at:new Date().toISOString()};
-      const {error}=await A.db.from('teams').update(patch).eq('id',t.id);
+      const {error}=await adminWrite('teams','update',{ id:t.id, values:patch });
       if(error){toast(error.message,'err');return false;}
       Object.assign(t,patch); toast('Team gespeichert'); renderView(); return true;
     });
@@ -632,7 +658,7 @@ function editPlayer(id){
     <label class="fld">Turniertore</label><input id="pl-goals" type="number" value="${p.tournament_goals??0}">`,
     async()=>{
       const patch={name:$('pl-name').value,team_id:Number($('pl-team').value),position:$('pl-pos').value||null,tournament_goals:num($('pl-goals').value)};
-      const {error}=await A.db.from('players').update(patch).eq('id',p.id);
+      const {error}=await adminWrite('players','update',{ id:p.id, values:patch });
       if(error){toast(error.message,'err');return false;}
       Object.assign(p,patch); toast('Spieler gespeichert'); renderView(); return true;
     });
@@ -682,7 +708,7 @@ function editUser(id){
     <div class="mut" style="font-size:11px;margin-top:12px">ID: ${esc(p.id)}</div>`,
     async()=>{
       const patch={display_name:$('u-name').value,email:$('u-email').value||null,missing_tip_reminder:$('u-rem').checked};
-      const {error}=await A.db.from('profiles').update(patch).eq('id',p.id);
+      const {error}=await adminWrite('profiles','update',{ id:p.id, values:patch });
       if(error){toast(error.message,'err');return false;}
       Object.assign(p,patch); toast('Nutzer gespeichert'); renderView(); return true;
     });
@@ -806,15 +832,15 @@ async function editExtraQ(id){
       const patch={question_text:$('q-text').value,points:num($('q-pts').value),answer_type:$('q-type').value,
         correct_answer:$('q-ans').value||null, deadline: $('q-dl').value? new Date($('q-dl').value).toISOString():q.deadline};
       if(!patch.question_text||!patch.deadline){toast('Text & Deadline nötig','err');return false;}
-      const res = id? await A.db.from('extra_questions').update(patch).eq('id',id)
-                    : await A.db.from('extra_questions').insert(patch);
+      const res = id? await adminWrite('extra_questions','update',{ id, values:patch })
+                    : await adminWrite('extra_questions','insert',{ values:patch });
       if(res.error){toast(res.error.message,'err');return false;}
       toast(id?'Frage gespeichert':'Frage angelegt'); renderView(); return true;
     }, undefined, id? `<button class="btn danger sm" onclick="delExtraQ(${id})">Löschen</button>`:'');
 }
 async function delExtraQ(id){
   if(!confirm('Frage #'+id+' wirklich löschen?')) return;
-  const {error}=await A.db.from('extra_questions').delete().eq('id',id);
+  const {error}=await adminWrite('extra_questions','delete',{ id });
   if(error){toast(error.message,'err');return;}
   closeModal(); toast('Gelöscht'); renderView();
 }
@@ -999,6 +1025,32 @@ function viewSettings(host){
       <div>User-ID: <span class="mono">${esc(A.user?.id||'–')}</span></div>
       <div>Admin-Konto: ${ADMIN_EMAILS.includes((A.user?.email||'').toLowerCase())?'<span class="badge b-green">ja</span>':'<span class="badge b-amber">nein (RLS-limitiert)</span>'}</div>
     </div></div>`));
+  // Admin-Proxy Status
+  const proxyCard = el(`<div class="card fade" style="margin-bottom:14px">
+    <div class="syne" style="font-weight:800;margin-bottom:10px">🔑 Admin-Proxy (Schreibrechte)</div>
+    <div class="mut" style="font-size:13px;line-height:1.7;margin-bottom:12px">
+      Schreibvorgänge (Spiele, Teams, Spieler, Nutzer, Extra-Fragen) laufen über die Vercel-Function
+      <code>${esc(proxyUrl())}</code>, die den <code>service_role</code>-Key serverseitig hält.
+      Lesen bleibt auf dem Anon-Key – fremde Tipps bleiben geschützt.
+    </div>
+    <div id="proxy-status" class="mut" style="font-size:13px;margin-bottom:12px">Status: <span class="spinner" style="width:14px;height:14px;display:inline-block;vertical-align:middle"></span></div>
+    <label class="fld">Proxy-Endpoint (optional überschreiben)</label>
+    <div class="row">
+      <input id="proxy-input" value="${esc(localStorage.getItem('admin_proxy_url')||'')}" placeholder="/api/admin (Standard)">
+      <button class="btn sm" onclick="(()=>{const v=$('proxy-input').value.trim(); if(v)localStorage.setItem('admin_proxy_url',v); else localStorage.removeItem('admin_proxy_url'); toast('Endpoint gespeichert'); renderView();})()">Speichern</button>
+    </div>
+  </div>`);
+  host.appendChild(proxyCard);
+  proxyHealth().then(h=>{
+    const s=$('proxy-status'); if(!s) return;
+    if(h && h.ok){
+      const set = h.keys && h.keys[A.env];
+      s.innerHTML = `Status: <span class="badge b-green">erreichbar</span> · Service-Key ${A.env.toUpperCase()}: ${set?'<span class="badge b-green">gesetzt</span>':'<span class="badge b-red">fehlt – Vercel Env setzen</span>'}`;
+    } else {
+      s.innerHTML = `Status: <span class="badge b-red">nicht erreichbar</span> <span class="mut">(${esc(h&&h.err||'kein /api/admin')}) – Schreiben nicht möglich, bis die Function deployed ist</span>`;
+    }
+  });
+
   host.appendChild(el(`<div class="card fade">
     <div class="syne" style="font-weight:800;margin-bottom:10px">🔒 Datenschutz-Logik</div>
     <div class="mut" style="font-size:13px;line-height:1.7">
