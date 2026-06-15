@@ -2336,7 +2336,7 @@ async function openScorer(matchId) {
   const renderP = (p, isStarter = false) => {
     const pos = posMap[p.position] || p.position || '?';
     const goals = p.tournament_goals > 0
-      ? `<span style="display:flex; align-items:center; gap:3px; flex-shrink:0; color:var(--blue); font-weight:800; line-height:1;"><span class="syne" style="font-size:17px;">${p.tournament_goals}</span><span style="font-size:15px;">⚽</span></span>`
+      ? `<span style="display:flex; align-items:center; gap:3px; flex-shrink:0; line-height:1;"><span class="syne" style="font-size:16px; font-weight:800; color:var(--text);">${p.tournament_goals}</span><span style="font-size:12px;">⚽</span></span>`
       : '';
     const bg = isStarter ? '#EEF3FF' : '#fff';
     const border = isStarter ? '1.5px solid var(--navy)' : '1.5px solid var(--border-light)';
