@@ -1244,7 +1244,7 @@ async function handleAuth() {
 // Frontend-Ratelimit: max. alle 10 Sekunden.
 let _lastScoreSync = 0;
 window.triggerScoreSync = async function() {
-  const COOLDOWN = S.profile?.role === 'admin' ? 0 : 10000; // admin ohne Ratelimit, mod 10s
+  const COOLDOWN = S.profile?.role === 'admin' ? 0 : 5000; // admin ohne Ratelimit, mod 10s
   const start = Date.now();
   const since = start - _lastScoreSync;
   if (since < COOLDOWN) {
