@@ -225,6 +225,17 @@ function toast(msg, type='ok'){
 function fmtDT(d){ if(!d) return '–'; const x=new Date(d); return x.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); }
 function fmtD(d){ if(!d) return '–'; return new Date(d).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit'}); }
 function fmtT(d){ if(!d) return '–'; return new Date(d).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}); }
+function fmtAgo(d){
+  if(!d) return '–';
+  const s=Math.floor((now()-new Date(d))/1000);
+  if(s<0) return 'gerade';
+  if(s<60) return 'vor '+s+' s';
+  const m=Math.floor(s/60); if(m<60) return 'vor '+m+' min';
+  const h=Math.floor(m/60); if(h<24) return 'vor '+h+' h';
+  const t=Math.floor(h/24); if(t<30) return 'vor '+t+' Tg.';
+  return fmtD(d);
+}
+function isOnline(d){ return d && (now()-new Date(d))<5*60*1000; }   // < 5 min = online
 function isLocked(m){ return new Date(m.kickoff_time) <= now(); }                 // Spiel angestoßen
 function isFinished(s){ return s && ['FINISHED','FT','AET','PEN'].includes(String(s).toUpperCase()); }
 function toLocalInput(d){ if(!d) return ''; const x=new Date(d); const off=x.getTimezoneOffset(); const l=new Date(x.getTime()-off*60000); return l.toISOString().slice(0,16); }
@@ -381,6 +392,7 @@ function viewOverview(host){
     ['Beendet', finished.length, 'var(--text)'],
     ['Anstehend', upcoming.length, 'var(--text)'],
     ['Nutzer', c.profiles.length, 'var(--text)'],
+    ['Online', c.profiles.filter(p=>isOnline(p.last_seen_at)).length, c.profiles.some(p=>isOnline(p.last_seen_at))?'var(--green)':'var(--text)'],
     ['Teams', c.teams.length, 'var(--text)'],
     ['Spieler', c.players.length, 'var(--text)'],
     ['API-Calls', c.system?.count_calls ?? '–', 'var(--text-2)'],
@@ -610,22 +622,37 @@ function editPlayer(id){
 // ════════════════════════════════════════════
 //  MODULE: NUTZER
 // ════════════════════════════════════════════
+A._uSort = A._uSort || 'seen';   // 'seen' | 'points'
 function viewUsers(host){
   const c=A.cache;
-  pageHead(host,'Nutzer', c.profiles.length+' Profile');
-  const list=[...c.profiles].map(p=>({...p, rank:c.rankById[p.id]}))
-    .sort((a,b)=>(Number(b.rank?.total_points||0))-(Number(a.rank?.total_points||0)));
+  const onlineCount = c.profiles.filter(p=>isOnline(p.last_seen_at)).length;
+  pageHead(host,'Nutzer', `${c.profiles.length} Profile · ${onlineCount} gerade online`,
+    `<div class="row"><span class="mut" style="font-size:12px">Sortieren:</span>
+     <select id="u-sort" style="width:auto" onchange="A._uSort=this.value;renderView();">
+       <option value="seen" ${A._uSort==='seen'?'selected':''}>Zuletzt online</option>
+       <option value="points" ${A._uSort==='points'?'selected':''}>Punkte</option>
+     </select></div>`);
+  let list=[...c.profiles].map(p=>({...p, rank:c.rankById[p.id]}));
+  if(A._uSort==='points') list.sort((a,b)=>Number(b.rank?.total_points||0)-Number(a.rank?.total_points||0));
+  else list.sort((a,b)=>new Date(b.last_seen_at||0)-new Date(a.last_seen_at||0));
   host.appendChild(el(`<div class="tbl-wrap fade"><table>
-    <thead><tr><th>Name</th><th>E-Mail</th><th class="num">Punkte</th><th class="num">Tipps</th><th>Reminder</th><th>Erstellt</th><th>ID</th><th></th></tr></thead>
-    <tbody>${list.map(p=>`<tr>
+    <thead><tr><th>Name</th><th>Zuletzt online</th><th>E-Mail</th><th class="num">Punkte</th><th class="num">Tipps</th><th>Reminder</th><th>Erstellt</th><th>ID</th><th></th></tr></thead>
+    <tbody>${list.map(p=>{
+      const on=isOnline(p.last_seen_at);
+      const seen = p.last_seen_at
+        ? `${on?'<span class="badge b-green">● online</span> ':''}<span class="mut" title="${esc(fmtDT(p.last_seen_at))}">${fmtAgo(p.last_seen_at)}</span>`
+        : '<span class="mut">nie</span>';
+      return `<tr>
       <td>${esc(p.display_name)}</td>
+      <td>${seen}</td>
       <td class="mut">${esc(p.email||'–')}</td>
       <td class="num">${p.rank?.total_points??0}</td>
       <td class="num">${p.rank?.total_bets??0}</td>
       <td>${p.missing_tip_reminder?'<span class="badge b-green">an</span>':'<span class="badge b-gray">aus</span>'}</td>
       <td class="mut">${fmtD(p.created_at)}</td>
       <td class="mut mono" style="font-size:11px">${esc(String(p.id).slice(0,8))}…</td>
-      <td><button class="btn sm" onclick="editUser('${p.id}')">✎</button></td></tr>`).join('')}</tbody></table></div>`));
+      <td><button class="btn sm" onclick="editUser('${p.id}')">✎</button></td></tr>`;
+    }).join('')}</tbody></table></div>`));
 }
 function editUser(id){
   const p=A.cache.profiles.find(x=>x.id===id); if(!p) return;
