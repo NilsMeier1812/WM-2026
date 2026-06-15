@@ -304,15 +304,34 @@ function enterApp(){
 // ════════════════════════════════════════════
 //  DATA LOADING
 // ════════════════════════════════════════════
+// Supabase liefert serverseitig max. 1000 Zeilen pro Request → paginiert nachladen.
+const PAGE=1000;
+async function pagedSelect(table, sel='*', apply, max=Infinity){
+  let from=0, all=[];
+  while(from<max){
+    const to=Math.min(from+PAGE, max)-1;        // range() zuletzt → gewinnt über apply
+    let q=A.db.from(table).select(sel);
+    if(apply) q=apply(q);
+    q=q.range(from, to);
+    const { data, error } = await q;
+    if(error) return { data:all, error };
+    all=all.concat(data||[]);
+    if(!data || data.length<(to-from+1)) break;
+    from=to+1;
+  }
+  return { data:all, error:null };
+}
+
 async function loadCore(force=false){
   if(A.cache.matches && !force) return A.cache;
   const db = A.db;
+  const matchSel='*, home_team:teams!home_team_id(id,name,flag_url,group), away_team:teams!away_team_id(id,name,flag_url,group), first_goalscorer:players!first_goalscorer_id(id,name)';
   const [mRes,tRes,pRes,prRes,rRes,ssRes] = await Promise.all([
-    db.from('matches').select('*, home_team:teams!home_team_id(id,name,flag_url,group), away_team:teams!away_team_id(id,name,flag_url,group), first_goalscorer:players!first_goalscorer_id(id,name)').order('kickoff_time',{ascending:true}),
-    db.from('teams').select('*').order('name'),
-    db.from('players').select('*').order('name'),
-    db.from('profiles').select('*').order('display_name'),
-    db.from('user_rankings').select('*'),
+    pagedSelect('matches', matchSel, q=>q.order('kickoff_time',{ascending:true})),
+    pagedSelect('teams', '*', q=>q.order('name')),
+    pagedSelect('players', '*', q=>q.order('name')),
+    pagedSelect('profiles', '*', q=>q.order('display_name')),
+    pagedSelect('user_rankings', '*'),
     db.from('system_state').select('*').limit(1)
   ]);
   const errs=[mRes,tRes,pRes,prRes,rRes].filter(r=>r.error).map(r=>r.error.message);
@@ -698,7 +717,7 @@ async function viewBets(host){
   const { data:myBets } = await A.db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name)').eq('user_id',myId);
 
   // 2) Aggregat: wie viele Tipps pro Spiel (NUR Zahlen, keine Werte) – über alle Spiele erlaubt
-  const { data:agg } = await A.db.from('bets').select('match_id').limit(20000);
+  const { data:agg } = await pagedSelect('bets','match_id');
   const countByMatch={}; (agg||[]).forEach(b=>countByMatch[b.match_id]=(countByMatch[b.match_id]||0)+1);
 
   // 3) Fremde Tipps – HARTER FILTER: nur angestoßene Spiele, nur wenn Schalter an
@@ -706,9 +725,9 @@ async function viewBets(host){
   if(A.showSensitive){
     const lockedIds = c.matches.filter(m=>isLocked(m)).map(m=>m.id);
     if(lockedIds.length){
-      const { data:fb, error } = await A.db.from('bets')
-        .select('*, goalscorer:players!first_goalscorer_id(id,name)')
-        .in('match_id', lockedIds).neq('user_id', myId);
+      const { data:fb, error } = await pagedSelect('bets',
+        '*, goalscorer:players!first_goalscorer_id(id,name)',
+        q=>q.in('match_id', lockedIds).neq('user_id', myId));
       if(error) toast(error.message,'err');
       foreign = fb||[];
     }
@@ -760,7 +779,7 @@ async function viewExtraQuestions(host){
   const wrap=el('<div><div style="display:flex;justify-content:center;padding:40px"><div class="spinner"></div></div></div>'); host.appendChild(wrap);
   const { data:qs, error } = await A.db.from('extra_questions').select('*').order('deadline');
   if(error){ wrap.innerHTML=`<div class="card" style="color:var(--red)">${esc(error.message)}</div>`; return; }
-  const { data:ebs } = await A.db.from('extra_bets').select('question_id');
+  const { data:ebs } = await pagedSelect('extra_bets','question_id');
   const cnt={}; (ebs||[]).forEach(e=>cnt[e.question_id]=(cnt[e.question_id]||0)+1);
   wrap.innerHTML = `<div class="tbl-wrap fade"><table>
     <thead><tr><th>ID</th><th>Frage</th><th>Typ</th><th class="num">Pkt</th><th>Deadline</th><th>Richtige Antw.</th><th class="num">Tipps</th><th></th></tr></thead>
@@ -821,14 +840,14 @@ async function viewExtraBets(host){
   // Eigene immer
   const { data:mine } = await A.db.from('extra_bets').select('*').eq('user_id',myId);
   // Aggregatzahlen
-  const { data:agg } = await A.db.from('extra_bets').select('question_id');
+  const { data:agg } = await pagedSelect('extra_bets','question_id');
   const cnt={}; (agg||[]).forEach(e=>cnt[e.question_id]=(cnt[e.question_id]||0)+1);
 
   let foreign=[];
   if(A.showSensitive){
     const closedIds=(qs||[]).filter(q=>new Date(q.deadline)<now()).map(q=>q.id);
     if(closedIds.length){
-      const { data:fb, error } = await A.db.from('extra_bets').select('*').in('question_id',closedIds).neq('user_id',myId);
+      const { data:fb, error } = await pagedSelect('extra_bets','*',q=>q.in('question_id',closedIds).neq('user_id',myId));
       if(error) toast(error.message,'err'); foreign=fb||[];
     }
   }
@@ -913,9 +932,10 @@ function viewBrowser(host){
 async function runBrowser(){
   A._brTable=$('br-table').value;
   const out=$('br-out'); out.innerHTML=`<div style="display:flex;justify-content:center;padding:30px"><div class="spinner"></div></div>`;
-  let q=A.db.from(A._brTable).select('*').limit(Math.min(num($('br-limit').value)||100,1000));
-  const ord=$('br-order').value.trim(); if(ord) q=q.order(ord);
-  const {data,error}=await q;
+  const lim=Math.max(1, num($('br-limit').value)||100);
+  const ord=$('br-order').value.trim();
+  // paginiert laden bis zum gewünschten Limit (umgeht 1000-Zeilen-Grenze)
+  const { data, error } = await pagedSelect(A._brTable,'*', q=>{ if(ord) q=q.order(ord); return q; }, lim);
   if(error){ out.innerHTML=`<div class="card" style="color:var(--red)">${esc(error.message)}</div>`; return; }
   if(!data||!data.length){ out.innerHTML=`<div class="card"><div class="empty">0 Zeilen</div></div>`; return; }
   const cols=Object.keys(data[0]);
