@@ -527,34 +527,27 @@
     /* ═══════════════════════════════════
        BILD-EXPORT (Long-Press auf Übersichts-Kachel)
     ═══════════════════════════════════ */
-    .img-sheet-overlay {
-      position:fixed; inset:0; z-index:200; background:rgba(12,24,40,.55);
-      display:flex; align-items:center; justify-content:center; padding:24px;
-      animation:fadeIn .15s ease both; backdrop-filter:blur(2px);
+    .img-pop {
+      position:fixed; top:calc(env(safe-area-inset-top) + 12px); left:50%;
+      transform:translateX(-50%) translateY(-18px); z-index:210;
+      background:var(--surface); border:1px solid var(--border-light);
+      border-radius:14px; box-shadow:0 12px 34px rgba(0,0,0,.28);
+      padding:9px 10px 9px 9px; display:flex; align-items:center; gap:9px;
+      max-width:min(94vw,440px); opacity:0; transition:opacity .22s ease, transform .22s cubic-bezier(.2,.8,.2,1);
     }
-    .img-sheet {
-      background:var(--surface); border-radius:18px; padding:16px;
-      width:100%; max-width:420px; box-shadow:0 12px 40px rgba(0,0,0,.3);
-      display:flex; flex-direction:column; gap:14px; animation:fadeUp .2s ease both;
+    .img-pop.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    .img-pop > img { width:44px; height:44px; object-fit:cover; border-radius:9px; border:1px solid var(--border-light); flex-shrink:0; }
+    .img-pop .txt { font-size:11px; font-weight:700; color:var(--text-2); margin-right:2px; white-space:nowrap; }
+    .img-pop button {
+      border:none; cursor:pointer; border-radius:9px; padding:9px 12px;
+      font-family:'Syne',sans-serif; font-size:12px; font-weight:700; transition:opacity .15s; white-space:nowrap;
     }
-    .img-sheet-preview {
-      width:100%; height:auto; max-height:52vh; object-fit:contain;
-      border-radius:10px; border:1px solid var(--border-light); display:block;
-    }
-    .img-sheet-actions { display:flex; gap:8px; }
-    .img-sheet-actions button {
-      flex:1; padding:12px 8px; border-radius:11px; border:none; cursor:pointer;
-      font-family:'Syne',sans-serif; font-size:13px; font-weight:700; letter-spacing:.01em;
-      display:flex; align-items:center; justify-content:center; gap:6px; transition:opacity .15s;
-    }
-    .img-sheet-actions button:active { opacity:.7; }
-    .img-sheet-actions .ish-primary { background:var(--navy); color:#fff; }
-    .img-sheet-actions .ish-second  { background:var(--surface-2); color:var(--text-2); }
-    .img-sheet-close {
-      background:none; border:none; cursor:pointer; color:var(--text-3);
-      font-size:13px; font-weight:700; padding:4px; font-family:'DM Sans',sans-serif;
-    }
-    .img-sheet-actions svg { width:15px; height:15px; }
+    .img-pop button:active { opacity:.65; }
+    .img-pop .ip-primary { background:var(--navy); color:#fff; }
+    .img-pop .ip-second  { background:var(--surface-2); color:var(--text); }
+    .img-pop .ip-close   { background:none; color:var(--text-3); padding:6px 4px; font-family:'DM Sans',sans-serif; font-size:14px; }
+    /* sanftes „Aufheben" der Kachel beim Long-Press */
+    .card-lifting { box-shadow:0 18px 40px rgba(0,0,0,.22) !important; }
   </style>
 </head>
 <body style="height:100dvh; overflow:hidden;">
@@ -2558,7 +2551,7 @@ function renderOverviewShell(main) {
       ${renderPhaseTabsContainer(S.overviewPhase, 'setOverviewPhase')}
       <div style="padding:8px 16px 0;font-size:10px;color:var(--text-3);font-weight:600;display:flex;align-items:center;gap:5px;">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-        Lange auf eine Kachel drücken → als Bild teilen
+        Lange auf eine Kachel drücken → als Bild kopieren/speichern
       </div>
       <div id="ov-cards" style="padding:16px;padding-bottom:32px;display:flex;flex-direction:column;gap:14px;" class="fade-up"></div>
     </div>`;
@@ -2672,104 +2665,146 @@ function _loadHtmlToImage() {
   return _h2iPromise;
 }
 
+// 1x1 transparenter PNG-Platzhalter → falls eine (cross-origin) Flagge nicht
+// CORS-konform geladen werden kann, bricht der Export nicht ab.
+const _IMG_PLACEHOLDER = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+let _exporting = false;
 async function exportOverviewCard(card) {
+  if (_exporting || !card) return;   // Doppel-Trigger (Timer + contextmenu) verhindern
+  _exporting = true;
   const matchId = card.id.replace('match-ov-card-', '');
   const body = document.getElementById(`match-ov-body-${matchId}`);
   const summary = document.getElementById(`match-ov-summary-${matchId}`);
-  // Für das Bild immer den vollen Inhalt zeigen (auch wenn die Karte eingeklappt ist)
+  // Für das Bild immer den vollen Inhalt zeigen (auch wenn eingeklappt)
   const wasCollapsed = body && body.style.display === 'none';
   if (wasCollapsed) { body.style.display = 'block'; if (summary) summary.style.display = 'none'; }
   const restore = () => { if (wasCollapsed) { body.style.display = 'none'; if (summary) summary.style.display = 'block'; } };
 
   try {
-    showToast('Erstelle Bild …');
     await _loadHtmlToImage();
     const surface = (getComputedStyle(document.body).getPropertyValue('--surface') || '#fff').trim();
-    const blob = await htmlToImage.toBlob(card, { pixelRatio: 2, backgroundColor: surface, cacheBust: true });
+    // Lift-/Scale-Transform für das Rendering kurz neutralisieren (sonst skaliert im Bild)
+    const _t = card.style.transform, _tr = card.style.transition;
+    card.style.transition = 'none'; card.style.transform = 'none';
+    const blob = await htmlToImage.toBlob(card, {
+      pixelRatio: 2, backgroundColor: surface, cacheBust: true, imagePlaceholder: _IMG_PLACEHOLDER
+    });
+    card.style.transition = _tr; card.style.transform = _t;
     restore();
     if (!blob) throw new Error('leeres Bild');
-    showImageSheet(blob, `wm-tipp-${matchId}.png`);
+    showImagePopup(blob, `wm-tipp-${matchId}.png`);
   } catch (e) {
     restore();
     showToast('Bild-Export fehlgeschlagen', 'error');
+  } finally {
+    _exporting = false;
   }
 }
 
-function showImageSheet(blob, filename) {
+let _imgPopEl = null;
+function showImagePopup(blob, filename) {
+  if (_imgPopEl) { _imgPopEl.remove(); _imgPopEl = null; }
   const url = URL.createObjectURL(blob);
   const file = new File([blob], filename, { type: 'image/png' });
-  const overlay = document.createElement('div');
-  overlay.className = 'img-sheet-overlay';
-  overlay.innerHTML = `
-    <div class="img-sheet">
-      <img class="img-sheet-preview" src="${url}" alt="Vorschau" />
-      <div class="img-sheet-actions">
-        <button class="ish-primary" data-act="share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>Teilen</button>
-        <button class="ish-second" data-act="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Kopieren</button>
-        <button class="ish-second" data-act="save"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Speichern</button>
-      </div>
-      <button class="img-sheet-close" data-act="close">Schließen</button>
-    </div>`;
-  const close = () => { overlay.remove(); setTimeout(() => URL.revokeObjectURL(url), 500); };
-
-  overlay.addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-act]');
-    if (!btn) { if (e.target === overlay) close(); return; }
+  let autoTimer = null;
+  const pop = document.createElement('div');
+  pop.className = 'img-pop';
+  pop.innerHTML = `
+    <img src="${url}" alt="" />
+    <span class="txt">Bild bereit</span>
+    <button class="ip-primary" data-act="copy">Kopieren</button>
+    <button class="ip-second"  data-act="save">Speichern</button>
+    <button class="ip-close"   data-act="close" aria-label="Schließen">✕</button>`;
+  const close = () => {
+    clearTimeout(autoTimer);
+    pop.classList.remove('show');
+    setTimeout(() => { pop.remove(); URL.revokeObjectURL(url); }, 240);
+    if (_imgPopEl === pop) _imgPopEl = null;
+  };
+  pop.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-act]'); if (!btn) return;
     const act = btn.dataset.act;
     if (act === 'close') return close();
-    if (act === 'share') {
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try { await navigator.share({ files: [file], title: 'WM-Tipp' }); close(); }
-        catch (err) { if (err.name !== 'AbortError') showToast('Teilen abgebrochen', 'error'); }
-      } else showToast('Teilen wird hier nicht unterstützt', 'error');
-    } else if (act === 'copy') {
+    if (act === 'copy') {
       try {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
         showToast('In Zwischenablage kopiert'); close();
-      } catch (err) { showToast('Kopieren nicht unterstützt – nutze Speichern', 'error'); }
+      } catch (err) {
+        // Fallback: Teilen-Sheet, sonst Hinweis auf Speichern
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try { await navigator.share({ files: [file] }); close(); } catch (_) {}
+        } else showToast('Kopieren hier nicht möglich – nutze Speichern', 'error');
+      }
     } else if (act === 'save') {
       const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
       showToast('Bild gespeichert'); close();
     }
   });
-  document.body.appendChild(overlay);
+  document.body.appendChild(pop);
+  _imgPopEl = pop;
+  requestAnimationFrame(() => pop.classList.add('show'));
+  autoTimer = setTimeout(close, 9000);
 }
 
-// Long-Press-Erkennung (Touch) + Rechtsklick (Desktop) auf Übersichts-Kacheln
+// Long-Press (Touch) lässt die Kachel langsam wachsen → dann Export-Popup. Desktop: Rechtsklick.
+let _suppressCardClick = false;
 (function setupCardLongPress() {
-  let timer = null, fired = false, startXY = null;
-  const cardFrom = (el) => el && el.closest ? el.closest('[id^="match-ov-card-"]') : null;
-  const reset = () => { clearTimeout(timer); timer = null; startXY = null; };
+  let timer = null, startXY = null, activeCard = null, lastTouch = 0;
+  const cardFrom = (el) => (el && el.closest) ? el.closest('[id^="match-ov-card-"]') : null;
+  const grow = (card) => {
+    card.style.transition = 'transform .55s cubic-bezier(.2,.8,.2,1)';
+    card.style.transformOrigin = 'center';
+    card.style.transform = 'scale(1.05)';
+    card.style.position = 'relative'; card.style.zIndex = '5';
+    card.classList.add('card-lifting');
+  };
+  const ungrow = (card) => {
+    if (!card) return;
+    card.style.transform = '';
+    card.classList.remove('card-lifting');
+    setTimeout(() => { card.style.transition = ''; card.style.zIndex = ''; card.style.position = ''; card.style.transformOrigin = ''; }, 320);
+  };
+  const cancel = () => { clearTimeout(timer); timer = null; startXY = null; if (activeCard) { ungrow(activeCard); activeCard = null; } };
 
   document.addEventListener('touchstart', (e) => {
+    lastTouch = Date.now();
     const card = cardFrom(e.target);
     if (!card || e.touches.length !== 1) return;
-    fired = false;
+    activeCard = card;
     const t = e.touches[0]; startXY = { x: t.clientX, y: t.clientY };
+    grow(card);
     timer = setTimeout(() => {
-      fired = true;
-      if (navigator.vibrate) navigator.vibrate(25);
-      exportOverviewCard(card);
-    }, 500);
+      const c = activeCard;
+      timer = null; startXY = null; activeCard = null;
+      ungrow(c);
+      _suppressCardClick = true;     // folgenden Toggle-Klick unterdrücken
+      if (navigator.vibrate) navigator.vibrate(20);
+      exportOverviewCard(c);
+    }, 550);
   }, { passive: true });
 
   document.addEventListener('touchmove', (e) => {
     if (!timer || !startXY) return;
     const t = e.touches[0];
-    if (Math.abs(t.clientX - startXY.x) > 12 || Math.abs(t.clientY - startXY.y) > 12) reset();
+    if (Math.abs(t.clientX - startXY.x) > 12 || Math.abs(t.clientY - startXY.y) > 12) cancel();
   }, { passive: true });
 
-  // Nach erfolgtem Long-Press den daraus folgenden Klick (Karte umklappen) unterdrücken
   document.addEventListener('touchend', (e) => {
-    if (fired) { e.preventDefault(); fired = false; }
-    reset();
+    lastTouch = Date.now();
+    if (_suppressCardClick) { e.preventDefault(); }
+    cancel();
+    setTimeout(() => { _suppressCardClick = false; }, 60);
   }, { passive: false });
-  document.addEventListener('touchcancel', () => { fired = false; reset(); }, { passive: true });
+  document.addEventListener('touchcancel', () => { _suppressCardClick = false; cancel(); }, { passive: true });
 
-  // Desktop: Rechtsklick auf Kachel → Export
+  // Kontextmenü auf Kacheln unterdrücken; nur echter Desktop-Rechtsklick exportiert
   document.addEventListener('contextmenu', (e) => {
     const card = cardFrom(e.target);
-    if (card) { e.preventDefault(); exportOverviewCard(card); }
+    if (!card) return;
+    e.preventDefault();                          // verhindert natives Menü + Doppel-Trigger
+    if (Date.now() - lastTouch < 1000) return;   // mobiles Long-Press → schon vom Timer behandelt
+    exportOverviewCard(card);
   });
 })();
 
