@@ -620,7 +620,8 @@ const S = {
   tabelleSubView: 'tabelle',  // 'tabelle' | 'diagramm' | 'h2h'
   tabelleFilter: 'total',     // gemerkter Filter
   h2hOpponent: null,           // user_id für H2H-Vergleich
-  h2hCache: {}                 // bereits geladene Bets anderer Spieler
+  h2hCache: {},                // bereits geladene Bets anderer Spieler
+  h2hCollapsed: {}             // eingeklappte Spieltag-Gruppen im H2H
 };
 
 // ──────────────────────────────────────────
@@ -955,6 +956,22 @@ window.openH2H = function(otherUserId) {
   goTo('tabelle');
 }
 
+// H2H: Spieltag-Gruppe ein-/ausklappen (Zustand überlebt Re-Render)
+window.toggleH2HGroup = function(sid, phase) {
+  if (!S.h2hCollapsed) S.h2hCollapsed = {};
+  const body = document.getElementById(sid);
+  if (!body) return;
+  const collapse = body.style.display !== 'none';
+  S.h2hCollapsed[phase] = collapse;
+  body.style.display = collapse ? 'none' : 'flex';
+  const header = body.previousElementSibling;
+  if (header) {
+    header.classList.toggle('collapsed', collapse);
+    const svg = header.querySelector('svg');
+    if (svg) svg.style.transform = collapse ? 'rotate(-90deg)' : 'rotate(0deg)';
+  }
+};
+
 function renderH2H(otherUserId, otherBets, container) {
   const content = container || $('h2h-content');
   const otherPlayer = S.liveLeaderboard.find(p => p.id === otherUserId);
@@ -1032,8 +1049,7 @@ function renderH2H(otherUserId, otherBets, container) {
   if (commonMatches.length === 0) {
     matchesHtml = `<p style="text-align:center; color:var(--text-3); padding:24px 16px; font-size:13px;">Noch keine gemeinsamen Tipps mit beendetem oder laufendem Spiel.</p>`;
   } else {
-    matchesHtml = `<div style="padding:14px 16px 0; display:flex; flex-direction:column; gap:8px;">` +
-      commonMatches.map(m => {
+    const renderH2HMatchCard = (m) => {
         const myBet = S.bets[m.id];
         const otherBet = otherBetsMap[m.id];
         const myPts = calcBetPoints(m, myBet);
@@ -1104,7 +1120,29 @@ function renderH2H(otherUserId, otherBets, container) {
               ${playerCell(otherNameShort, 'var(--text)', otherBet, otherPts)}
             </div>
           </div>`;
-      }).join('') + `</div>`;
+    };
+
+    // Nach Spieltag (phase) gruppieren – Reihenfolge wie in commonMatches (neueste zuerst), einklappbar
+    if (!S.h2hCollapsed) S.h2hCollapsed = {};
+    const _order = [];
+    const _byPhase = {};
+    commonMatches.forEach(m => {
+      const key = m.phase || 'Sonstige';
+      if (!_byPhase[key]) { _byPhase[key] = []; _order.push(key); }
+      _byPhase[key].push(m);
+    });
+    matchesHtml = `<div style="padding:6px 16px 0;">` + _order.map(phase => {
+      const sid = 'h2hg-' + phase.replace(/[^a-z0-9]/gi, '_');
+      const collapsed = S.h2hCollapsed[phase] === true;
+      return `
+        <div class="date-header${collapsed ? ' collapsed' : ''}" onclick="toggleH2HGroup('${sid}','${phase}')">
+          <span>${phase}</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:${collapsed ? 'rotate(-90deg)' : 'rotate(0deg)'}"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
+        <div id="${sid}" style="display:${collapsed ? 'none' : 'flex'}; flex-direction:column; gap:8px; margin-bottom:10px;">
+          ${_byPhase[phase].map(renderH2HMatchCard).join('')}
+        </div>`;
+    }).join('') + `</div>`;
   }
 
   content.innerHTML = `
@@ -1660,7 +1698,7 @@ function welcomeSummaryCard(s) {
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
       <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;">Update</div>
-      <div style="font-size:11px;color:var(--text-3);font-weight:600;margin-top:2px;">${fmtSince(s.since)}</div>
+      <div style="font-size:11px;color:var(--text-3);font-weight:600;margin-top:2px;">Zuletzt online: ${fmtSince(s.since)}</div>
 
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 4px;font-size:12px;font-weight:700;">
         <span style="color:var(--text-2);">⚽ ${n} ${n === 1 ? 'Spiel' : 'Spiele'}</span>
@@ -2297,17 +2335,19 @@ async function openScorer(matchId) {
 
   const renderP = (p, isStarter = false) => {
     const pos = posMap[p.position] || p.position || '?';
-    const goals = p.tournament_goals > 0 ? `<span style="font-size:9px;font-weight:700;background:var(--blue-bg);color:var(--blue);padding:2px 6px;border-radius:4px;margin-left:auto;">${p.tournament_goals}⚽</span>` : '';
+    const goals = p.tournament_goals > 0
+      ? `<span style="display:flex; align-items:center; gap:3px; flex-shrink:0; line-height:1;"><span class="syne" style="font-size:16px; font-weight:800; color:var(--text);">${p.tournament_goals}</span><span style="font-size:12px;">⚽</span></span>`
+      : '';
     const bg = isStarter ? '#EEF3FF' : '#fff';
     const border = isStarter ? '1.5px solid var(--navy)' : '1.5px solid var(--border-light)';
     const fw = isStarter ? 700 : 600;
     return `
-      <button onclick="pickScorer(${matchId},${p.id})" style="width:100%;text-align:left;padding:9px 10px;border-radius:10px;border:${border};background:${bg};cursor:pointer;display:flex;flex-direction:column;gap:4px;transition:background .12s;min-width:0;">
-        <span style="font-size:11px;font-weight:${fw};color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">${p.name}</span>
-        <div style="display:flex;align-items:center;gap:4px;width:100%;">
+      <button onclick="pickScorer(${matchId},${p.id})" style="width:100%;text-align:left;padding:9px 12px;border-radius:10px;border:${border};background:${bg};cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;transition:background .12s;min-width:0;">
+        <span style="display:flex; flex-direction:column; gap:3px; min-width:0;">
+          <span style="font-size:11px;font-weight:${fw};color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.name}</span>
           <span style="font-size:9px;font-weight:700;color:var(--text-3);">${pos}</span>
-          ${goals}
-        </div>
+        </span>
+        ${goals}
       </button>`;
   };
 
