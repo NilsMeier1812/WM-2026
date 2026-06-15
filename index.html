@@ -1255,7 +1255,8 @@ async function triggerSoftRefresh() {
 
 async function fetchData(showLoadingState=true, silent = false) {
   S.allBetsCache = null;
-  S.overviewAllBets = null;
+  // S.overviewAllBets NICHT hier leeren – sonst rendert der Silent-Patch der Übersicht
+  // mit leerem Cache (alle Tipps verschwinden). Wird unten gezielt frisch geladen.
 
   if (showLoadingState) {
     $('main').innerHTML = `<div style="max-width:480px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px;" class="fade-in">${skeletonCards(3)}</div>`;
@@ -1320,6 +1321,10 @@ async function fetchData(showLoadingState=true, silent = false) {
     
     if (!S.bettingPhase  || !ph.includes(S.bettingPhase))  S.bettingPhase  = defaultPhase;
     if (!S.overviewPhase || !ph.includes(S.overviewPhase)) S.overviewPhase = defaultPhase;
+
+    // Übersicht-Tipps (alle Spieler) frisch halten, falls bereits geladen –
+    // verhindert, dass Patch/Render der Übersicht mit veraltetem/leerem Cache läuft.
+    if (S.overviewAllBets !== null) await refreshOverviewBets();
 
     if (silent) {
       // Bei Auto-Reload: für jedes Match das sich geändert hat surgical patchen
@@ -2440,6 +2445,18 @@ window.toggleMatchOverview = function(matchId) {
   if (summary) summary.style.display = expand ? 'none' : 'block';
   if (icon) icon.style.transform = expand ? 'rotate(180deg)' : 'rotate(0deg)';
 };
+
+// Lädt die Tipps ALLER Spieler (phasenübergreifend) neu in den Übersicht-Cache,
+// ohne die Ansicht zu leeren. Eine verdächtig leere Antwort ersetzt den Cache nicht.
+async function refreshOverviewBets() {
+  if (!S.matches.length) return;
+  const { data, error } = await db.from('bets')
+    .select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)')
+    .in('match_id', S.matches.map(m => m.id));
+  if (error || !data) return;
+  if (data.length === 0 && S.overviewAllBets && S.overviewAllBets.length > 0) return;
+  S.overviewAllBets = data;
+}
 
 async function loadOverviewData() {
   const cards = $('ov-cards');
