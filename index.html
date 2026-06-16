@@ -3156,7 +3156,7 @@ async function renderPointsChart(container) {
 
   if (intervals.length === 0) {
     container.innerHTML = `
-      <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin-bottom:6px;">${view === 'table' ? 'Tabellenverlauf' : 'Punkteverlauf'}</div>
+      <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin-bottom:6px;">${view === 'table' ? 'Tabelle' : 'Punkte'}</div>
       <p style="text-align:center;color:var(--text-3);padding:24px 0;font-size:13px;">Noch keine beendeten Spiele.</p>`;
     return;
   }
@@ -3307,8 +3307,8 @@ async function renderPointsChart(container) {
   container.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
       <div class="chart-view-toggle">
-        <button class="chart-view-btn${view === 'points' ? ' is-active' : ''}" onclick="setChartView('points')">Punkteverlauf</button>
-        <button class="chart-view-btn${view === 'table' ? ' is-active' : ''}" onclick="setChartView('table')">Tabellenverlauf</button>
+        <button class="chart-view-btn${view === 'points' ? ' is-active' : ''}" onclick="setChartView('points')">Punkte</button>
+        <button class="chart-view-btn${view === 'table' ? ' is-active' : ''}" onclick="setChartView('table')">Tabelle</button>
       </div>
       <div style="display:flex;align-items:center;gap:6px;">
         <button class="chart-legend-ctrl" onclick="setChartLines('all')">Alle</button>
