@@ -409,11 +409,12 @@
     .chart-legend-ctrl:hover { color:var(--navy); }
     .chart-legend-ctrl.is-active { background:var(--navy); color:#fff; }
     .chart-legend-ctrl.is-active:hover { color:#fff; }
-    .chart-toggles { display:flex; flex-wrap:wrap; gap:8px 16px; margin-bottom:14px; }
+    .chart-toggles { display:flex; flex-wrap:wrap; gap:8px 16px; }
     .chart-toggle { display:flex; align-items:center; gap:5px; }
     .chart-toggle-label { font-size:10px; font-weight:800; color:var(--text-3); font-family:'DM Mono',monospace; }
-    .chart-view-toggle { display:inline-flex; background:var(--border-light); border-radius:9px; padding:3px; gap:2px; }
-    .chart-view-btn { font-family:'Syne',sans-serif; font-size:13px; font-weight:800; letter-spacing:-.01em; color:var(--text-2); background:transparent; border:none; border-radius:7px; padding:6px 11px; cursor:pointer; transition:background .15s, color .15s; }
+    .chart-toolbar { display:flex; justify-content:space-between; align-items:center; gap:10px 14px; flex-wrap:wrap; margin-bottom:14px; }
+    .chart-view-toggle { display:flex; width:100%; background:var(--border-light); border-radius:10px; padding:3px; gap:3px; margin-bottom:12px; }
+    .chart-view-btn { flex:1; font-family:'Syne',sans-serif; font-size:13px; font-weight:800; letter-spacing:-.01em; color:var(--text-2); background:transparent; border:none; border-radius:8px; padding:8px 11px; cursor:pointer; transition:background .15s, color .15s; }
     .chart-view-btn.is-active { background:#fff; color:var(--navy); box-shadow:0 1px 2px rgba(12,24,40,.12); }
     
     /* ═══════════════════════════════════
@@ -3167,8 +3168,6 @@ async function renderPointsChart(container) {
   const PALETTE = ['#F0BC2C','#A78BFA','#34D399','#F87171','#FB923C','#22D3EE','#EC4899','#84CC16','#8B5CF6','#14B8A6','#E879F9','#FBBF24','#0EA5E9','#F472B6'];
   const ranked = S.liveLeaderboard.map(p => p.id).filter(uid => userIds.includes(uid));
   userIds.forEach(uid => { if (!ranked.includes(uid)) ranked.push(uid); });
-  const rankIndex = {};
-  ranked.forEach((uid, i) => { rankIndex[uid] = i; });
   const colorOf = {};
   let pi = 0;
   ranked.forEach(uid => {
@@ -3186,10 +3185,11 @@ async function renderPointsChart(container) {
     userIds.forEach(uid => { cumPts[uid] = 0; series[uid] = []; });
     intervals.forEach(iv => {
       userIds.forEach(uid => { cumPts[uid] += (iv.pts[uid] || 0); });
-      // meiste Punkte = Position 1; Gleichstand nach aktuellem Tabellenrang
-      const order = [...userIds].sort((a, b) =>
-        (cumPts[b] - cumPts[a]) || (rankIndex[a] - rankIndex[b]));
-      order.forEach((uid, idx) => series[uid].push({ value: idx + 1 }));
+      // meiste Punkte = Position 1; kein Tiebreaker — gleiche Punkte = gleiche Position
+      userIds.forEach(uid => {
+        const pos = 1 + userIds.filter(o => cumPts[o] > cumPts[uid]).length;
+        series[uid].push({ value: pos });
+      });
     });
   } else {
     userIds.forEach(uid => {
@@ -3305,23 +3305,23 @@ async function renderPointsChart(container) {
       </div>` : '';
 
   container.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-      <div class="chart-view-toggle">
-        <button class="chart-view-btn${view === 'points' ? ' is-active' : ''}" onclick="setChartView('points')">Punkte</button>
-        <button class="chart-view-btn${view === 'table' ? ' is-active' : ''}" onclick="setChartView('table')">Tabelle</button>
+    <div class="chart-view-toggle">
+      <button class="chart-view-btn${view === 'points' ? ' is-active' : ''}" onclick="setChartView('points')">Punkte</button>
+      <button class="chart-view-btn${view === 'table' ? ' is-active' : ''}" onclick="setChartView('table')">Tabelle</button>
+    </div>
+    <div class="chart-toolbar">
+      <div class="chart-toggles">
+        <div class="chart-toggle">
+          <span class="chart-toggle-label">X</span>
+          <button class="chart-legend-ctrl${xMode === 'days' ? ' is-active' : ''}" onclick="setChartXMode('days')">Spieltage</button>
+          <button class="chart-legend-ctrl${xMode === 'matches' ? ' is-active' : ''}" onclick="setChartXMode('matches')">Einzelne Spiele</button>
+        </div>${yToggle}
       </div>
       <div style="display:flex;align-items:center;gap:6px;">
         <button class="chart-legend-ctrl" onclick="setChartLines('all')">Alle</button>
         <button class="chart-legend-ctrl" onclick="setChartLines('me')">Nur ich</button>
         <span style="font-size:10px;color:var(--text-3);font-weight:600;white-space:nowrap;">${countLabel}</span>
       </div>
-    </div>
-    <div class="chart-toggles">
-      <div class="chart-toggle">
-        <span class="chart-toggle-label">X</span>
-        <button class="chart-legend-ctrl${xMode === 'days' ? ' is-active' : ''}" onclick="setChartXMode('days')">Spieltage</button>
-        <button class="chart-legend-ctrl${xMode === 'matches' ? ' is-active' : ''}" onclick="setChartXMode('matches')">Einzelne Spiele</button>
-      </div>${yToggle}
     </div>
     <svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
       ${yGrid}
