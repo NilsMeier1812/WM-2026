@@ -407,6 +407,11 @@
     .chart-legend-swatch { width:14px; height:3px; border-radius:2px; flex-shrink:0; }
     .chart-legend-ctrl { font-size:10px; font-weight:700; color:var(--text-3); background:var(--border-light); border:none; border-radius:6px; padding:3px 9px; cursor:pointer; letter-spacing:.02em; }
     .chart-legend-ctrl:hover { color:var(--navy); }
+    .chart-legend-ctrl.is-active { background:var(--navy); color:#fff; }
+    .chart-legend-ctrl.is-active:hover { color:#fff; }
+    .chart-toggles { display:flex; flex-wrap:wrap; gap:8px 16px; margin-bottom:14px; }
+    .chart-toggle { display:flex; align-items:center; gap:5px; }
+    .chart-toggle-label { font-size:10px; font-weight:800; color:var(--text-3); font-family:'DM Mono',monospace; }
     
     /* ═══════════════════════════════════
        MISC
@@ -3114,37 +3119,69 @@ async function renderPointsChart(container) {
     day[b.user_id] = (day[b.user_id] || 0) + pts;
   });
 
-  const sortedDays = [...dayMap.keys()].sort();
+  // 2b) Modi: X nach Spieltagen (Kalendertag) oder einzelnen Spielen,
+  //     Y summiert (kumulativ) oder pro Tag/Spiel (nicht summiert)
+  if (S.chartXMode !== 'matches') S.chartXMode = 'days';
+  if (S.chartYMode !== 'per') S.chartYMode = 'cumulative';
+  const xMode = S.chartXMode, yMode = S.chartYMode;
 
-  if (sortedDays.length === 0) {
+  const fmtDate = ds => {
+    const d = new Date(ds);
+    return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}`;
+  };
+
+  // Intervalle bilden — je Tag oder je Spiel, jeweils mit Punkte-Map pro User
+  let intervals;
+  if (xMode === 'matches') {
+    const matchMap = new Map(); // matchId -> { kickoff, pts:{ userId: pts } }
+    S.allBetsCache.forEach(b => {
+      const m = b.match;
+      if (!m) return;
+      if (!matchMap.has(m.id)) matchMap.set(m.id, { kickoff: m.kickoff_time, pts: {} });
+      const e = matchMap.get(m.id);
+      e.pts[b.user_id] = (e.pts[b.user_id] || 0) + calcBetPoints(m, b);
+    });
+    intervals = [...matchMap.values()]
+      .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff))
+      .map(e => ({ pts: e.pts, label: fmtDate(e.kickoff) }));
+  } else {
+    intervals = [...dayMap.keys()].sort()
+      .map(date => ({ pts: dayMap.get(date), label: fmtDate(date) }));
+  }
+
+  if (intervals.length === 0) {
     container.innerHTML = `
       <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;margin-bottom:6px;">Punkteverlauf</div>
       <p style="text-align:center;color:var(--text-3);padding:24px 0;font-size:13px;">Noch keine beendeten Spiele.</p>`;
     return;
   }
 
-  // 3) Kumulative Werte pro User berechnen — mit Tag-0-Ursprung (alle starten bei 0)
+  // 3) Datenreihen pro User — kumulativ (mit 0-Ursprung) oder pro Intervall
   const userIds = S.leaderboard.map(p => p.id);
-  const cumulative = {};
+  const series = {};
   userIds.forEach(uid => {
-    cumulative[uid] = [{ date: null, value: 0 }]; // Ursprung: Tag 0, 0 Punkte
-    let total = 0;
-    sortedDays.forEach(date => {
-      total += (dayMap.get(date)[uid] || 0);
-      cumulative[uid].push({ date, value: total });
-    });
+    const arr = [];
+    if (yMode === 'cumulative') {
+      arr.push({ label: null, value: 0 }); // Ursprung: 0 Punkte
+      let total = 0;
+      intervals.forEach(iv => { total += (iv.pts[uid] || 0); arr.push({ label: iv.label, value: total }); });
+    } else {
+      intervals.forEach(iv => arr.push({ label: iv.label, value: (iv.pts[uid] || 0) }));
+    }
+    series[uid] = arr;
   });
 
-  // Anzahl Stützstellen inkl. Ursprung; Intervalle = sortedDays.length
-  const nIntervals = sortedDays.length; // mind. 1
-  const maxY = Math.max(1, ...userIds.flatMap(uid => cumulative[uid].map(p => p.value)));
+  // Stützstellen: kumulativ = Ursprung + N Intervalle, sonst = N Intervalle
+  const nPoints = (yMode === 'cumulative') ? intervals.length + 1 : intervals.length;
+  const nSegments = Math.max(1, nPoints - 1);
+  const maxY = Math.max(1, ...userIds.flatMap(uid => series[uid].map(p => p.value)));
 
   // 4) SVG-Geometrie — höher (mehr vertikaler Platz)
   const W = 600, H = 380;
   const padL = 34, padR = 14, padT = 16, padB = 28;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
-  const xStep = chartW / Math.max(1, nIntervals);
+  const xStep = chartW / nSegments;
   const yScale = chartH / maxY;
   const xAt = i => padL + i * xStep;
   const yAt = v => padT + chartH - (v * yScale);
@@ -3163,14 +3200,16 @@ async function renderPointsChart(container) {
     yGrid += `<text x="${padL - 5}" y="${y + 3}" text-anchor="end" font-size="9" fill="#9CA3AF" font-family="DM Mono">${val}</text>`;
   }
 
-  // 6) X-Achse: Ursprung (0) + Datum-Labels (max ~5 Labels)
-  const labelStep = Math.max(1, Math.ceil(sortedDays.length / 5));
-  let xLabels = `<text x="${xAt(0)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="#9CA3AF" font-family="DM Mono">0</text>`;
-  sortedDays.forEach((date, i) => {
-    if (i % labelStep === 0 || i === sortedDays.length - 1) {
-      const d = new Date(date);
-      const label = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}`;
-      xLabels += `<text x="${xAt(i + 1)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="#9CA3AF" font-family="DM Mono">${label}</text>`;
+  // 6) X-Achse: Labels (max ~6) — bei kumulativ zusätzlich 0-Ursprung
+  const labelStep = Math.max(1, Math.ceil(intervals.length / 5));
+  let xLabels = '';
+  if (yMode === 'cumulative') {
+    xLabels += `<text x="${xAt(0)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="#9CA3AF" font-family="DM Mono">0</text>`;
+  }
+  intervals.forEach((iv, i) => {
+    if (i % labelStep === 0 || i === intervals.length - 1) {
+      const pointIdx = (yMode === 'cumulative') ? i + 1 : i;
+      xLabels += `<text x="${xAt(pointIdx)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="#9CA3AF" font-family="DM Mono">${iv.label}</text>`;
     }
   });
 
@@ -3192,18 +3231,18 @@ async function renderPointsChart(container) {
 
   let lines = '';
   drawOrder.forEach(uid => {
-    if (!cumulative[uid] || S.chartHidden.has(uid)) return;
+    if (!series[uid] || S.chartHidden.has(uid)) return;
     const isMe = uid === S.user.id;
     const strokeColor = colorOf[uid];
     const strokeWidth = isMe ? 3 : 2;
     const opacity = isMe ? 1 : 0.85;
 
-    const points = cumulative[uid].map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.value).toFixed(1)}`).join(' ');
+    const points = series[uid].map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.value).toFixed(1)}`).join(' ');
     lines += `<polyline points="${points}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}" />`;
 
     // Endpunkt markieren
-    const last = cumulative[uid][cumulative[uid].length - 1];
-    lines += `<circle cx="${xAt(cumulative[uid].length - 1).toFixed(1)}" cy="${yAt(last.value).toFixed(1)}" r="${isMe ? 4 : 3}" fill="${strokeColor}" stroke="#fff" stroke-width="1.5" />`;
+    const last = series[uid][series[uid].length - 1];
+    lines += `<circle cx="${xAt(series[uid].length - 1).toFixed(1)}" cy="${yAt(last.value).toFixed(1)}" r="${isMe ? 4 : 3}" fill="${strokeColor}" stroke="#fff" stroke-width="1.5" />`;
   });
 
   // 8) Legende — alle Spieler, einzeln klickbar zum Ein-/Ausblenden
@@ -3218,13 +3257,30 @@ async function renderPointsChart(container) {
     </div>`;
   }).join('');
 
+  const countLabel = xMode === 'matches'
+    ? `${intervals.length} ${intervals.length === 1 ? 'Spiel' : 'Spiele'}`
+    : `${intervals.length} ${intervals.length === 1 ? 'Tag' : 'Tage'}`;
+  const perLabel = xMode === 'matches' ? 'Pro Spiel' : 'Pro Tag';
+
   container.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;">
       <div class="syne" style="font-size:15px;font-weight:800;letter-spacing:-.01em;">Punkteverlauf</div>
       <div style="display:flex;align-items:center;gap:6px;">
         <button class="chart-legend-ctrl" onclick="setChartLines('all')">Alle</button>
         <button class="chart-legend-ctrl" onclick="setChartLines('me')">Nur ich</button>
-        <span style="font-size:10px;color:var(--text-3);font-weight:600;white-space:nowrap;">${sortedDays.length} ${sortedDays.length === 1 ? 'Tag' : 'Tage'}</span>
+        <span style="font-size:10px;color:var(--text-3);font-weight:600;white-space:nowrap;">${countLabel}</span>
+      </div>
+    </div>
+    <div class="chart-toggles">
+      <div class="chart-toggle">
+        <span class="chart-toggle-label">X</span>
+        <button class="chart-legend-ctrl${xMode === 'days' ? ' is-active' : ''}" onclick="setChartXMode('days')">Spieltage</button>
+        <button class="chart-legend-ctrl${xMode === 'matches' ? ' is-active' : ''}" onclick="setChartXMode('matches')">Einzelne Spiele</button>
+      </div>
+      <div class="chart-toggle">
+        <span class="chart-toggle-label">Y</span>
+        <button class="chart-legend-ctrl${yMode === 'cumulative' ? ' is-active' : ''}" onclick="setChartYMode('cumulative')">Summiert</button>
+        <button class="chart-legend-ctrl${yMode === 'per' ? ' is-active' : ''}" onclick="setChartYMode('per')">${perLabel}</button>
       </div>
     </div>
     <svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
@@ -3247,6 +3303,16 @@ window.setChartLines = function(mode) {
   if (mode === 'me') {
     S.leaderboard.forEach(p => { if (p.id !== S.user.id) S.chartHidden.add(p.id); });
   }
+  if (S.chartContainer) renderPointsChart(S.chartContainer);
+};
+
+window.setChartXMode = function(mode) {
+  S.chartXMode = (mode === 'matches') ? 'matches' : 'days';
+  if (S.chartContainer) renderPointsChart(S.chartContainer);
+};
+
+window.setChartYMode = function(mode) {
+  S.chartYMode = (mode === 'per') ? 'per' : 'cumulative';
   if (S.chartContainer) renderPointsChart(S.chartContainer);
 };
 
