@@ -399,7 +399,8 @@
     /* Punkteverlaufs-Graph */
     .chart-card { padding:18px 16px; }
     .chart-svg { width:100%; height:auto; max-height:420px; display:block; }
-    .chart-legend { display:flex; flex-wrap:wrap; gap:9px 12px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border-light); }
+    .chart-legend-head { display:flex; align-items:center; gap:8px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border-light); }
+    .chart-legend { display:flex; flex-wrap:wrap; gap:9px 12px; margin-top:12px; }
     .chart-legend-item { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:600; color:var(--text-2); cursor:pointer; user-select:none; padding:2px 4px; border-radius:6px; transition:opacity .15s, background .15s; }
     .chart-legend-item:hover { background:var(--border-light); }
     .chart-legend-item.is-hidden { opacity:.4; }
@@ -409,10 +410,12 @@
     .chart-legend-ctrl:hover { color:var(--navy); }
     .chart-legend-ctrl.is-active { background:var(--navy); color:#fff; }
     .chart-legend-ctrl.is-active:hover { color:#fff; }
-    .chart-toggles { display:flex; flex-wrap:wrap; gap:8px 16px; }
-    .chart-toggle { display:flex; align-items:center; gap:5px; }
-    .chart-toggle-label { font-size:10px; font-weight:800; color:var(--text-3); font-family:'DM Mono',monospace; }
-    .chart-toolbar { display:flex; justify-content:space-between; align-items:center; gap:10px 14px; flex-wrap:wrap; margin-bottom:14px; }
+    .chart-axes { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+    .chart-axis-row { display:flex; align-items:center; gap:10px; }
+    .chart-axis-label { flex-shrink:0; width:54px; font-size:11px; font-weight:800; color:var(--text-2); font-family:'DM Mono',monospace; }
+    .chart-seg { display:flex; flex:1; background:var(--border-light); border-radius:8px; padding:2px; gap:2px; }
+    .chart-seg-btn { flex:1; font-size:11px; font-weight:700; color:var(--text-3); background:transparent; border:none; border-radius:6px; padding:7px 8px; cursor:pointer; letter-spacing:.02em; transition:background .15s, color .15s; }
+    .chart-seg-btn.is-active { background:#fff; color:var(--navy); box-shadow:0 1px 2px rgba(12,24,40,.1); }
     .chart-view-toggle { display:flex; width:100%; background:var(--border-light); border-radius:10px; padding:3px; gap:3px; margin-bottom:12px; }
     .chart-view-btn { flex:1; font-family:'Syne',sans-serif; font-size:13px; font-weight:800; letter-spacing:-.01em; color:var(--text-2); background:transparent; border:none; border-radius:8px; padding:8px 11px; cursor:pointer; transition:background .15s, color .15s; }
     .chart-view-btn.is-active { background:#fff; color:var(--navy); box-shadow:0 1px 2px rgba(12,24,40,.12); }
@@ -3287,9 +3290,13 @@ async function renderPointsChart(container) {
     const isMe = uid === S.user.id;
     const hidden = S.chartHidden.has(uid);
     const name = isMe ? 'Du' : (p?.display_name || '?');
+    // Tabelle: aktueller Platz (letzter Wert der Positionsreihe); Punkte: aktuelle Gesamtpunkte
+    const suffix = (view === 'table')
+      ? `${series[uid][series[uid].length - 1].value}.`
+      : `${p?.total_points ?? 0}`;
     return `<div class="chart-legend-item${hidden ? ' is-hidden' : ''}" onclick="toggleChartLine('${uid}')">
       <span class="chart-legend-swatch" style="background:${colorOf[uid]};${isMe ? 'height:4px;' : ''}"></span>
-      <span class="chart-legend-name"${isMe ? ' style="color:var(--blue);font-weight:700;"' : ''}>${name} · ${p?.total_points ?? 0}</span>
+      <span class="chart-legend-name"${isMe ? ' style="color:var(--blue);font-weight:700;"' : ''}>${name} · ${suffix}</span>
     </div>`;
   }).join('');
 
@@ -3297,11 +3304,13 @@ async function renderPointsChart(container) {
     ? `${intervals.length} ${intervals.length === 1 ? 'Spiel' : 'Spiele'}`
     : `${intervals.length} ${intervals.length === 1 ? 'Tag' : 'Tage'}`;
   const perLabel = xMode === 'matches' ? 'Pro Spiel' : 'Pro Tag';
-  const yToggle = (view === 'points') ? `
-      <div class="chart-toggle">
-        <span class="chart-toggle-label">Y</span>
-        <button class="chart-legend-ctrl${yMode === 'cumulative' ? ' is-active' : ''}" onclick="setChartYMode('cumulative')">Summiert</button>
-        <button class="chart-legend-ctrl${yMode === 'per' ? ' is-active' : ''}" onclick="setChartYMode('per')">${perLabel}</button>
+  const yAxisRow = (view === 'points') ? `
+      <div class="chart-axis-row">
+        <span class="chart-axis-label">Y Achse</span>
+        <div class="chart-seg">
+          <button class="chart-seg-btn${yMode === 'cumulative' ? ' is-active' : ''}" onclick="setChartYMode('cumulative')">Summiert</button>
+          <button class="chart-seg-btn${yMode === 'per' ? ' is-active' : ''}" onclick="setChartYMode('per')">${perLabel}</button>
+        </div>
       </div>` : '';
 
   container.innerHTML = `
@@ -3309,25 +3318,25 @@ async function renderPointsChart(container) {
       <button class="chart-view-btn${view === 'points' ? ' is-active' : ''}" onclick="setChartView('points')">Punkte</button>
       <button class="chart-view-btn${view === 'table' ? ' is-active' : ''}" onclick="setChartView('table')">Tabelle</button>
     </div>
-    <div class="chart-toolbar">
-      <div class="chart-toggles">
-        <div class="chart-toggle">
-          <span class="chart-toggle-label">X</span>
-          <button class="chart-legend-ctrl${xMode === 'days' ? ' is-active' : ''}" onclick="setChartXMode('days')">Spieltage</button>
-          <button class="chart-legend-ctrl${xMode === 'matches' ? ' is-active' : ''}" onclick="setChartXMode('matches')">Einzelne Spiele</button>
-        </div>${yToggle}
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;">
-        <button class="chart-legend-ctrl" onclick="setChartLines('all')">Alle</button>
-        <button class="chart-legend-ctrl" onclick="setChartLines('me')">Nur ich</button>
-        <span style="font-size:10px;color:var(--text-3);font-weight:600;white-space:nowrap;">${countLabel}</span>
-      </div>
+    <div class="chart-axes">
+      <div class="chart-axis-row">
+        <span class="chart-axis-label">X Achse</span>
+        <div class="chart-seg">
+          <button class="chart-seg-btn${xMode === 'days' ? ' is-active' : ''}" onclick="setChartXMode('days')">Spieltage</button>
+          <button class="chart-seg-btn${xMode === 'matches' ? ' is-active' : ''}" onclick="setChartXMode('matches')">Einzelne Spiele</button>
+        </div>
+      </div>${yAxisRow}
     </div>
     <svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
       ${yGrid}
       ${lines}
       ${xLabels}
     </svg>
+    <div class="chart-legend-head">
+      <button class="chart-legend-ctrl" onclick="setChartLines('all')">Alle</button>
+      <button class="chart-legend-ctrl" onclick="setChartLines('me')">Nur ich</button>
+      <span style="margin-left:auto;font-size:10px;color:var(--text-3);font-weight:600;white-space:nowrap;">${countLabel}</span>
+    </div>
     <div class="chart-legend">${legendItems}</div>`;
 }
 
