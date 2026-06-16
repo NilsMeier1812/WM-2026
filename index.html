@@ -2647,18 +2647,38 @@ window.toggleMatchOverview = function(matchId) {
 // ═══════════════════════════════════════════
 // BILD-EXPORT: Long-Press auf eine Übersichts-Kachel → Vorschau (Teilen/Kopieren/Speichern)
 // ═══════════════════════════════════════════
-let _h2cPromise = null;
-function _loadHtml2Canvas() {
-  if (window.html2canvas) return Promise.resolve();
-  if (_h2cPromise) return _h2cPromise;
-  _h2cPromise = new Promise((resolve, reject) => {
+let _h2iPromise = null;
+function _loadHtmlToImage() {
+  if (window.htmlToImage) return Promise.resolve();
+  if (_h2iPromise) return _h2iPromise;
+  _h2iPromise = new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+    s.src = 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js';
     s.onload = resolve;
-    s.onerror = () => { _h2cPromise = null; reject(new Error('Lib konnte nicht geladen werden')); };
+    s.onerror = () => { _h2iPromise = null; reject(new Error('Lib konnte nicht geladen werden')); };
     document.head.appendChild(s);
   });
-  return _h2cPromise;
+  return _h2iPromise;
+}
+
+const _TRANSPARENT_PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+// Cross-origin Flaggen (api-sports, kein CORS) über den weserv-Proxy zu same-origin
+// Data-URLs machen → dürfen dann ins Canvas, ohne es zu "tainten".
+const _flagCache = new Map();
+async function _proxiedDataUrl(url) {
+  if (_flagCache.has(url)) return _flagCache.get(url);
+  let data = null;
+  try {
+    const prox = 'https://images.weserv.nl/?url=' + encodeURIComponent(url.replace(/^https?:\/\//, '')) + '&output=png';
+    const resp = await fetch(prox);
+    if (resp.ok) {
+      const blob = await resp.blob();
+      data = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => res(null); r.readAsDataURL(blob); });
+    }
+  } catch (_) {}
+  _flagCache.set(url, data);
+  return data;
 }
 
 let _exporting = false;
@@ -2668,43 +2688,37 @@ async function exportOverviewCard(card) {
   const matchId = card.id.replace('match-ov-card-', '');
   const body = document.getElementById('match-ov-body-' + matchId);
   const summary = document.getElementById('match-ov-summary-' + matchId);
-  // Live-Karte für den Capture aufklappen (html2canvas bemisst die Höhe an der Live-Karte)
   const wasCollapsed = body && body.style.display === 'none';
-  if (wasCollapsed) { body.style.display = 'block'; if (summary) summary.style.display = 'none'; }
-  const restore = () => { if (wasCollapsed) { body.style.display = 'none'; if (summary) summary.style.display = 'block'; } };
+  const swapped = [];   // {img, orig}
+  const restore = () => {
+    if (wasCollapsed) { body.style.display = 'none'; if (summary) summary.style.display = 'block'; }
+    swapped.forEach(({ img, orig }) => { img.src = orig; });
+  };
   try {
-    await _loadHtml2Canvas();
+    await _loadHtmlToImage();
+    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (_) {} }
+
     const pageBg = (getComputedStyle(document.body).getPropertyValue('--bg') || '#E9E4D9').trim();
-    const scale = 3;
+    card.style.transition = 'none'; card.style.transform = 'none';
+    if (wasCollapsed) { body.style.display = 'block'; if (summary) summary.style.display = 'none'; }
 
-    // Lift-/Scale-Transform der Live-Karte sicher entfernen, bevor html2canvas die Maße liest
-    card.style.transition = 'none';
-    card.style.transform = 'none';
+    // Flaggen → Data-URLs (gleiches Bild, daher kein sichtbares Flackern)
+    const imgs = [...card.querySelectorAll('img')].filter(img => /^https?:\/\//.test(img.getAttribute('src') || ''));
+    await Promise.all(imgs.map(async (img) => {
+      const orig = img.getAttribute('src');
+      const data = await _proxiedDataUrl(orig);
+      if (data) { swapped.push({ img, orig }); await new Promise(res => { img.onload = res; img.onerror = res; img.src = data; }); }
+    }));
 
-    // Live-Karte erfassen; Änderungen passieren im internen Klon (onclone) → Live-DOM unberührt
-    const canvas = await html2canvas(card, {
-      backgroundColor: null,   // transparent → abgerundete Karte schwebt später auf dem Padding
-      scale, useCORS: true, logging: false,
-      onclone: (doc, el) => {
-        const root = el || doc.getElementById('match-ov-card-' + matchId);
-        if (!root) return;
-        root.style.transform = 'none';
-        const b = root.querySelector('[id^="match-ov-body-"]');
-        const s = root.querySelector('[id^="match-ov-summary-"]');
-        if (b) b.style.display = 'block';      // vollen Inhalt zeigen
-        if (s) s.style.display = 'none';
-        // Flaggen über CORS-Proxy (api-sports liefert sonst kein CORS)
-        root.querySelectorAll('img').forEach(img => {
-          const src = img.getAttribute('src') || '';
-          const m = src.match(/^https?:\/\/(.+)$/);
-          if (m) { img.crossOrigin = 'anonymous'; img.src = 'https://images.weserv.nl/?url=' + encodeURIComponent(m[1]) + '&output=png'; }
-        });
-      }
-    });
+    const opts = { backgroundColor: null, imagePlaceholder: _TRANSPARENT_PX };
+    // html-to-image: erster Render ist manchmal leer → Warm-up (klein), dann scharf in 3x
+    await htmlToImage.toCanvas(card, { ...opts, pixelRatio: 1 }).catch(() => {});
+    const canvas = await htmlToImage.toCanvas(card, { ...opts, pixelRatio: 3 });
+
     restore();
 
     // Rand/Padding um die Karte komponieren
-    const pad = Math.round(16 * scale);
+    const pad = Math.round(16 * 3);
     const out = document.createElement('canvas');
     out.width = canvas.width + pad * 2;
     out.height = canvas.height + pad * 2;
