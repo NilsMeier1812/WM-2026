@@ -2549,10 +2549,6 @@ function renderOverviewShell(main) {
   main.innerHTML=`
     <div style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;">
       ${renderPhaseTabsContainer(S.overviewPhase, 'setOverviewPhase')}
-      <div style="padding:8px 16px 0;font-size:10px;color:var(--text-3);font-weight:600;display:flex;align-items:center;gap:5px;">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-        Lange auf eine Kachel drücken → als Bild kopieren/speichern
-      </div>
       <div id="ov-cards" style="padding:16px;padding-bottom:32px;display:flex;flex-direction:column;gap:14px;" class="fade-up"></div>
     </div>`;
 }
@@ -2670,32 +2666,55 @@ function _loadHtmlToImage() {
 const _IMG_PLACEHOLDER = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
 let _exporting = false;
+function _waitImages(root, timeout = 3000) {
+  const imgs = [...root.querySelectorAll('img')];
+  return Promise.race([
+    Promise.all(imgs.map(img => (img.complete && img.naturalWidth) ? Promise.resolve()
+      : new Promise(res => { img.onload = res; img.onerror = res; }))),
+    new Promise(res => setTimeout(res, timeout))
+  ]);
+}
 async function exportOverviewCard(card) {
-  if (_exporting || !card) return;   // Doppel-Trigger (Timer + contextmenu) verhindern
+  if (_exporting || !card) return;   // Doppel-Trigger verhindern
   _exporting = true;
-  const matchId = card.id.replace('match-ov-card-', '');
-  const body = document.getElementById(`match-ov-body-${matchId}`);
-  const summary = document.getElementById(`match-ov-summary-${matchId}`);
-  // Für das Bild immer den vollen Inhalt zeigen (auch wenn eingeklappt)
-  const wasCollapsed = body && body.style.display === 'none';
-  if (wasCollapsed) { body.style.display = 'block'; if (summary) summary.style.display = 'none'; }
-  const restore = () => { if (wasCollapsed) { body.style.display = 'none'; if (summary) summary.style.display = 'block'; } };
-
+  let wrap = null;
   try {
     await _loadHtmlToImage();
-    const surface = (getComputedStyle(document.body).getPropertyValue('--surface') || '#fff').trim();
-    // Lift-/Scale-Transform für das Rendering kurz neutralisieren (sonst skaliert im Bild)
-    const _t = card.style.transform, _tr = card.style.transition;
-    card.style.transition = 'none'; card.style.transform = 'none';
-    const blob = await htmlToImage.toBlob(card, {
-      pixelRatio: 2, backgroundColor: surface, cacheBust: true, imagePlaceholder: _IMG_PLACEHOLDER
+    const cs = getComputedStyle(document.body);
+    const pageBg = (cs.getPropertyValue('--bg') || '#E9E4D9').trim();
+    const w = card.offsetWidth;
+    const matchId = card.id.replace('match-ov-card-', '');
+
+    // Karte klonen (live-DOM bleibt unberührt), vollen Inhalt zeigen
+    const clone = card.cloneNode(true);
+    clone.style.width = w + 'px';
+    clone.style.transform = 'none';
+    clone.style.margin = '0';
+    const cb = clone.querySelector('[id^="match-ov-body-"]');
+    const csum = clone.querySelector('[id^="match-ov-summary-"]');
+    if (cb) cb.style.display = 'block';
+    if (csum) csum.style.display = 'none';
+
+    // Flaggen über CORS-Proxy laden – api-sports liefert sonst kein CORS → Canvas wäre "tainted"
+    clone.querySelectorAll('img').forEach(img => {
+      const src = img.getAttribute('src') || '';
+      const m = src.match(/^https?:\/\/(.+)$/);
+      if (m) { img.crossOrigin = 'anonymous'; img.setAttribute('src', 'https://images.weserv.nl/?url=' + encodeURIComponent(m[1]) + '&output=png'); }
     });
-    card.style.transition = _tr; card.style.transform = _t;
-    restore();
+
+    // Wrapper mit Padding → etwas Rand um die Karte im Screenshot
+    wrap = document.createElement('div');
+    wrap.style.cssText = `position:fixed; left:-10000px; top:0; padding:16px; background:${pageBg}; display:inline-block; border-radius:22px;`;
+    wrap.appendChild(clone);
+    document.body.appendChild(wrap);
+
+    await _waitImages(wrap, 3000);
+    const blob = await htmlToImage.toBlob(wrap, { pixelRatio: 3, backgroundColor: pageBg, imagePlaceholder: _IMG_PLACEHOLDER });
+    wrap.remove(); wrap = null;
     if (!blob) throw new Error('leeres Bild');
     showImagePopup(blob, `wm-tipp-${matchId}.png`);
   } catch (e) {
-    restore();
+    if (wrap) wrap.remove();
     showToast('Bild-Export fehlgeschlagen', 'error');
   } finally {
     _exporting = false;
@@ -2747,64 +2766,69 @@ function showImagePopup(blob, filename) {
   autoTimer = setTimeout(close, 9000);
 }
 
-// Long-Press (Touch) lässt die Kachel langsam wachsen → dann Export-Popup. Desktop: Rechtsklick.
+// Long-Press (Touch): Kachel wächst erst nach kurzem Halten, Export erst deutlich später. Desktop: Rechtsklick.
 let _suppressCardClick = false;
 (function setupCardLongPress() {
-  let timer = null, startXY = null, activeCard = null, lastTouch = 0;
+  let growTimer = null, fireTimer = null, startXY = null, card = null, grown = false, lastTouch = 0;
   const cardFrom = (el) => (el && el.closest) ? el.closest('[id^="match-ov-card-"]') : null;
-  const grow = (card) => {
-    card.style.transition = 'transform .55s cubic-bezier(.2,.8,.2,1)';
+  const doGrow = () => {
+    if (!card) return;
+    grown = true;
+    card.style.transition = 'transform .45s cubic-bezier(.2,.8,.2,1)';
     card.style.transformOrigin = 'center';
     card.style.transform = 'scale(1.05)';
     card.style.position = 'relative'; card.style.zIndex = '5';
     card.classList.add('card-lifting');
   };
-  const ungrow = (card) => {
-    if (!card) return;
-    card.style.transform = '';
-    card.classList.remove('card-lifting');
-    setTimeout(() => { card.style.transition = ''; card.style.zIndex = ''; card.style.position = ''; card.style.transformOrigin = ''; }, 320);
+  const doUngrow = (c) => {
+    if (!c || !grown) return;
+    c.style.transform = '';
+    c.classList.remove('card-lifting');
+    setTimeout(() => { c.style.transition = ''; c.style.zIndex = ''; c.style.position = ''; c.style.transformOrigin = ''; }, 320);
   };
-  const cancel = () => { clearTimeout(timer); timer = null; startXY = null; if (activeCard) { ungrow(activeCard); activeCard = null; } };
+  const reset = () => {
+    clearTimeout(growTimer); clearTimeout(fireTimer); growTimer = fireTimer = null;
+    doUngrow(card); card = null; startXY = null; grown = false;
+  };
 
   document.addEventListener('touchstart', (e) => {
     lastTouch = Date.now();
-    const card = cardFrom(e.target);
-    if (!card || e.touches.length !== 1) return;
-    activeCard = card;
+    const c = cardFrom(e.target);
+    if (!c || e.touches.length !== 1) return;
+    card = c; grown = false;
     const t = e.touches[0]; startXY = { x: t.clientX, y: t.clientY };
-    grow(card);
-    timer = setTimeout(() => {
-      const c = activeCard;
-      timer = null; startXY = null; activeCard = null;
-      ungrow(c);
-      _suppressCardClick = true;     // folgenden Toggle-Klick unterdrücken
+    growTimer = setTimeout(doGrow, 280);   // erst nach kurzem Halten wachsen → kein Flackern bei Tap/Scroll
+    fireTimer = setTimeout(() => {
+      const target = card;
+      clearTimeout(growTimer); growTimer = fireTimer = null;
+      doUngrow(target); card = null; startXY = null; grown = false;
+      _suppressCardClick = true;
       if (navigator.vibrate) navigator.vibrate(20);
-      exportOverviewCard(c);
-    }, 550);
+      exportOverviewCard(target);
+    }, 780);                                // Long-Press deutlich später
   }, { passive: true });
 
   document.addEventListener('touchmove', (e) => {
-    if (!timer || !startXY) return;
+    if (!card || !startXY) return;
     const t = e.touches[0];
-    if (Math.abs(t.clientX - startXY.x) > 12 || Math.abs(t.clientY - startXY.y) > 12) cancel();
+    if (Math.abs(t.clientX - startXY.x) > 10 || Math.abs(t.clientY - startXY.y) > 10) reset();
   }, { passive: true });
 
   document.addEventListener('touchend', (e) => {
     lastTouch = Date.now();
-    if (_suppressCardClick) { e.preventDefault(); }
-    cancel();
+    if (_suppressCardClick) e.preventDefault();
+    reset();
     setTimeout(() => { _suppressCardClick = false; }, 60);
   }, { passive: false });
-  document.addEventListener('touchcancel', () => { _suppressCardClick = false; cancel(); }, { passive: true });
+  document.addEventListener('touchcancel', () => { _suppressCardClick = false; reset(); }, { passive: true });
 
   // Kontextmenü auf Kacheln unterdrücken; nur echter Desktop-Rechtsklick exportiert
   document.addEventListener('contextmenu', (e) => {
-    const card = cardFrom(e.target);
-    if (!card) return;
-    e.preventDefault();                          // verhindert natives Menü + Doppel-Trigger
+    const c = cardFrom(e.target);
+    if (!c) return;
+    e.preventDefault();
     if (Date.now() - lastTouch < 1000) return;   // mobiles Long-Press → schon vom Timer behandelt
-    exportOverviewCard(card);
+    exportOverviewCard(c);
   });
 })();
 
