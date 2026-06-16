@@ -2647,74 +2647,77 @@ window.toggleMatchOverview = function(matchId) {
 // ═══════════════════════════════════════════
 // BILD-EXPORT: Long-Press auf eine Übersichts-Kachel → Vorschau (Teilen/Kopieren/Speichern)
 // ═══════════════════════════════════════════
-let _h2iPromise = null;
-function _loadHtmlToImage() {
-  if (window.htmlToImage) return Promise.resolve();
-  if (_h2iPromise) return _h2iPromise;
-  _h2iPromise = new Promise((resolve, reject) => {
+let _h2cPromise = null;
+function _loadHtml2Canvas() {
+  if (window.html2canvas) return Promise.resolve();
+  if (_h2cPromise) return _h2cPromise;
+  _h2cPromise = new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js';
+    s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
     s.onload = resolve;
-    s.onerror = () => { _h2iPromise = null; reject(new Error('Lib konnte nicht geladen werden')); };
+    s.onerror = () => { _h2cPromise = null; reject(new Error('Lib konnte nicht geladen werden')); };
     document.head.appendChild(s);
   });
-  return _h2iPromise;
+  return _h2cPromise;
 }
-
-// 1x1 transparenter PNG-Platzhalter → falls eine (cross-origin) Flagge nicht
-// CORS-konform geladen werden kann, bricht der Export nicht ab.
-const _IMG_PLACEHOLDER = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
 let _exporting = false;
-function _waitImages(root, timeout = 3000) {
-  const imgs = [...root.querySelectorAll('img')];
-  return Promise.race([
-    Promise.all(imgs.map(img => (img.complete && img.naturalWidth) ? Promise.resolve()
-      : new Promise(res => { img.onload = res; img.onerror = res; }))),
-    new Promise(res => setTimeout(res, timeout))
-  ]);
-}
 async function exportOverviewCard(card) {
   if (_exporting || !card) return;   // Doppel-Trigger verhindern
   _exporting = true;
-  let wrap = null;
+  const matchId = card.id.replace('match-ov-card-', '');
+  const body = document.getElementById('match-ov-body-' + matchId);
+  const summary = document.getElementById('match-ov-summary-' + matchId);
+  // Live-Karte für den Capture aufklappen (html2canvas bemisst die Höhe an der Live-Karte)
+  const wasCollapsed = body && body.style.display === 'none';
+  if (wasCollapsed) { body.style.display = 'block'; if (summary) summary.style.display = 'none'; }
+  const restore = () => { if (wasCollapsed) { body.style.display = 'none'; if (summary) summary.style.display = 'block'; } };
   try {
-    await _loadHtmlToImage();
-    const cs = getComputedStyle(document.body);
-    const pageBg = (cs.getPropertyValue('--bg') || '#E9E4D9').trim();
-    const w = card.offsetWidth;
-    const matchId = card.id.replace('match-ov-card-', '');
+    await _loadHtml2Canvas();
+    const pageBg = (getComputedStyle(document.body).getPropertyValue('--bg') || '#E9E4D9').trim();
+    const scale = 3;
 
-    // Karte klonen (live-DOM bleibt unberührt), vollen Inhalt zeigen
-    const clone = card.cloneNode(true);
-    clone.style.width = w + 'px';
-    clone.style.transform = 'none';
-    clone.style.margin = '0';
-    const cb = clone.querySelector('[id^="match-ov-body-"]');
-    const csum = clone.querySelector('[id^="match-ov-summary-"]');
-    if (cb) cb.style.display = 'block';
-    if (csum) csum.style.display = 'none';
+    // Lift-/Scale-Transform der Live-Karte sicher entfernen, bevor html2canvas die Maße liest
+    card.style.transition = 'none';
+    card.style.transform = 'none';
 
-    // Flaggen über CORS-Proxy laden – api-sports liefert sonst kein CORS → Canvas wäre "tainted"
-    clone.querySelectorAll('img').forEach(img => {
-      const src = img.getAttribute('src') || '';
-      const m = src.match(/^https?:\/\/(.+)$/);
-      if (m) { img.crossOrigin = 'anonymous'; img.setAttribute('src', 'https://images.weserv.nl/?url=' + encodeURIComponent(m[1]) + '&output=png'); }
+    // Live-Karte erfassen; Änderungen passieren im internen Klon (onclone) → Live-DOM unberührt
+    const canvas = await html2canvas(card, {
+      backgroundColor: null,   // transparent → abgerundete Karte schwebt später auf dem Padding
+      scale, useCORS: true, logging: false,
+      onclone: (doc, el) => {
+        const root = el || doc.getElementById('match-ov-card-' + matchId);
+        if (!root) return;
+        root.style.transform = 'none';
+        const b = root.querySelector('[id^="match-ov-body-"]');
+        const s = root.querySelector('[id^="match-ov-summary-"]');
+        if (b) b.style.display = 'block';      // vollen Inhalt zeigen
+        if (s) s.style.display = 'none';
+        // Flaggen über CORS-Proxy (api-sports liefert sonst kein CORS)
+        root.querySelectorAll('img').forEach(img => {
+          const src = img.getAttribute('src') || '';
+          const m = src.match(/^https?:\/\/(.+)$/);
+          if (m) { img.crossOrigin = 'anonymous'; img.src = 'https://images.weserv.nl/?url=' + encodeURIComponent(m[1]) + '&output=png'; }
+        });
+      }
     });
+    restore();
 
-    // Wrapper mit Padding → etwas Rand um die Karte im Screenshot
-    wrap = document.createElement('div');
-    wrap.style.cssText = `position:fixed; left:-10000px; top:0; padding:16px; background:${pageBg}; display:inline-block; border-radius:22px;`;
-    wrap.appendChild(clone);
-    document.body.appendChild(wrap);
+    // Rand/Padding um die Karte komponieren
+    const pad = Math.round(16 * scale);
+    const out = document.createElement('canvas');
+    out.width = canvas.width + pad * 2;
+    out.height = canvas.height + pad * 2;
+    const ctx = out.getContext('2d');
+    ctx.fillStyle = pageBg;
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(canvas, pad, pad);
 
-    await _waitImages(wrap, 3000);
-    const blob = await htmlToImage.toBlob(wrap, { pixelRatio: 3, backgroundColor: pageBg, imagePlaceholder: _IMG_PLACEHOLDER });
-    wrap.remove(); wrap = null;
+    const blob = await new Promise(res => out.toBlob(res, 'image/png'));
     if (!blob) throw new Error('leeres Bild');
     showImagePopup(blob, `wm-tipp-${matchId}.png`);
   } catch (e) {
-    if (wrap) wrap.remove();
+    restore();
     showToast('Bild-Export fehlgeschlagen', 'error');
   } finally {
     _exporting = false;
