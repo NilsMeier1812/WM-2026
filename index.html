@@ -394,6 +394,7 @@ const MODULES = [
   {id:'users',     label:'Nutzer',         ic:'👥', fn:viewUsers},
   {id:'bets',      label:'Tipps',          ic:'🔒', fn:viewBets},
   {id:'extraq',    label:'Extra-Fragen',   ic:'❓', fn:viewExtraQuestions},
+  {id:'results',   label:'Bonus-Ergebnisse',ic:'🎯', fn:viewResults},
   {id:'extrab',    label:'Extra-Tipps',    ic:'🔒', fn:viewExtraBets},
   {id:'events',    label:'Events/Aufst.',  ic:'📋', fn:viewEvents},
   {id:'rankings',  label:'Rankings',       ic:'🏆', fn:viewRankings},
@@ -844,6 +845,99 @@ async function delExtraQ(id){
   if(error){toast(error.message,'err');return;}
   closeModal(); toast('Gelöscht'); renderView();
 }
+
+// ════════════════════════════════════════════
+//  MODULE: BONUS-ERGEBNISSE (correct_answer eintragen)
+// ════════════════════════════════════════════
+A._resQs=null;
+async function viewResults(host){
+  pageHead(host,'Bonus-Ergebnisse','Richtige Antworten der Extra-/Bonus-Fragen eintragen',
+    `<button class="btn ghost sm" onclick="viewResultsReload()">↻ Fragen neu laden</button>`);
+  const wrap=el(`<div><div style="display:flex;justify-content:center;padding:40px"><div class="spinner"></div></div></div>`);
+  host.appendChild(wrap);
+
+  const { data:qs, error } = await A.db.from('extra_questions').select('*').order('deadline');
+  if(error){ wrap.innerHTML=`<div class="card" style="color:var(--red)">${esc(error.message)}</div>`; return; }
+  A._resQs = qs||[];
+  // Wie viele haben geantwortet (nur Zahl)
+  const { data:ebs } = await pagedSelect('extra_bets','question_id');
+  const cnt={}; (ebs||[]).forEach(e=>cnt[e.question_id]=(cnt[e.question_id]||0)+1);
+
+  // Sortierung: dringend zuerst (Deadline vorbei & noch keine Antwort), dann offen, dann erledigt
+  const rank=q=>{ const past=new Date(q.deadline)<now(); const has=!!q.correct_answer;
+    if(past&&!has) return 0; if(!has) return 1; return 2; };
+  const list=[...A._resQs].sort((a,b)=>rank(a)-rank(b) || new Date(a.deadline)-new Date(b.deadline));
+
+  const open = list.filter(q=>!q.correct_answer).length;
+  wrap.innerHTML = `<div class="mut fade" style="margin-bottom:12px;font-size:13px">${list.length} Fragen · <b style="color:${open?'var(--accent)':'var(--green)'}">${open} ohne Ergebnis</b></div>`
+    + list.map(q=>resultCard(q,cnt[q.id]||0)).join('');
+  // Spieler-Selects vorbefüllen (falls Team gewählt)
+  list.forEach(q=>{ if((q.answer_type||'').toLowerCase()==='players' && q.correct_answer){
+    const cur=A.cache.players.find(p=>p.name===q.correct_answer); if(cur) bonusFillPlayers(q.id, cur.team_id, q.correct_answer);
+  }});
+}
+function viewResultsReload(){ A._resQs=null; renderView(); }
+
+function resultCard(q, answeredCount){
+  const past=new Date(q.deadline)<now(), has=!!q.correct_answer;
+  const state = has ? '<span class="badge b-green">✓ gesetzt</span>'
+              : past ? '<span class="badge b-red">offen – fällig</span>'
+              : '<span class="badge b-blue">offen</span>';
+  return `<div class="card fade" style="margin-bottom:12px">
+    <div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px">
+      <div style="flex:1;min-width:200px">
+        <div class="syne" style="font-weight:800;font-size:15px">${esc(q.question_text)}</div>
+        <div class="mut" style="font-size:11.5px;margin-top:4px">
+          <span class="badge b-gray">${esc(q.answer_type)}</span> · ${q.points} Pkt · Frist ${fmtDT(q.deadline)} · ${answeredCount} Tipps
+        </div>
+      </div>${state}
+    </div>
+    <div class="row" style="align-items:flex-end;gap:8px">
+      <div style="flex:1;min-width:200px">${bonusInput(q)}</div>
+      <button class="btn primary" id="res-save-${q.id}" onclick="saveBonusResult(${q.id})">Speichern</button>
+      ${has?`<button class="btn ghost sm" id="res-clr-${q.id}" onclick="saveBonusResult(${q.id},true)" title="Ergebnis löschen">✕</button>`:''}
+    </div>
+  </div>`;
+}
+
+function bonusInput(q){
+  const ca=q.correct_answer||'';
+  const type=(q.answer_type||'').toLowerCase();
+  const gm=type.match(/^group\s+(.+)$/);
+  if(type==='teams' || gm){
+    let teams=A.cache.teams;
+    if(gm){ const g=gm[1].trim().toLowerCase(); teams=teams.filter(t=>String(t.group||'').trim().toLowerCase()===g); }
+    return `<select id="res-${q.id}"><option value="">– kein Ergebnis –</option>
+      ${teams.map(t=>`<option ${t.name===ca?'selected':''}>${esc(t.name)}</option>`).join('')}</select>`;
+  }
+  if(type==='players'){
+    const cur=A.cache.players.find(p=>p.name===ca);
+    const curTeam=cur?cur.team_id:'';
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <select id="res-team-${q.id}" onchange="bonusFillPlayers(${q.id},this.value)"><option value="">Team …</option>
+        ${A.cache.teams.map(t=>`<option value="${t.id}" ${String(curTeam)===String(t.id)?'selected':''}>${esc(t.name)}</option>`).join('')}</select>
+      <select id="res-${q.id}"><option value="">Spieler …</option></select>
+    </div>`;
+  }
+  if(type==='boolean'){
+    return `<input id="res-${q.id}" list="bool-${q.id}" value="${esc(ca)}" placeholder="Ja / Nein">
+      <datalist id="bool-${q.id}"><option>Ja</option><option>Nein</option></datalist>`;
+  }
+  return `<input id="res-${q.id}" type="${type==='number'?'number':'text'}" value="${esc(ca)}" placeholder="Antwort eintragen …">`;
+}
+window.bonusFillPlayers=function(qId, teamId, selectName){
+  const sel=$('res-'+qId); if(!sel) return;
+  const ps=A.cache.players.filter(p=>String(p.team_id)===String(teamId)).sort((a,b)=>a.name.localeCompare(b.name));
+  sel.innerHTML=`<option value="">Spieler …</option>`+ps.map(p=>`<option ${p.name===selectName?'selected':''}>${esc(p.name)}</option>`).join('');
+};
+window.saveBonusResult=async function(qId, clear){
+  const v = clear ? '' : (($('res-'+qId)?.value)||'').trim();
+  const btn=$('res-save-'+qId); if(btn){ btn.disabled=true; btn.textContent='…'; }
+  const { error } = await adminWrite('extra_questions','update',{ id:qId, values:{ correct_answer: v||null } });
+  if(error){ toast(error.message,'err'); if(btn){ btn.disabled=false; btn.textContent='Speichern'; } return; }
+  const q=(A._resQs||[]).find(x=>x.id===qId); if(q) q.correct_answer=v||null;
+  toast(v?'Ergebnis gespeichert':'Ergebnis gelöscht'); renderView();
+};
 
 // ════════════════════════════════════════════
 //  MODULE: EXTRA-TIPPS (SENSITIV)
