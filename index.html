@@ -999,9 +999,9 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
   const myBetsMap = leftMap;
   const otherBetsMap = rightMap;
 
-  // Nur Matches mit beiden Tipps und mind. Kickoff
-  const commonMatches = S.matches
-    .filter(m => isLocked(m) && myBetsMap[m.id] && otherBetsMap[m.id])
+  // Alle gestarteten Spiele — auch wenn einer oder beide nicht getippt haben (nicht getippt = 0 Punkte)
+  const comparedMatches = S.matches
+    .filter(m => isLocked(m))
     .sort((a, b) => new Date(b.kickoff_time) - new Date(a.kickoff_time));
 
   // Stats berechnen
@@ -1009,7 +1009,7 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
   let myScorer = 0, otherScorer = 0;
   let myExact = 0, otherExact = 0;
 
-  commonMatches.forEach(m => {
+  comparedMatches.forEach(m => {
     const myBet = myBetsMap[m.id];
     const otherBet = otherBetsMap[m.id];
     const myPts = calcBetPoints(m, myBet);
@@ -1024,8 +1024,8 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
     // Exakte Treffer: auch laufende Spiele (aktueller Spielstand) — wie bei den anderen Stats
     const fh = getFinalScore(m, 'home'), fa = getFinalScore(m, 'away');
     if (fh !== null && fa !== null) {
-      if (myBet.home_score === fh && myBet.away_score === fa) myExact++;
-      if (otherBet.home_score === fh && otherBet.away_score === fa) otherExact++;
+      if (myBet && myBet.home_score === fh && myBet.away_score === fa) myExact++;
+      if (otherBet && otherBet.home_score === fh && otherBet.away_score === fa) otherExact++;
     }
   });
 
@@ -1065,8 +1065,8 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
 
   // Match-Karten
   let matchesHtml;
-  if (commonMatches.length === 0) {
-    matchesHtml = `<p style="text-align:center; color:var(--text-3); padding:24px 16px; font-size:13px;">Noch keine gemeinsamen Tipps mit beendetem oder laufendem Spiel.</p>`;
+  if (comparedMatches.length === 0) {
+    matchesHtml = `<p style="text-align:center; color:var(--text-3); padding:24px 16px; font-size:13px;">Noch keine gestarteten Spiele.</p>`;
   } else {
     const renderH2HMatchCard = (m) => {
         const myBet = myBetsMap[m.id];
@@ -1102,7 +1102,8 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
         // Torschützen-Tipp pro Spieler (mit Treffer-Färbung sobald aufgelöst)
         const scorerLine = (bet) => {
           let label;
-          if (bet.is_goalless === true) label = 'Kein Tor';
+          if (!bet) label = '–';
+          else if (bet.is_goalless === true) label = 'Kein Tor';
           else if (bet.first_goalscorer_id) label = bet.goalscorer?.name || '–';
           else label = '–';
           let col = 'var(--text-2)';
@@ -1111,17 +1112,20 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
           return `<span style="color:${col}; font-weight:${label==='–'?'400':'700'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">⚽ ${label}</span>`;
         };
 
-        const playerCell = (name, nameColor, bet, pts) => `
-          <div class="${bet.is_boosted === true ? 'boosted-bg' : ''}" style="display:flex; flex-direction:column; gap:4px; padding:7px 10px; background:#fff; border-radius:7px; overflow:hidden;">
+        const playerCell = (name, nameColor, bet, pts) => {
+          const scoreStr = bet ? `${bet.home_score ?? '-'}:${bet.away_score ?? '-'}` : '–:–';
+          return `
+          <div class="${bet && bet.is_boosted === true ? 'boosted-bg' : ''}" style="display:flex; flex-direction:column; gap:4px; padding:7px 10px; background:#fff; border-radius:7px; overflow:hidden;">
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
               <span style="color:${nameColor}; font-weight:700; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60px;">${name}</span>
-              <span class="mono" style="font-weight:600;">${bet.home_score ?? '-'}:${bet.away_score ?? '-'}</span>
+              <span class="mono" style="font-weight:600;${bet ? '' : ' color:var(--text-3);'}">${scoreStr}</span>
               <span class="syne" style="font-weight:800; color:${pts > 0 ? nameColor : 'var(--text-3)'};">${pts > 0 ? '+' + pts : '0'}</span>
             </div>
             <div style="display:flex; align-items:center; font-size:10.5px; border-top:1px solid var(--border-light); padding-top:4px;">
               ${scorerLine(bet)}
             </div>
           </div>`;
+        };
 
         return `
           <div style="background:${cardBg}; border:1px solid ${cardBorder}; border-left:3px solid ${cardBorder}; border-radius:10px; padding:10px 12px;">
@@ -1141,11 +1145,11 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
           </div>`;
     };
 
-    // Nach Spieltag (phase) gruppieren – Reihenfolge wie in commonMatches (neueste zuerst), einklappbar
+    // Nach Spieltag (phase) gruppieren – Reihenfolge wie in comparedMatches (neueste zuerst), einklappbar
     if (!S.h2hCollapsed) S.h2hCollapsed = {};
     const _order = [];
     const _byPhase = {};
-    commonMatches.forEach(m => {
+    comparedMatches.forEach(m => {
       const key = m.phase || 'Sonstige';
       if (!_byPhase[key]) { _byPhase[key] = []; _order.push(key); }
       _byPhase[key].push(m);
