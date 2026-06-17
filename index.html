@@ -631,7 +631,8 @@ const S = {
   overviewAllBets: null, // Cache für ALLE Übersicht-Wetten (phasenübergreifend)
   tabelleSubView: 'tabelle',  // 'tabelle' | 'diagramm' | 'h2h'
   tabelleFilter: 'total',     // gemerkter Filter
-  h2hOpponent: null,           // user_id für H2H-Vergleich
+  h2hLeft: null,               // user_id linke Seite (Standard: man selbst)
+  h2hRight: null,              // user_id rechte Seite
   h2hCache: {},                // bereits geladene Bets anderer Spieler
   h2hCollapsed: {}             // eingeklappte Spieltag-Gruppen im H2H
 };
@@ -963,7 +964,8 @@ function renderStreaksCard(s) {
 
 window.openH2H = function(otherUserId) {
   if (otherUserId === S.user.id) return;
-  S.h2hOpponent = otherUserId;
+  S.h2hLeft = S.user.id;
+  S.h2hRight = otherUserId;
   S.tabelleSubView = 'h2h';
   goTo('tabelle');
 }
@@ -984,17 +986,22 @@ window.toggleH2HGroup = function(sid, phase) {
   }
 };
 
-function renderH2H(otherUserId, otherBets, container) {
+function renderH2H(leftId, rightId, leftMap, rightMap, container) {
   const content = container || $('h2h-content');
-  const otherPlayer = S.liveLeaderboard.find(p => p.id === otherUserId);
-  const mePlayer = S.liveLeaderboard.find(p => p.id === S.user.id);
+  const leftPlayer = S.liveLeaderboard.find(p => p.id === leftId);
+  const rightPlayer = S.liveLeaderboard.find(p => p.id === rightId);
+  const leftName = leftId === S.user.id ? 'Du' : (leftPlayer?.display_name || '?');
+  const rightName = rightId === S.user.id ? 'Du' : (rightPlayer?.display_name || '?');
+  const leftNameShort = leftName.split(' ')[0];
+  const rightNameShort = rightName.split(' ')[0];
 
-  const otherBetsMap = {};
-  otherBets.forEach(b => { otherBetsMap[b.match_id] = b; });
+  // Intern: linke Seite ("my") vs. rechte Seite ("other")
+  const myBetsMap = leftMap;
+  const otherBetsMap = rightMap;
 
   // Nur Matches mit beiden Tipps und mind. Kickoff
   const commonMatches = S.matches
-    .filter(m => isLocked(m) && S.bets[m.id] && otherBetsMap[m.id])
+    .filter(m => isLocked(m) && myBetsMap[m.id] && otherBetsMap[m.id])
     .sort((a, b) => new Date(b.kickoff_time) - new Date(a.kickoff_time));
 
   // Stats berechnen
@@ -1003,7 +1010,7 @@ function renderH2H(otherUserId, otherBets, container) {
   let myExact = 0, otherExact = 0;
 
   commonMatches.forEach(m => {
-    const myBet = S.bets[m.id];
+    const myBet = myBetsMap[m.id];
     const otherBet = otherBetsMap[m.id];
     const myPts = calcBetPoints(m, myBet);
     const otherPts = calcBetPoints(m, otherBet);
@@ -1035,7 +1042,7 @@ function renderH2H(otherUserId, otherBets, container) {
     let boostPts = 0; seq.forEach(r => { if (r.boosted) boostPts += r.pts / 2; }); // Boost verdoppelt → 1/2 = Bonus
     return { cur, best, worst, curWorst, boostPts: Math.round(boostPts) };
   };
-  const myExtra = computeExtra(m => S.bets[m.id]);
+  const myExtra = computeExtra(m => myBetsMap[m.id]);
   const otherExtra = computeExtra(m => otherBetsMap[m.id]);
 
   // Hilfsfunktion für Stat-Zeilen — flach, optional Sub-Label & eigener Vergleichswert, neutral möglich
@@ -1062,7 +1069,7 @@ function renderH2H(otherUserId, otherBets, container) {
     matchesHtml = `<p style="text-align:center; color:var(--text-3); padding:24px 16px; font-size:13px;">Noch keine gemeinsamen Tipps mit beendetem oder laufendem Spiel.</p>`;
   } else {
     const renderH2HMatchCard = (m) => {
-        const myBet = S.bets[m.id];
+        const myBet = myBetsMap[m.id];
         const otherBet = otherBetsMap[m.id];
         const myPts = calcBetPoints(m, myBet);
         const otherPts = calcBetPoints(m, otherBet);
@@ -1090,7 +1097,7 @@ function renderH2H(otherUserId, otherBets, container) {
           realScorerHtml = `<span style="font-size:10px; color:var(--text-2); font-weight:700; max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">⚽ ${rn}</span>`;
         }
 
-        const otherNameShort = (otherPlayer?.display_name || '?').split(' ')[0];
+        const otherNameShort = rightNameShort;
 
         // Torschützen-Tipp pro Spieler (mit Treffer-Färbung sobald aufgelöst)
         const scorerLine = (bet) => {
@@ -1128,7 +1135,7 @@ function renderH2H(otherUserId, otherBets, container) {
               </div>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-              ${playerCell('Du', 'var(--blue)', myBet, myPts)}
+              ${playerCell(leftNameShort, 'var(--blue)', myBet, myPts)}
               ${playerCell(otherNameShort, 'var(--text)', otherBet, otherPts)}
             </div>
           </div>`;
@@ -1160,16 +1167,14 @@ function renderH2H(otherUserId, otherBets, container) {
   content.innerHTML = `
     <!-- Header mit Namen + Gesamtpunkten -->
     <div style="display:flex; align-items:stretch; justify-content:space-between; padding:18px 16px 16px; gap:12px; background:#F8F6F2; border-bottom:1px solid var(--border-light);">
-      <div style="flex:1; text-align:center;">
-        <div style="font-size:10px; color:var(--text-2); font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">DU</div>
-        <div class="syne" style="font-size:28px; font-weight:800; color:var(--blue); letter-spacing:-.02em; line-height:1;">${mePlayer?.total_points ?? 0}</div>
-        <div style="font-size:11px; color:var(--text-2); font-weight:600; margin-top:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${mePlayer?.display_name || ''}</div>
+      <div style="flex:1; text-align:center; min-width:0;">
+        <div class="syne" style="font-size:28px; font-weight:800; color:var(--blue); letter-spacing:-.02em; line-height:1;">${leftPlayer?.total_points ?? 0}</div>
+        <div style="font-size:12px; color:var(--text-2); font-weight:700; margin-top:7px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${leftName}</div>
       </div>
       <div style="display:flex; align-items:center; font-size:14px; font-weight:800; color:var(--text-3);">vs</div>
-      <div style="flex:1; text-align:center;">
-        <div style="font-size:10px; color:var(--text-2); font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">SPIELER</div>
-        <div class="syne" style="font-size:28px; font-weight:800; color:var(--navy); letter-spacing:-.02em; line-height:1;">${otherPlayer?.total_points ?? 0}</div>
-        <div style="font-size:11px; color:var(--text-2); font-weight:600; margin-top:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${otherPlayer?.display_name || ''}</div>
+      <div style="flex:1; text-align:center; min-width:0;">
+        <div class="syne" style="font-size:28px; font-weight:800; color:var(--navy); letter-spacing:-.02em; line-height:1;">${rightPlayer?.total_points ?? 0}</div>
+        <div style="font-size:12px; color:var(--text-2); font-weight:700; margin-top:7px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${rightName}</div>
       </div>
     </div>
 
@@ -2958,28 +2963,39 @@ function renderSubView_Diagramm(c) {
 
 // ── Sub-View 3: H2H ──────────────────────────────────
 async function renderSubView_H2H(c) {
-  const others = S.liveLeaderboard.filter(p => p.id !== S.user.id);
+  const all = S.liveLeaderboard;
 
-  if (others.length === 0) {
+  if (all.length < 2) {
     c.innerHTML = `<p style="text-align:center; padding:40px 16px; color:var(--text-3); font-size:13px;">Noch keine anderen Spieler.</p>`;
     return;
   }
 
-  if (!S.h2hOpponent || !others.find(p => p.id === S.h2hOpponent)) {
-    S.h2hOpponent = others[0].id;
+  // Standard: links man selbst, rechts der erste andere Spieler
+  if (!S.h2hLeft || !all.find(p => p.id === S.h2hLeft)) S.h2hLeft = S.user.id;
+  if (!S.h2hRight || !all.find(p => p.id === S.h2hRight) || S.h2hRight === S.h2hLeft) {
+    S.h2hRight = (all.find(p => p.id !== S.h2hLeft) || all[0]).id;
   }
 
-  c.innerHTML = `
-    <div style="padding:14px 16px 12px;">
-      <div style="position:relative;">
-        <select onchange="setH2HOpponent(this.value)"
-          style="width:100%;background:var(--surface);border:1.5px solid var(--border);color:var(--text);font-weight:700;font-size:13px;border-radius:10px;padding:11px 40px 11px 14px;outline:none;appearance:none;cursor:pointer;">
-          ${others.map(p => `<option value="${p.id}" ${p.id === S.h2hOpponent ? 'selected' : ''}>Vergleich mit: ${p.display_name || '?'}</option>`).join('')}
-        </select>
-        <div style="pointer-events:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--text-2);">
-          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
-        </div>
+  const options = (selectedId) => all.map(p => {
+    const label = p.id === S.user.id ? 'Du' : (p.display_name || '?');
+    return `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${label}</option>`;
+  }).join('');
+  const selectBox = (side, selectedId) => `
+    <div style="position:relative; flex:1; min-width:0;">
+      <select onchange="setH2HSide('${side}', this.value)"
+        style="width:100%;background:var(--surface);border:1.5px solid var(--border);color:var(--text);font-weight:700;font-size:13px;border-radius:10px;padding:11px 32px 11px 14px;outline:none;appearance:none;cursor:pointer;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">
+        ${options(selectedId)}
+      </select>
+      <div style="pointer-events:none;position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--text-2);">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
       </div>
+    </div>`;
+
+  c.innerHTML = `
+    <div style="padding:14px 16px 12px; display:flex; align-items:center; gap:8px;">
+      ${selectBox('left', S.h2hLeft)}
+      <span style="font-size:13px; font-weight:800; color:var(--text-3); flex-shrink:0;">vs.</span>
+      ${selectBox('right', S.h2hRight)}
     </div>
     <div id="h2h-content" style="">
       <div style="display:flex; justify-content:center; padding:60px 0;">
@@ -2987,36 +3003,47 @@ async function renderSubView_H2H(c) {
       </div>
     </div>`;
 
-  await loadH2HInline(S.h2hOpponent);  // ← Jetzt mit await!
+  await loadH2HInline();
 }
 
-window.setH2HOpponent = async function(userId) {
-  S.h2hOpponent = userId;
-  await loadH2HInline(userId);
+window.setH2HSide = async function(side, userId) {
+  if (side === 'left') S.h2hLeft = userId;
+  else S.h2hRight = userId;
+  await loadH2HInline();
 }
 
-async function loadH2HInline(otherUserId) {
+async function loadH2HInline() {
   const container = $('h2h-content');
   if (!container) return;
 
   container.innerHTML = `<div style="display:flex; justify-content:center; padding:60px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
 
-  if (!S.h2hCache) S.h2hCache = {};
-  let otherBets = S.h2hCache[otherUserId];
-
-  if (!otherBets) {
-    const { data, error } = await db.from('bets')
-      .select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)')
-      .eq('user_id', otherUserId);
-    if (error) {
-      container.innerHTML = `<p style="color:var(--red); padding:24px; text-align:center; font-size:13px;">${error.message}</p>`;
-      return;
-    }
-    otherBets = data || [];
-    S.h2hCache[otherUserId] = otherBets;
+  const leftMap = await getH2HBetsMap(S.h2hLeft);
+  const rightMap = await getH2HBetsMap(S.h2hRight);
+  if (leftMap === null || rightMap === null) {
+    container.innerHTML = `<p style="color:var(--red); padding:24px; text-align:center; font-size:13px;">Tipps konnten nicht geladen werden.</p>`;
+    return;
   }
 
-  renderH2H(otherUserId, otherBets, container);
+  renderH2H(S.h2hLeft, S.h2hRight, leftMap, rightMap, container);
+}
+
+// Bets eines Spielers als Map (match_id -> bet); eigene aus S.bets, fremde aus Cache/DB
+async function getH2HBetsMap(userId) {
+  if (userId === S.user.id) return S.bets;
+  if (!S.h2hCache) S.h2hCache = {};
+  let bets = S.h2hCache[userId];
+  if (!bets) {
+    const { data, error } = await db.from('bets')
+      .select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)')
+      .eq('user_id', userId);
+    if (error) return null;
+    bets = data || [];
+    S.h2hCache[userId] = bets;
+  }
+  const map = {};
+  bets.forEach(b => { map[b.match_id] = b; });
+  return map;
 }
 
 async function loadTabelleData(filterType) {
