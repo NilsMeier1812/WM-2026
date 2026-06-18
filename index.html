@@ -2753,15 +2753,22 @@ function buildOverviewMatchCardHTML(m, matchBets) {
       if (hasHome) {
         let bh = bet.home_score, ba = bet.away_score;
         let scoreStyle = 'font-weight:800; font-family:"DM Mono", monospace; font-size:12px; display:inline-block; text-align:center; min-width:32px;';
+        let strike = false;
         if (locked && fnH !== null) {
           const isExact = (bh === fnH && ba === fnA);
           const isTrend = !isExact && ((bh>ba && fnH>fnA) || (bh<ba && fnH<fnA) || (bh===ba && fnH===fnA));
           if (isExact) scoreStyle += 'background:var(--green-bg); color:var(--green); padding:2px 6px; border-radius:6px;';
           else if (isTrend) scoreStyle += 'background:#FEF3C7; color:var(--accent-text); padding:2px 6px; border-radius:6px;';
-          else scoreStyle += 'color:var(--text-3); text-decoration:line-through; font-weight:500;';
+          else { scoreStyle += 'color:var(--text-3); font-weight:500;'; strike = true; }
         }
-        // Underdog-Marker (temporär): einziger mit dieser Tendenz → unterstreichen.
-        if (locked && isRareTendency(bet, udCounts)) scoreStyle += 'border-bottom:2px solid currentColor;';
+        // Underdog-Marker: einziger mit dieser Tendenz → Ergebnis-Tipp unterstreichen.
+        // Unterstreichung direkt am Text (statt border-bottom), damit sie auch auf
+        // den farbigen Ergebnis-Badges (exakt/Tendenz) klar sichtbar ist.
+        const underdog = locked && isRareTendency(bet, udCounts);
+        if (strike || underdog) {
+          const deco = [underdog ? 'underline' : null, strike ? 'line-through' : null].filter(Boolean).join(' ');
+          scoreStyle += `text-decoration:${deco}; text-decoration-thickness:2px; text-underline-offset:3px;`;
+        }
         scoreBadge = `<span style="${scoreStyle}">${bh}:${ba}</span>`;
       }
       if (hasBet) {
