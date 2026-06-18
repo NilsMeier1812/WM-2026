@@ -2579,7 +2579,38 @@ async function renderBonusOverview(cards) {
   const byQ={};
   (bRes.data||[]).forEach(b=>{(byQ[b.question_id]??=[]).push(b);});
 
-  cards.innerHTML=questions.map(q=>{
+  const formatAnswer=(q,bet)=>{
+    let ans=bet?.bet_value||'-';
+    if (q.answer_type==='teams'||q.answer_type==='players'||/^group\s+/i.test(q.answer_type||'')) {
+      const t=S.teams.find(x=>String(x.id)===String(bet?.bet_team_id))||S.teams.find(x=>x.name===bet?.bet_value);
+      if (t?.flag_url&&!t.flag_url.startsWith('http')&&!t.flag_url.startsWith('/')&&bet?.bet_value) ans=`${t.flag_url} ${bet.bet_value}`;
+    }
+    return ans;
+  };
+
+  // Normalisierter Schlüssel für Tipp/Lösung-Vergleich (team_id bevorzugt, sonst Name)
+  const normKey=(teamId,value)=>{
+    if (teamId) return 't:'+String(teamId);
+    if (value) {
+      const v=value.trim();
+      const t=S.teams.find(x=>String(x.name).trim().toLowerCase()===v.toLowerCase());
+      return t?('t:'+t.id):('n:'+v.toLowerCase());
+    }
+    return null;
+  };
+
+  // Fragen mit gleichem group_key zu einer Karte zusammenfassen, Reihenfolge ab erstem Vorkommen
+  const items=[]; const groupIdx={};
+  questions.forEach(q=>{
+    if (q.group_key) {
+      if (groupIdx[q.group_key]===undefined) {
+        groupIdx[q.group_key]=items.length;
+        items.push({type:'group',key:q.group_key,questions:[q]});
+      } else items[groupIdx[q.group_key]].questions.push(q);
+    } else items.push({type:'single',q});
+  });
+
+  const renderSingleCard=(q)=>{
     const locked=new Date(q.deadline)<=new Date();
     const qBets=byQ[q.id]||[];
     let displayRows=S.leaderboard.map(player=>({player,bet:qBets.find(x=>x.user_id===player.id)}));
@@ -2598,12 +2629,7 @@ async function renderBonusOverview(cards) {
       if (bet) {
         if (!show) ans='<span style="color:var(--text-3);">verdeckt</span>';
         else {
-          ans=bet.bet_value||'-';
-          // Flagge anzeigen für teams/group/players (Nation über bet_team_id, Fallback Name)
-          if (q.answer_type==='teams'||q.answer_type==='players'||/^group\s+/i.test(q.answer_type||'')) {
-            const t=S.teams.find(x=>String(x.id)===String(bet.bet_team_id))||S.teams.find(x=>x.name===bet.bet_value);
-            if (t?.flag_url&&!t.flag_url.startsWith('http')&&!t.flag_url.startsWith('/')&&bet.bet_value) ans=`${t.flag_url} ${bet.bet_value}`;
-          }
+          ans=formatAnswer(q,bet);
           ptHtml=locked?`<span style="font-weight:700;color:${(bet.points_awarded||0)>0?'var(--blue)':'var(--text-2)'};">${bet.points_awarded??0}</span>`:'';
         }
       } else { ans='<span style="color:var(--text-3);">–</span>'; if (locked) ptHtml='<span style="color:var(--text-3);">0</span>'; }
@@ -2625,7 +2651,77 @@ async function renderBonusOverview(cards) {
       </div>
       <div>${rows}</div>
     </div>`;
-  }).join('');
+  };
+
+  const renderGroupCard=(qs)=>{
+    const firstQ=qs[0];
+    const earliest=qs.reduce((min,q)=>new Date(q.deadline)<new Date(min.deadline)?q:min,qs[0]);
+    const locked=new Date(earliest.deadline)<=new Date();
+    const pointsPerHit=Number(firstQ.points)||0;
+
+    const correctSet=new Set();
+    qs.forEach(q=>{ const k=normKey(null,q.correct_answer); if (k) correctSet.add(k); });
+    const correctLabels=qs.map(q=>(q.correct_answer||'').trim()).filter(Boolean);
+
+    const playerData=S.leaderboard.map(player=>{
+      const bets=qs.map(q=>({q,bet:(byQ[q.id]||[]).find(x=>x.user_id===player.id)}));
+      const picksSet=new Set();
+      bets.forEach(({bet})=>{ const k=normKey(bet?.bet_team_id,bet?.bet_value); if (k) picksSet.add(k); });
+      let hits=0; picksSet.forEach(p=>{ if (correctSet.has(p)) hits++; });
+      return { player, bets, computedPoints: hits*pointsPerHit, hasAnyBet: bets.some(x=>x.bet) };
+    });
+
+    playerData.sort((a,b)=>{
+      if (a.player.id===S.user.id) return -1;
+      if (b.player.id===S.user.id) return 1;
+      if (locked) return b.computedPoints-a.computedPoints;
+      if (a.hasAnyBet&&!b.hasAnyBet) return -1;
+      if (!a.hasAnyBet&&b.hasAnyBet) return 1;
+      return (a.player.display_name||'').localeCompare(b.player.display_name||'');
+    });
+
+    const rows=playerData.map(({player,bets,computedPoints,hasAnyBet})=>{
+      const isMe=player.id===S.user.id, show=locked||isMe;
+      let picksHtml='';
+      if (!hasAnyBet) picksHtml='<span style="color:var(--text-3);">–</span>';
+      else if (!show) picksHtml='<span style="color:var(--text-3);">verdeckt</span>';
+      else {
+        picksHtml=bets.map(({q,bet})=>{
+          if (!bet) return '<span style="color:var(--text-3);font-size:11px;font-weight:500;">–</span>';
+          const ans=formatAnswer(q,bet);
+          const k=normKey(bet.bet_team_id,bet.bet_value);
+          const isCorrect=locked&&k&&correctSet.has(k);
+          const color=isCorrect?'#059669':'var(--text)';
+          const weight=isCorrect?700:500;
+          return `<span style="font-size:11px;font-weight:${weight};color:${color};white-space:nowrap;">${ans}</span>`;
+        }).join('');
+      }
+      let ptHtml='';
+      if (locked) {
+        if (hasAnyBet) ptHtml=`<span style="font-weight:700;color:${computedPoints>0?'var(--blue)':'var(--text-2)'};">${computedPoints}</span>`;
+        else ptHtml='<span style="color:var(--text-3);">0</span>';
+      }
+      return `<div class="ov-row ${isMe?'me':''}">
+        <span style="width:30%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isMe?700:600};color:${isMe?'var(--blue)':'var(--text)'};">${player.display_name||'?'}</span>
+        <span style="width:55%;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;">${picksHtml}</span>
+        <span style="width:15%;text-align:right;">${ptHtml}</span>
+      </div>`;
+    }).join('');
+
+    let headerRight=locked
+      ? (correctLabels.length?`<span style="font-size:10px;color:#6EE7B7;font-weight:700;text-align:right;">✓ ${correctLabels.join(', ')}</span>`:`<span style="font-size:10px;color:rgba(255,255,255,.4);">Ausstehend</span>`)
+      : `<span class="mono" style="font-size:10px;font-weight:700;background:rgba(255,255,255,.1);padding:3px 8px;border-radius:6px;white-space:nowrap;">Frist: ${fmtDate(earliest.deadline)}</span>`;
+
+    return `<div class="card" style="overflow:hidden;">
+      <div style="background:var(--navy);color:#fff;padding:11px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span style="font-weight:700;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${firstQ.question_text} <span style="color:rgba(255,255,255,.55);font-weight:600;">×${qs.length}</span></span>
+        ${headerRight}
+      </div>
+      <div>${rows}</div>
+    </div>`;
+  };
+
+  cards.innerHTML=items.map(it=>it.type==='single'?renderSingleCard(it.q):renderGroupCard(it.questions)).join('');
 }
 
 window.toggleMatchOverview = function(matchId) {
