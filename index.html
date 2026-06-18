@@ -3124,7 +3124,7 @@ async function loadTabelleData(filterType) {
 
   if (!S.allBetsCache && filterType!=='total') {
     const {data,error}=await db.from('bets')
-      .select('user_id,home_score,away_score,first_goalscorer_id,is_goalless,is_boosted,points_awarded,match:matches!inner(id,phase,home_score,away_score,home_score_extratime,away_score_extratime,status,kickoff_time,first_goalscorer_id)')
+      .select('user_id,home_score,away_score,first_goalscorer_id,is_goalless,is_boosted,points_awarded,match:matches!inner(id,phase,home_score,away_score,home_score_extratime,away_score_extratime,status,kickoff_time,first_goalscorer_id,is_goalless)')
       .lte('match.kickoff_time', new Date().toISOString());
     if (error) { c.innerHTML=`<p style="color:var(--red);font-size:13px;">${error.message}</p>`; return; }
     S.allBetsCache=data||[];
@@ -3203,7 +3203,7 @@ async function renderPointsChart(container) {
   // 1) Bets laden (falls Cache leer) — gleiche Query wie loadTabelleData
   if (!S.allBetsCache) {
     const { data, error } = await db.from('bets')
-      .select('user_id,home_score,away_score,first_goalscorer_id,is_goalless,is_boosted,points_awarded,match:matches!inner(id,phase,home_score,away_score,home_score_extratime,away_score_extratime,status,kickoff_time,first_goalscorer_id)')
+      .select('user_id,home_score,away_score,first_goalscorer_id,is_goalless,is_boosted,points_awarded,match:matches!inner(id,phase,home_score,away_score,home_score_extratime,away_score_extratime,status,kickoff_time,first_goalscorer_id,is_goalless)')
       .lte('match.kickoff_time', new Date().toISOString());
     if (error) {
       container.innerHTML = `<p style="font-size:13px;color:var(--red);text-align:center;padding:32px 0;">${error.message}</p>`;
