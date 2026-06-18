@@ -31,6 +31,10 @@
       --green-bg:     #D1FAE5;
       --blue:         #2563EB;
       --blue-bg:      #DBEAFE;
+      --score-exact:  #166534;
+      --score-diff:   #22C55E;
+      --score-tend:   #CA8A04;
+      --score-wrong:  #D9372A;
       --text:         #0C1828;
       --text-2:       #6C7480;
       --text-3:       #9CA3AF;
@@ -2753,21 +2757,16 @@ function buildOverviewMatchCardHTML(m, matchBets) {
       if (hasHome) {
         let bh = bet.home_score, ba = bet.away_score;
         let scoreStyle = "font-weight:800; font-family:'DM Mono', monospace; font-size:12px; display:inline-block; text-align:center; min-width:32px;";
-        let strike = false;
+        // Reine Textfarbe nach Punktstufe – kein Hintergrund, kein Durchstreichen.
         if (locked && fnH !== null) {
-          const isExact = (bh === fnH && ba === fnA);
-          const isTrend = !isExact && ((bh>ba && fnH>fnA) || (bh<ba && fnH<fnA) || (bh===ba && fnH===fnA));
-          if (isExact) scoreStyle += 'background:var(--green-bg); color:var(--green); padding:2px 6px; border-radius:6px;';
-          else if (isTrend) scoreStyle += 'background:#FEF3C7; color:var(--accent-text); padding:2px 6px; border-radius:6px;';
-          else { scoreStyle += 'color:var(--text-3); font-weight:500;'; strike = true; }
+          if (bh === fnH && ba === fnA) scoreStyle += 'color:var(--score-exact);';                                   // exakt (3 P.) – dunkelgrün
+          else if (bh - ba === fnH - fnA) scoreStyle += 'color:var(--score-diff);';                                  // Tordifferenz (2 P.) – hellgrün
+          else if ((bh>ba && fnH>fnA) || (bh<ba && fnH<fnA) || (bh===ba && fnH===fnA)) scoreStyle += 'color:var(--score-tend);'; // Tendenz (1 P.) – gelb
+          else scoreStyle += 'color:var(--score-wrong);';                                                            // falsch (0 P.) – rot
         }
-        // Underdog-Marker: einziger mit dieser Tendenz → Ergebnis-Tipp unterstreichen.
-        // Unterstreichung in Textfarbe (currentColor), direkt am Text statt am
-        // Box-Rand, damit sie auch auf den farbigen exakt/Tendenz-Badges greift.
-        const underdog = locked && isRareTendency(bet, udCounts);
-        if (strike || underdog) {
-          const deco = [underdog ? 'underline' : null, strike ? 'line-through' : null].filter(Boolean).join(' ');
-          scoreStyle += `text-decoration:${deco}; text-decoration-thickness:2px; text-underline-offset:3px;`;
+        // Underdog-Marker: einziger mit dieser Tendenz → Ergebnis-Tipp unterstreichen (Textfarbe).
+        if (locked && isRareTendency(bet, udCounts)) {
+          scoreStyle += 'text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:3px;';
         }
         scoreBadge = `<span style="${scoreStyle}">${bh}:${ba}</span>`;
       }
