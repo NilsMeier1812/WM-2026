@@ -1064,6 +1064,13 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
   const myBetsMap = leftMap;
   const otherBetsMap = rightMap;
 
+  // Underdog-Counts pro Spiel über ALLE Spieler (für Rarität/Unterstreichung).
+  const udCountsFor = (m) => {
+    if (S.overviewAllBets && S.overviewAllBets.length)
+      return buildUnderdogCounts(S.overviewAllBets.filter(b => b.match_id === m.id));
+    return (S.liveUdMap && S.liveUdMap[m.id]) || null;
+  };
+
   // Alle gestarteten Spiele — auch wenn einer oder beide nicht getippt haben (nicht getippt = 0 Punkte)
   const comparedMatches = S.matches
     .filter(m => isLocked(m))
@@ -1139,8 +1146,10 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
         const myPts = calcBetPoints(m, myBet);
         const otherPts = calcBetPoints(m, otherBet);
         const fin = isFinished(m.status);
-        const fh = getFinalScore(m, 'home') ?? '-';
-        const fa = getFinalScore(m, 'away') ?? '-';
+        const rawH = getFinalScore(m, 'home'), rawA = getFinalScore(m, 'away'); // numerisch (oder null)
+        const fh = rawH ?? '-';
+        const fa = rawA ?? '-';
+        const udc = udCountsFor(m);
 
         const cardBg = myPts > otherPts ? 'rgba(37,99,235,.05)' 
                     : otherPts > myPts ? 'rgba(217,55,42,.05)' 
@@ -1174,16 +1183,34 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
           let col = 'var(--text-2)';
           if (label === '–') col = 'var(--text-3)';
           else if (scorerResolved(m)) col = scorerHit(m, bet) ? 'var(--green)' : 'var(--red)';
-          return `<span style="color:${col}; font-weight:${label==='–'?'400':'700'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">⚽ ${label}</span>`;
+          // Underdog-Marker: einziger mit diesem Torschützen → unterstreichen (Textfarbe).
+          const ul = (label !== '–' && isRareScorer(bet, udc)) ? ' border-bottom:2px solid currentColor;' : '';
+          return `<span style="color:${col}; font-weight:${label==='–'?'400':'700'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;${ul}">⚽ ${label}</span>`;
         };
 
         const playerCell = (name, nameColor, bet, pts) => {
-          const scoreStr = bet ? `${bet.home_score ?? '-'}:${bet.away_score ?? '-'}` : '–:–';
+          const hasHome = bet && bet.home_score !== null && bet.away_score !== null;
+          const scoreStr = hasHome ? `${bet.home_score}:${bet.away_score}` : '–:–';
+          // Reine Textfarbe nach Punktstufe – analog zur Übersicht (kein Hintergrund, kein Durchstreichen).
+          let scoreStyle = 'font-weight:600;';
+          if (hasHome) {
+            const bh = bet.home_score, ba = bet.away_score;
+            if (rawH !== null && rawA !== null) {
+              if (bh === rawH && ba === rawA) scoreStyle += 'color:var(--score-exact);';                                  // exakt (3 P.) – dunkelgrün
+              else if (bh - ba === rawH - rawA) scoreStyle += 'color:var(--score-diff);';                                 // Tordifferenz (2 P.) – hellgrün
+              else if ((bh>ba && rawH>rawA)||(bh<ba && rawH<rawA)||(bh===ba && rawH===rawA)) scoreStyle += 'color:var(--score-tend);'; // Tendenz (1 P.) – gelb
+              else scoreStyle += 'color:var(--score-wrong);';                                                             // falsch (0 P.) – rot
+            }
+            // Underdog-Marker: einziger mit dieser Tendenz → Ergebnis-Tipp unterstreichen.
+            if (isRareTendency(bet, udc)) scoreStyle += 'text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:3px;';
+          } else {
+            scoreStyle += 'color:var(--text-3);';
+          }
           return `
           <div class="${bet && bet.is_boosted === true ? 'boosted-bg' : ''}" style="display:flex; flex-direction:column; gap:4px; padding:7px 10px; background:#fff; border-radius:7px; overflow:hidden;">
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
               <span style="color:${nameColor}; font-weight:700; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60px;">${name}</span>
-              <span class="mono" style="font-weight:600;${bet ? '' : ' color:var(--text-3);'}">${scoreStr}</span>
+              <span class="mono" style="${scoreStyle}">${scoreStr}</span>
               <span class="syne" style="font-weight:800; color:${pts > 0 ? nameColor : 'var(--text-3)'};">${pts > 0 ? '+' + pts : '0'}</span>
             </div>
             <div style="display:flex; align-items:center; font-size:10.5px; border-top:1px solid var(--border-light); padding-top:4px;">
@@ -3095,8 +3122,19 @@ async function loadH2HInline() {
 
   container.innerHTML = `<div style="display:flex; justify-content:center; padding:60px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
 
-  const leftMap = await getH2HBetsMap(S.h2hLeft);
-  const rightMap = await getH2HBetsMap(S.h2hRight);
+  // overviewAllBets (alle Tipps aller Spieler) sicherstellen – Basis für die
+  // Underdog-Rarität pro Spiel (H2H selbst kennt nur die zwei Spieler).
+  const ensureAllBets = async () => {
+    if (S.overviewAllBets !== null) return;
+    const { data } = await db.from('bets')
+      .select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)')
+      .in('match_id', S.matches.map(m => m.id));
+    if (data) S.overviewAllBets = data;
+  };
+
+  const [leftMap, rightMap] = await Promise.all([
+    getH2HBetsMap(S.h2hLeft), getH2HBetsMap(S.h2hRight), ensureAllBets()
+  ]);
   if (leftMap === null || rightMap === null) {
     container.innerHTML = `<p style="color:var(--red); padding:24px; text-align:center; font-size:13px;">Tipps konnten nicht geladen werden.</p>`;
     return;
