@@ -31,7 +31,6 @@
       --green-bg:     #D1FAE5;
       --blue:         #2563EB;
       --blue-bg:      #DBEAFE;
-      --underdog:     #7C3AED;
       --text:         #0C1828;
       --text-2:       #6C7480;
       --text-3:       #9CA3AF;
@@ -2763,14 +2762,12 @@ function buildOverviewMatchCardHTML(m, matchBets) {
           else { scoreStyle += 'color:var(--text-3); font-weight:500;'; strike = true; }
         }
         // Underdog-Marker: einziger mit dieser Tendenz → Ergebnis-Tipp unterstreichen.
-        // Eigene, immer sichtbare Markierungsfarbe (--underdog): currentColor war
-        // auf grauen "falsch"-Tipps und auf den farbigen exakt/Tendenz-Badges
-        // (grün auf grün, gold auf gelb) unsichtbar.
+        // Unterstreichung in Textfarbe (currentColor), direkt am Text statt am
+        // Box-Rand, damit sie auch auf den farbigen exakt/Tendenz-Badges greift.
         const underdog = locked && isRareTendency(bet, udCounts);
         if (strike || underdog) {
           const deco = [underdog ? 'underline' : null, strike ? 'line-through' : null].filter(Boolean).join(' ');
           scoreStyle += `text-decoration:${deco}; text-decoration-thickness:2px; text-underline-offset:3px;`;
-          if (underdog) scoreStyle += 'text-decoration-color:var(--underdog);';
         }
         scoreBadge = `<span style="${scoreStyle}">${bh}:${ba}</span>`;
       }
@@ -2798,9 +2795,8 @@ function buildOverviewMatchCardHTML(m, matchBets) {
         } else {
           scorerStyle += 'color:var(--text-2);';
         }
-        // Underdog-Marker: einziger mit diesem Torschützen → unterstreichen.
-        // Gleiche, immer sichtbare Markierungsfarbe wie beim Ergebnis-Tipp.
-        if (locked && isRareScorer(bet, udCounts)) scorerStyle += 'border-bottom:2px solid var(--underdog);';
+        // Underdog-Marker: einziger mit diesem Torschützen → unterstreichen (Textfarbe).
+        if (locked && isRareScorer(bet, udCounts)) scorerStyle += 'border-bottom:2px solid currentColor;';
         scorerBadge = `<span style="${scorerStyle}">${sName}</span>`;
       }
     } else {
