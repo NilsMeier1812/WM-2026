@@ -629,6 +629,8 @@ const S = {
   expandedMatches: new Set(), // Speichert aufgeklappte Übersicht-Spiele (überlebt Re-Render)
   smartActionMatch: null, // Aktuelles Ziel für Smart Action Bar
   overviewAllBets: null, // Cache für ALLE Übersicht-Wetten (phasenübergreifend)
+  liveBets: [],          // Tipps aller User für laufende Spiele (für Live-Punkte)
+  liveUdMap: {},         // matchId -> Underdog-Counts (Fallback für calcBetPoints, nur laufende Spiele)
   tabelleSubView: 'tabelle',  // 'tabelle' | 'diagramm' | 'h2h'
   tabelleFilter: 'total',     // gemerkter Filter
   h2hLeft: null,               // user_id linke Seite (Standard: man selbst)
@@ -819,14 +821,15 @@ function getFinalScore(m, type) {
   return null;
 }
 
-function calcBetPoints(m, b) {
+function calcBetPoints(m, b, udCounts=null) {
   if (!m || !b) return 0;
   if (!isLocked(m)) return 0;
-  
+
+  // Beendete Spiele: points_awarded enthält den Underdog-Bonus bereits (Backend).
   if (isFinished(m.status) && b.points_awarded !== null && b.points_awarded !== undefined) {
     return Number(b.points_awarded);
   }
-  
+
   const mh = getFinalScore(m,'home'), ma = getFinalScore(m,'away');
   if (mh===null || ma===null) return 0;
   const bh=b.home_score, ba=b.away_score;
@@ -834,13 +837,23 @@ function calcBetPoints(m, b) {
   if (mh===bh && ma===ba) pts+=3;
   else if (mh-ma===bh-ba) pts+=2;
   else if ((mh>ma&&bh>ba)||(mh<ma&&bh<ba)) pts+=1;
-  
+
   if (m.is_goalless === false && m.first_goalscorer_id && b.first_goalscorer_id===m.first_goalscorer_id) {
     pts+=1;
   } else if (m.is_goalless === true && b.is_goalless === true) {
     pts+=1;
   }
-  
+
+  // Underdog-Boni (live berechnet): je +1, wenn man der einzige korrekte Tipper ist.
+  // Zählen zur Basis und werden daher vom Boost mitverdoppelt.
+  // Fallback: für laufende Spiele liegen die Counts global in S.liveUdMap.
+  const counts = udCounts || (S.liveUdMap && S.liveUdMap[m.id]) || null;
+  if (counts) {
+    const bTend = udBetTendency(b), mTend = Math.sign(mh - ma);
+    if (bTend !== null && bTend === mTend && counts.tend[bTend] === 1) pts += 1;
+    if (scorerHit(m, b) && counts.scorer[udScorerKey(b)] === 1) pts += 1;
+  }
+
   if (b.is_boosted) pts *= 2;
   return pts;
 }
@@ -855,6 +868,54 @@ function scorerHit(m, b) {
   if (m.is_goalless === false && m.first_goalscorer_id && b.first_goalscorer_id === m.first_goalscorer_id) return true;
   if (m.is_goalless === true && b.is_goalless === true) return true;
   return false;
+}
+
+// --- Underdog-Tipps -------------------------------------------------------
+// Ein Underdog-Bonus (+1) gibt es, wenn man der EINZIGE korrekte Tipper eines
+// Spiels ist – getrennt für Tendenz (Sieg/Remis/Niederlage) und Torschütze.
+// Die Unterstreichung in der Übersicht markiert die Seltenheit (einziger mit
+// dieser Tendenz / diesem Schützen), unabhängig davon ob der Tipp korrekt ist.
+
+// Tendenz eines Tipps: 1 = Heimsieg, 0 = Remis, -1 = Auswärtssieg, null wenn unvollständig.
+function udBetTendency(b) {
+  if (!b || b.home_score === null || b.home_score === undefined ||
+      b.away_score === null || b.away_score === undefined) return null;
+  return Math.sign(b.home_score - b.away_score);
+}
+// Torschützen-Schlüssel: Spieler-ID (String), 'goalless', oder null.
+function udScorerKey(b) {
+  if (!b) return null;
+  if (b.is_goalless === true) return 'goalless';
+  if (b.first_goalscorer_id !== null && b.first_goalscorer_id !== undefined) return String(b.first_goalscorer_id);
+  return null;
+}
+// Zählt für EIN Spiel, wie viele Tipps auf jede Tendenz bzw. jeden Schützen entfallen.
+function buildUnderdogCounts(bets) {
+  const tend = {}, scorer = {};
+  (bets || []).forEach(b => {
+    const t = udBetTendency(b); if (t !== null) tend[t] = (tend[t] || 0) + 1;
+    const s = udScorerKey(b);   if (s !== null) scorer[s] = (scorer[s] || 0) + 1;
+  });
+  return { tend, scorer };
+}
+// Baut aus einem spielübergreifenden Bet-Array eine Map matchId -> Counts.
+function buildUnderdogMap(bets) {
+  const byMatch = {};
+  (bets || []).forEach(b => { (byMatch[b.match_id] = byMatch[b.match_id] || []).push(b); });
+  const map = {};
+  Object.keys(byMatch).forEach(mid => { map[mid] = buildUnderdogCounts(byMatch[mid]); });
+  return map;
+}
+// Seltenheits-Marker (outcome-unabhängig): bin ich der einzige mit dieser Tendenz / diesem Schützen?
+function isRareTendency(b, counts) {
+  if (!counts) return false;
+  const t = udBetTendency(b);
+  return t !== null && counts.tend[t] === 1;
+}
+function isRareScorer(b, counts) {
+  if (!counts) return false;
+  const s = udScorerKey(b);
+  return s !== null && counts.scorer[s] === 1;
 }
 
 function calculateStreaks() {
@@ -2624,7 +2685,9 @@ function buildOverviewMatchCardHTML(m, matchBets) {
     ext = ' n.V.';
   }
 
-  matchBets.forEach(b => b._pts = calcBetPoints(m, b));
+  // Underdog-Counts dieses Spiels (alle Tipps) – für Live-Bonus und Markierung.
+  const udCounts = locked ? buildUnderdogCounts(matchBets) : null;
+  matchBets.forEach(b => b._pts = calcBetPoints(m, b, udCounts));
 
   let iGotScorer = false, someoneGotScorer = false;
   const hasScorerResult = (locked && m.first_goalscorer) || (locked && isFinished(m.status) && m.is_goalless === true);
@@ -2697,6 +2760,8 @@ function buildOverviewMatchCardHTML(m, matchBets) {
           else if (isTrend) scoreStyle += 'background:#FEF3C7; color:var(--accent-text); padding:2px 6px; border-radius:6px;';
           else scoreStyle += 'color:var(--text-3); text-decoration:line-through; font-weight:500;';
         }
+        // Underdog-Marker (temporär): einziger mit dieser Tendenz → unterstreichen.
+        if (locked && isRareTendency(bet, udCounts)) scoreStyle += 'border-bottom:2px solid currentColor;';
         scoreBadge = `<span style="${scoreStyle}">${bh}:${ba}</span>`;
       }
       if (hasBet) {
@@ -2723,6 +2788,8 @@ function buildOverviewMatchCardHTML(m, matchBets) {
         } else {
           scorerStyle += 'color:var(--text-2);';
         }
+        // Underdog-Marker (temporär): einziger mit diesem Torschützen → unterstreichen.
+        if (locked && isRareScorer(bet, udCounts)) scorerStyle += 'border-bottom:2px solid currentColor;';
         scorerBadge = `<span style="${scorerStyle}">${sName}</span>`;
       }
     } else {
@@ -4001,11 +4068,15 @@ function patchBettingMatchCard(matchId) {
 // Tipps sind ab Anpfiff gesperrt → ändern sich während des Spiels nicht, nur die Spielstände.
 async function refreshLiveBets() {
   const liveMatches = S.matches.filter(m => isLocked(m) && !isFinished(m.status));
-  if (liveMatches.length === 0) { S.liveBets = []; return; }
+  if (liveMatches.length === 0) { S.liveBets = []; S.liveUdMap = {}; return; }
   const { data, error } = await db.from('bets')
     .select('user_id,match_id,home_score,away_score,first_goalscorer_id,is_goalless,is_boosted,points_awarded')
     .in('match_id', liveMatches.map(m => m.id));
-  if (!error) S.liveBets = data || [];
+  if (!error) {
+    S.liveBets = data || [];
+    // Underdog-Counts pro laufendem Spiel cachen → Fallback für calcBetPoints.
+    S.liveUdMap = buildUnderdogMap(S.liveBets);
+  }
 }
 
 function recomputeLiveLeaderboard() {
