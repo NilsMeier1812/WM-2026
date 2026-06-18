@@ -2752,7 +2752,7 @@ function buildOverviewMatchCardHTML(m, matchBets) {
     if (locked || isMe) {
       if (hasHome) {
         let bh = bet.home_score, ba = bet.away_score;
-        let scoreStyle = 'font-weight:800; font-family:"DM Mono", monospace; font-size:12px; display:inline-block; text-align:center; min-width:32px;';
+        let scoreStyle = "font-weight:800; font-family:'DM Mono', monospace; font-size:12px; display:inline-block; text-align:center; min-width:32px;";
         let strike = false;
         if (locked && fnH !== null) {
           const isExact = (bh === fnH && ba === fnA);
