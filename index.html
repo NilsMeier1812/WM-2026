@@ -1080,6 +1080,9 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
   let myWins = 0, otherWins = 0;
   let myScorer = 0, otherScorer = 0;
   let myExact = 0, otherExact = 0;
+  // Underdog-Tipps: Versuche (seltener Tipp über alle Spieler) + tatsächlich korrekte (= Bonus)
+  let myUdResAtt = 0, myUdResOk = 0, otherUdResAtt = 0, otherUdResOk = 0;
+  let myUdScoAtt = 0, myUdScoOk = 0, otherUdScoAtt = 0, otherUdScoOk = 0;
 
   comparedMatches.forEach(m => {
     const myBet = myBetsMap[m.id];
@@ -1099,6 +1102,15 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
       if (myBet && myBet.home_score === fh && myBet.away_score === fa) myExact++;
       if (otherBet && otherBet.home_score === fh && otherBet.away_score === fa) otherExact++;
     }
+
+    // Underdog-Tipps: Versuch = einziger mit dieser Tendenz / diesem Schützen (über ALLE Spieler).
+    // Korrekt = seltener Tipp + tatsächlich richtig → genau das ergibt den Underdog-Bonus (+1).
+    const udc = udCountsFor(m);
+    const resTend = (fh !== null && fa !== null) ? Math.sign(fh - fa) : null;
+    if (isRareTendency(myBet, udc))    { myUdResAtt++;    if (resTend !== null && udBetTendency(myBet) === resTend)    myUdResOk++; }
+    if (isRareTendency(otherBet, udc)) { otherUdResAtt++; if (resTend !== null && udBetTendency(otherBet) === resTend) otherUdResOk++; }
+    if (isRareScorer(myBet, udc))    { myUdScoAtt++;    if (scorerHit(m, myBet))    myUdScoOk++; }
+    if (isRareScorer(otherBet, udc)) { otherUdScoAtt++; if (scorerHit(m, otherBet)) otherUdScoOk++; }
   });
 
   // Serien, Pechsträhnen & Boost-Punkte pro Spieler (über alle eigenen beendeten Tipps)
@@ -1279,6 +1291,8 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
       ${statRow('Bessere Tipps', myWins, otherWins)}
       ${statRow('Exakte Treffer', myExact, otherExact)}
       ${statRow('Korrekter Torschütze', myScorer, otherScorer)}
+      ${statRow('Underdog Ergebnisse', dual(myUdResOk, myUdResAtt), dual(otherUdResOk, otherUdResAtt), { sub: 'korrekt / insgesamt', myCmp: myUdResOk, otherCmp: otherUdResOk })}
+      ${statRow('Underdog Torschütze', dual(myUdScoOk, myUdScoAtt), dual(otherUdScoOk, otherUdScoAtt), { sub: 'korrekt / insgesamt', myCmp: myUdScoOk, otherCmp: otherUdScoOk })}
       ${statRow('Punkte durch Boosts', myExtra.boostPts, otherExtra.boostPts)}
       ${statRow('Serie', dual(myExtra.cur, myExtra.best), dual(otherExtra.cur, otherExtra.best), { sub: 'aktuell / längste', myCmp: myExtra.best, otherCmp: otherExtra.best })}
       ${statRow('Pechsträhne', dual(myExtra.curWorst, myExtra.worst), dual(otherExtra.curWorst, otherExtra.worst), { sub: 'aktuell / längste', neutral: true, last: true })}
