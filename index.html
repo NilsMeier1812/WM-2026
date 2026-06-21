@@ -2745,13 +2745,15 @@ async function renderBonusOverview(cards) {
       return { player, bets, computedPoints: hits*pointsPerHit, hasAnyBet: bets.some(x=>x.bet) };
     });
 
+    // Solange es in dieser Gruppe noch keine Punkte gibt (nicht ausgewertet),
+    // alphabetisch sortieren; sobald Punkte vergeben sind, nach Punkten (Tie: Name).
+    const anyPoints = playerData.some(d => d.computedPoints > 0);
+    const byName = (a,b) => (a.player.display_name||'').localeCompare(b.player.display_name||'');
     playerData.sort((a,b)=>{
       if (a.player.id===S.user.id) return -1;
       if (b.player.id===S.user.id) return 1;
-      if (locked) return b.computedPoints-a.computedPoints;
-      if (a.hasAnyBet&&!b.hasAnyBet) return -1;
-      if (!a.hasAnyBet&&b.hasAnyBet) return 1;
-      return (a.player.display_name||'').localeCompare(b.player.display_name||'');
+      if (!anyPoints) return byName(a,b);
+      return (b.computedPoints-a.computedPoints) || byName(a,b);
     });
 
     const rows=playerData.map(({player,bets,computedPoints,hasAnyBet})=>{
