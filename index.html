@@ -809,14 +809,15 @@ async function viewExtraQuestions(host){
   const { data:ebs } = await pagedSelect('extra_bets','question_id');
   const cnt={}; (ebs||[]).forEach(e=>cnt[e.question_id]=(cnt[e.question_id]||0)+1);
   wrap.innerHTML = `<div class="tbl-wrap fade"><table>
-    <thead><tr><th>ID</th><th>Frage</th><th>Typ</th><th class="num">Pkt</th><th>Deadline</th><th>Richtige Antw.</th><th class="num">Tipps</th><th></th></tr></thead>
+    <thead><tr><th>ID</th><th>Frage</th><th>Typ</th><th class="num">Pkt</th><th>Deadline</th><th>Spiel</th><th>Richtige Antw.</th><th class="num">Tipps</th><th></th></tr></thead>
     <tbody>${(qs||[]).map(q=>`<tr>
       <td class="mut mono">${q.id}</td><td style="white-space:normal;max-width:280px">${esc(q.question_text)}</td>
       <td><span class="badge b-gray">${esc(q.answer_type)}</span></td><td class="num">${q.points}</td>
       <td class="mut">${fmtDT(q.deadline)} ${new Date(q.deadline)<now()?'<span class="badge b-red">zu</span>':'<span class="badge b-green">offen</span>'}</td>
+      <td class="mut" style="white-space:normal;max-width:180px">${q.match_id?matchShort(matchById(q.match_id)):'<span class="mut">–</span>'}</td>
       <td>${q.correct_answer?esc(q.correct_answer):'<span class="mut">–</span>'}</td>
       <td class="num">${cnt[q.id]||0}</td>
-      <td><button class="btn sm" onclick='editExtraQ(${q.id})'>✎</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty">Keine Fragen</td></tr>'}</tbody></table></div>`;
+      <td><button class="btn sm" onclick='editExtraQ(${q.id})'>✎</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">Keine Fragen</td></tr>'}</tbody></table></div>`;
 }
 async function editExtraQ(id){
   let q={question_text:'',points:5,answer_type:'text',correct_answer:'',deadline:''};
@@ -828,10 +829,12 @@ async function editExtraQ(id){
       <div><label class="fld">Antworttyp</label><select id="q-type">${['text','number','boolean','player','team'].map(t=>`<option ${q.answer_type===t?'selected':''}>${t}</option>`).join('')}${['text','number','boolean','player','team'].includes(q.answer_type)?'':`<option selected>${esc(q.answer_type)}</option>`}</select></div>
     </div>
     <label class="fld" style="margin-top:10px">Deadline</label><input id="q-dl" type="datetime-local" value="${toLocalInput(q.deadline)}" style="margin-bottom:10px">
-    <label class="fld">Richtige Antwort (zum Auswerten)</label><input id="q-ans" value="${esc(q.correct_answer||'')}">`,
+    <label class="fld">Richtige Antwort (zum Auswerten)</label><input id="q-ans" value="${esc(q.correct_answer||'')}" style="margin-bottom:10px">
+    <label class="fld">Verknüpftes Spiel · Auswertungszeitpunkt</label><select id="q-match">${matchOptionsHtml(q.match_id)}</select>`,
     async()=>{
       const patch={question_text:$('q-text').value,points:num($('q-pts').value),answer_type:$('q-type').value,
-        correct_answer:$('q-ans').value||null, deadline: $('q-dl').value? new Date($('q-dl').value).toISOString():q.deadline};
+        correct_answer:$('q-ans').value||null, match_id:num($('q-match').value),
+        deadline: $('q-dl').value? new Date($('q-dl').value).toISOString():q.deadline};
       if(!patch.question_text||!patch.deadline){toast('Text & Deadline nötig','err');return false;}
       const res = id? await adminWrite('extra_questions','update',{ id, values:patch })
                     : await adminWrite('extra_questions','insert',{ values:patch });
@@ -878,8 +881,26 @@ async function viewResults(host){
 }
 function viewResultsReload(){ A._resQs=null; renderView(); }
 
+// Kompakte Spiel-Beschriftung & Auswahl für die Verknüpfung (Auswertungszeitpunkt)
+function matchShort(m){
+  if(!m) return '–';
+  const h=m.home_team?esc(m.home_team.name):('#'+m.home_team_id);
+  const a=m.away_team?esc(m.away_team.name):('#'+m.away_team_id);
+  return `${fmtD(m.kickoff_time)} · ${h} – ${a}`;
+}
+function matchById(id){ return id==null?null:(A.cache.matches||[]).find(m=>String(m.id)===String(id))||null; }
+function matchOptionsHtml(selectedId){
+  const sel=String(selectedId==null?'':selectedId);
+  const byPhase={}, order=[];
+  (A.cache.matches||[]).forEach(m=>{ const ph=m.phase||'–'; if(!byPhase[ph]){byPhase[ph]=[];order.push(ph);} byPhase[ph].push(m); });
+  const opt=m=>`<option value="${m.id}" ${sel===String(m.id)?'selected':''}>${matchShort(m)}</option>`;
+  return `<option value="" ${sel===''?'selected':''}>– kein Spiel –</option>`
+    + order.map(ph=>`<optgroup label="${esc(ph)}">${byPhase[ph].map(opt).join('')}</optgroup>`).join('');
+}
+
 function resultCard(q, answeredCount){
   const past=new Date(q.deadline)<now(), has=!!q.correct_answer;
+  const linked=matchById(q.match_id);
   const state = has ? '<span class="badge b-green">✓ gesetzt</span>'
               : past ? '<span class="badge b-red">offen – fällig</span>'
               : '<span class="badge b-blue">offen</span>';
@@ -889,11 +910,19 @@ function resultCard(q, answeredCount){
         <div class="syne" style="font-weight:800;font-size:15px">${esc(q.question_text)}</div>
         <div class="mut" style="font-size:11.5px;margin-top:4px">
           <span class="badge b-gray">${esc(q.answer_type)}</span> · ${q.points} Pkt · Frist ${fmtDT(q.deadline)} · ${answeredCount} Tipps
+          · ${linked?`<span class="badge b-blue">🔗 ${matchShort(linked)}</span>`:'<span class="badge b-gray">kein Spiel verknüpft</span>'}
         </div>
       </div>${state}
     </div>
-    <div class="row" style="align-items:flex-end;gap:8px">
-      <div style="flex:1;min-width:200px">${bonusInput(q)}</div>
+    <div class="row" style="align-items:flex-end;gap:8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <label class="fld">Richtige Antwort</label>
+        ${bonusInput(q)}
+      </div>
+      <div style="flex:1;min-width:200px">
+        <label class="fld">Verknüpftes Spiel · Auswertungszeitpunkt</label>
+        <select id="res-match-${q.id}">${matchOptionsHtml(q.match_id)}</select>
+      </div>
       <button class="btn primary" id="res-save-${q.id}" onclick="saveBonusResult(${q.id})">Speichern</button>
       ${has?`<button class="btn ghost sm" id="res-clr-${q.id}" onclick="saveBonusResult(${q.id},true)" title="Ergebnis löschen">✕</button>`:''}
     </div>
@@ -932,11 +961,15 @@ window.bonusFillPlayers=function(qId, teamId, selectName){
 };
 window.saveBonusResult=async function(qId, clear){
   const v = clear ? '' : (($('res-'+qId)?.value)||'').trim();
+  const matchSel=$('res-match-'+qId);
+  const matchId = matchSel ? num(matchSel.value) : undefined;   // undefined = Select nicht im DOM → nicht ändern
+  const values = { correct_answer: v||null };
+  if(matchId!==undefined) values.match_id = matchId;
   const btn=$('res-save-'+qId); if(btn){ btn.disabled=true; btn.textContent='…'; }
-  const { error } = await adminWrite('extra_questions','update',{ id:qId, values:{ correct_answer: v||null } });
+  const { error } = await adminWrite('extra_questions','update',{ id:qId, values });
   if(error){ toast(error.message,'err'); if(btn){ btn.disabled=false; btn.textContent='Speichern'; } return; }
-  const q=(A._resQs||[]).find(x=>x.id===qId); if(q) q.correct_answer=v||null;
-  toast(v?'Ergebnis gespeichert':'Ergebnis gelöscht'); renderView();
+  const q=(A._resQs||[]).find(x=>x.id===qId); if(q){ q.correct_answer=v||null; if(matchId!==undefined) q.match_id=matchId; }
+  toast(clear?'Ergebnis gelöscht':(v?'Gespeichert':'Verknüpfung gespeichert')); renderView();
 };
 
 // ════════════════════════════════════════════
