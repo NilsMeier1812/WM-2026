@@ -628,6 +628,8 @@ const S = {
   bettingPhase: null, overviewPhase: null,
   pendingScorer: {}, playerCache: {},
   authMode: 'login', allBetsCache: null,
+  allExtraBetsCache: null,       // Cache für ALLE Extra-/Bonus-Tipps (für Diagramm/Tabelle/H2H)
+  allExtraQuestionsCache: null,  // Cache für ALLE Bonusfragen (match_id-Verankerung, Frist)
   overviewMode: 'full',
   collapsedDates: {}, // Speichert Einklapp-Zustand für Daten
   expandedMatches: new Set(), // Speichert aufgeklappte Übersicht-Spiele (überlebt Re-Render)
@@ -860,6 +862,56 @@ function calcBetPoints(m, b, udCounts=null) {
 
   if (b.is_boosted) pts *= 2;
   return pts;
+}
+
+// ── Bonus-/Extra-Punkte (zeitlich über das verknüpfte Spiel verankert) ───────
+// extra_questions.match_id verankert den Auswertungszeitpunkt einer Bonusfrage
+// an einem Spiel (z. B. Torschützenkönig → Finale). Fehlt die Verknüpfung,
+// dient die Frist (deadline) als zeitlicher Anker. Punktequelle ist immer
+// extra_bets.points_awarded – identisch zur Gesamtwertung (user_rankings).
+async function ensureExtraCaches() {
+  if (!S.allExtraBetsCache) {
+    const { data } = await db.from('extra_bets').select('user_id,question_id,points_awarded');
+    S.allExtraBetsCache = data || [];
+  }
+  if (!S.allExtraQuestionsCache) {
+    const { data } = await db.from('extra_questions').select('id,match_id,deadline');
+    S.allExtraQuestionsCache = data || [];
+  }
+}
+
+// Bonus-Punkte je Spieler (Summe der ausgewerteten Extra-Tipps).
+function bonusPointsByUser() {
+  const out = {};
+  (S.allExtraBetsCache || []).forEach(eb => {
+    if (eb.points_awarded === null || eb.points_awarded === undefined) return;
+    out[eb.user_id] = (out[eb.user_id] || 0) + Number(eb.points_awarded);
+  });
+  return out;
+}
+
+// Ausgewertete Extra-Punkte als zeitlich verankerte Ereignisse.
+// Liefert { userId, pts, time:Date|null, matchId:number|null, phase:string|null }.
+function extraPointEvents() {
+  const matchById = new Map(S.matches.map(m => [m.id, m]));
+  const qById = new Map((S.allExtraQuestionsCache || []).map(q => [q.id, q]));
+  const events = [];
+  (S.allExtraBetsCache || []).forEach(eb => {
+    if (eb.points_awarded === null || eb.points_awarded === undefined) return;
+    const pts = Number(eb.points_awarded);
+    if (!pts) return;
+    const q = qById.get(eb.question_id);
+    if (!q) return;
+    const linked = q.match_id ? matchById.get(q.match_id) : null;
+    const time = linked ? new Date(linked.kickoff_time)
+               : (q.deadline ? new Date(q.deadline) : null);
+    events.push({
+      userId: eb.user_id, pts, time,
+      matchId: linked ? linked.id : null,
+      phase: linked ? linked.phase : null
+    });
+  });
+  return events;
 }
 
 // Torschützen-Outcome bekannt? (Tor gefallen & Schütze gesetzt, oder torlos beendet)
@@ -1129,6 +1181,11 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
   const myExtra = computeExtra(m => myBetsMap[m.id]);
   const otherExtra = computeExtra(m => otherBetsMap[m.id]);
 
+  // Bonus-Punkte (ausgewertete Extra-/Bonusfragen) – konsistent zur Gesamtwertung
+  const bonusBy = bonusPointsByUser();
+  const myBonus = bonusBy[leftId] || 0;
+  const otherBonus = bonusBy[rightId] || 0;
+
   // Hilfsfunktion für Stat-Zeilen — flach, optional Sub-Label & eigener Vergleichswert, neutral möglich
   const statRow = (label, myVal, otherVal, opts = {}) => {
     const { sub = '', myCmp = myVal, otherCmp = otherVal, neutral = false, last = false } = opts;
@@ -1293,6 +1350,7 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
       ${statRow('Korrekter Torschütze', myScorer, otherScorer)}
       ${statRow('Underdog Ergebnisse', dual(myUdResOk, myUdResAtt), dual(otherUdResOk, otherUdResAtt), { sub: 'korrekt / insgesamt', myCmp: myUdResOk, otherCmp: otherUdResOk })}
       ${statRow('Underdog Torschütze', dual(myUdScoOk, myUdScoAtt), dual(otherUdScoOk, otherUdScoAtt), { sub: 'korrekt / insgesamt', myCmp: myUdScoOk, otherCmp: otherUdScoOk })}
+      ${statRow('Bonus Punkte', myBonus, otherBonus)}
       ${statRow('Punkte durch Boosts', myExtra.boostPts, otherExtra.boostPts)}
       ${statRow('Serie', dual(myExtra.cur, myExtra.best), dual(otherExtra.cur, otherExtra.best), { sub: 'aktuell / längste', myCmp: myExtra.best, otherCmp: otherExtra.best })}
       ${statRow('Pechsträhne', dual(myExtra.curWorst, myExtra.worst), dual(otherExtra.curWorst, otherExtra.worst), { sub: 'aktuell / längste', neutral: true, last: true })}
@@ -1464,6 +1522,8 @@ async function triggerSoftRefresh() {
 
 async function fetchData(showLoadingState=true, silent = false) {
   S.allBetsCache = null;
+  S.allExtraBetsCache = null;
+  S.allExtraQuestionsCache = null;
   // S.overviewAllBets NICHT hier leeren – sonst rendert der Silent-Patch der Übersicht
   // mit leerem Cache (alle Tipps verschwinden). Wird unten gezielt frisch geladen.
 
@@ -3243,7 +3303,7 @@ async function loadH2HInline() {
   };
 
   const [leftMap, rightMap] = await Promise.all([
-    getH2HBetsMap(S.h2hLeft), getH2HBetsMap(S.h2hRight), ensureAllBets()
+    getH2HBetsMap(S.h2hLeft), getH2HBetsMap(S.h2hRight), ensureAllBets(), ensureExtraCaches()
   ]);
   if (leftMap === null || rightMap === null) {
     container.innerHTML = `<p style="color:var(--red); padding:24px; text-align:center; font-size:13px;">Tipps konnten nicht geladen werden.</p>`;
@@ -3284,6 +3344,9 @@ async function loadTabelleData(filterType) {
     S.allBetsCache=data||[];
   }
 
+  // Phasen-Stand: Bonus-Punkte des verknüpften Spiels zählen zur jeweiligen Phase mit
+  if (filterType.startsWith('phase_')) await ensureExtraCaches();
+
   let ranked=[];
   if (filterType==='total') {
     ranked=S.liveLeaderboard.map(p=>({id:p.id,display_name:p.display_name,value:p.total_points??0}));
@@ -3317,6 +3380,12 @@ async function loadTabelleData(filterType) {
         if (m.phase===filterType.replace('phase_','')) scores[b.user_id].val+=pts;
       }
     });
+    if (filterType.startsWith('phase_')) {
+      const ph=filterType.replace('phase_','');
+      extraPointEvents().forEach(ev=>{
+        if (ev.phase===ph && scores[ev.userId]) scores[ev.userId].val+=ev.pts;
+      });
+    }
     ranked=Object.keys(scores).map(id=>({id,display_name:scores[id].name,value:scores[id].val}));
     ranked.sort((a,b)=>b.value-a.value);
   }
@@ -3366,6 +3435,10 @@ async function renderPointsChart(container) {
     S.allBetsCache = data || [];
   }
 
+  // Bonus-/Extra-Punkte mitladen (zeitlich über das verknüpfte Spiel verankert)
+  await ensureExtraCaches();
+  const extraEvents = extraPointEvents();
+
   // 2) Punkte pro Tag aggregieren
   const dayMap = new Map(); // dateKey -> { userId: pointsThatDay }
   S.allBetsCache.forEach(b => {
@@ -3376,6 +3449,14 @@ async function renderPointsChart(container) {
     const day = dayMap.get(dateKey);
     const pts = calcBetPoints(m, b);
     day[b.user_id] = (day[b.user_id] || 0) + pts;
+  });
+  // Bonus-Punkte am Anker-Tag (verknüpftes Spiel bzw. Frist) eintragen
+  extraEvents.forEach(ev => {
+    if (!ev.time) return;
+    const dateKey = ev.time.toISOString().split('T')[0];
+    if (!dayMap.has(dateKey)) dayMap.set(dateKey, {});
+    const day = dayMap.get(dateKey);
+    day[ev.userId] = (day[ev.userId] || 0) + ev.pts;
   });
 
   // 2b) Modi: Ansicht (Punkte- vs. Tabellenverlauf),
@@ -3401,6 +3482,28 @@ async function renderPointsChart(container) {
       if (!matchMap.has(m.id)) matchMap.set(m.id, { kickoff: m.kickoff_time, pts: {} });
       const e = matchMap.get(m.id);
       e.pts[b.user_id] = (e.pts[b.user_id] || 0) + calcBetPoints(m, b);
+    });
+    // Bonus-Punkte dem verknüpften Spiel zuordnen; ohne Verknüpfung dem jüngsten
+    // bereits gespielten Spiel-Intervall vor dem Anker-Zeitpunkt (Frist).
+    const matchById = new Map(S.matches.map(m => [m.id, m]));
+    extraEvents.forEach(ev => {
+      let mid = ev.matchId;
+      if (mid && matchById.has(mid)) {
+        if (!matchMap.has(mid)) matchMap.set(mid, { kickoff: matchById.get(mid).kickoff_time, pts: {} });
+      } else {
+        mid = null;
+        const t = ev.time ? ev.time.getTime() : Infinity;
+        let bestT = -Infinity, firstT = Infinity, firstId = null;
+        matchMap.forEach((e, id) => {
+          const kt = new Date(e.kickoff).getTime();
+          if (kt <= t && kt > bestT) { bestT = kt; mid = id; }
+          if (kt < firstT) { firstT = kt; firstId = id; }
+        });
+        if (mid === null) mid = firstId; // kein vorheriges Spiel → frühestes Intervall
+      }
+      if (mid === null) return;
+      const e = matchMap.get(mid);
+      e.pts[ev.userId] = (e.pts[ev.userId] || 0) + ev.pts;
     });
     intervals = [...matchMap.values()]
       .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff))
