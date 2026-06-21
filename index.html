@@ -867,11 +867,13 @@ function calcBetPoints(m, b, udCounts=null) {
 // ── Bonus-/Extra-Punkte (zeitlich über das verknüpfte Spiel verankert) ───────
 // extra_questions.match_id verankert den Auswertungszeitpunkt einer Bonusfrage
 // an einem Spiel (z. B. Torschützenkönig → Finale). Fehlt die Verknüpfung,
-// dient die Frist (deadline) als zeitlicher Anker. Punktequelle ist immer
-// extra_bets.points_awarded – identisch zur Gesamtwertung (user_rankings).
+// dient die Frist (deadline) als zeitlicher Anker. Punktequelle ist die View
+// extra_bet_scores.points_awarded (berechnet) – identisch zur Gesamtwertung
+// (user_rankings). Fallback auf extra_bets, falls die View noch nicht existiert.
 async function ensureExtraCaches() {
   if (!S.allExtraBetsCache) {
-    const { data } = await db.from('extra_bets').select('user_id,question_id,points_awarded');
+    let { data, error } = await db.from('extra_bet_scores').select('user_id,question_id,points_awarded');
+    if (error) ({ data } = await db.from('extra_bets').select('user_id,question_id,points_awarded'));
     S.allExtraBetsCache = data || [];
   }
   if (!S.allExtraQuestionsCache) {
@@ -2643,15 +2645,19 @@ window.setOverviewPhase = async function(p) {
 }
 
 async function renderBonusOverview(cards) {
-  const [qRes,bRes]=await Promise.all([
+  const [qRes,bRes,sRes]=await Promise.all([
     db.from('extra_questions').select('*').order('id',{ascending:true}),
-    db.from('extra_bets').select('*')
+    db.from('extra_bets').select('*'),
+    db.from('extra_bet_scores').select('id,points_awarded')   // berechnete Punkte (View)
   ]);
   if (qRes.error) { cards.innerHTML=`<p style="color:var(--red);padding:16px;">${qRes.error.message}</p>`; return; }
   const questions=qRes.data||[];
   if (!questions.length) { cards.innerHTML='<p style="text-align:center;color:var(--text-3);padding:40px 0;font-size:13px;">Keine Bonusfragen verfügbar.</p>'; return; }
+  // Berechnete Punkte aus der View über bet.id einspielen (Fallback: vorhandenes points_awarded).
+  const scoreById={};
+  if (!sRes.error) (sRes.data||[]).forEach(s=>{scoreById[s.id]=s.points_awarded;});
   const byQ={};
-  (bRes.data||[]).forEach(b=>{(byQ[b.question_id]??=[]).push(b);});
+  (bRes.data||[]).forEach(b=>{ if (!sRes.error) b.points_awarded=scoreById[b.id]??0; (byQ[b.question_id]??=[]).push(b); });
 
   // Spielernamen der gesetzten Lösungen (correct_player_id) leichtgewichtig per ID nachladen.
   const neededPlayerIds=[...new Set(questions.map(q=>q.correct_player_id).filter(Boolean))];
@@ -3743,9 +3749,10 @@ window.setChartView = function(mode) {
 // ──────────────────────────────────────────
 async function renderBonusInsideBetting(container) {
   container.innerHTML=`<div style="display:flex;justify-content:center;padding:40px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
-  const [qRes,bRes]=await Promise.all([
+  const [qRes,bRes,sRes]=await Promise.all([
     db.from('extra_questions').select('*').order('id',{ascending:true}),
-    db.from('extra_bets').select('*').eq('user_id',S.user.id)
+    db.from('extra_bets').select('*').eq('user_id',S.user.id),
+    db.from('extra_bet_scores').select('id,points_awarded').eq('user_id',S.user.id)  // berechnete Punkte (View)
   ]);
   if (qRes.error) { container.innerHTML=`<p style="color:var(--red);padding:16px;">${qRes.error.message}</p>`; return; }
   const questions=qRes.data||[];
@@ -3753,8 +3760,10 @@ async function renderBonusInsideBetting(container) {
     container.innerHTML=`<div class="card" style="padding:32px 20px;text-align:center;"><p style="color:var(--text-3);font-size:13px;">Derzeit keine Bonusfragen.</p></div>`;
     return;
   }
+  const scoreById={};
+  if (!sRes.error) (sRes.data||[]).forEach(s=>{scoreById[s.id]=s.points_awarded;});
   const betsMap={};
-  (bRes.data||[]).forEach(b=>betsMap[b.question_id]=b);
+  (bRes.data||[]).forEach(b=>{ if (!sRes.error) b.points_awarded=scoreById[b.id]??0; betsMap[b.question_id]=b; });
 
   // Spieler vorladen, falls es eine "players"-Frage gibt.
   // Paginiert laden, da Supabase pro Request serverseitig max. 1000 Zeilen liefert.
@@ -3818,9 +3827,11 @@ async function renderBonusInsideBetting(container) {
         style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;background:${locked?'#F4F0E8':'var(--surface)'};font-size:14px;font-weight:600;outline:none;${locked?'opacity:.6;':''}" />`;
     }
 
+    // "ausgewertet" = Lösung gesetzt (ID-Spalten bzw. Text-Fallback) → dann zählen die berechneten Punkte
+    const evaluated = q.correct_team_id!=null || q.correct_player_id!=null || (q.correct_answer!=null && q.correct_answer!=='');
     const badge=locked
-      ? (ptsAw!==null&&ptsAw!==undefined
-          ? `<span class="pill pill-gold">${ptsAw} Pkt</span>`
+      ? (evaluated
+          ? `<span class="pill pill-gold">${ptsAw??0} Pkt</span>`
           : `<span class="pill pill-done">Abgelaufen</span>`)
       : `<span class="pill" style="background:#F1F0EC;color:var(--text-2);">+${q.points} Pkt</span>`;
 
