@@ -454,9 +454,9 @@ function viewOverview(host){
   if(teamlessMatches) warns.push(`${teamlessMatches} Spiele mit fehlendem Team-Verweis`);
   host.appendChild(el(`<div class="card fade" style="margin-bottom:16px;">
     <div class="syne" style="font-weight:800;margin-bottom:10px;">Health-Check</div>
-    ${warns.length? warns.map(w=>`<div style="padding:6px 0;color:var(--accent)">⚠ ${w}</div>`).join('')
-                  : '<div style="color:var(--green)">✓ Keine Auffälligkeiten</div>'}
+    <div id="health-body"><div class="mut">⏳ Prüfe Tipps auf Duplikate …</div></div>
   </div>`));
+  renderHealthBody(warns);   // async: ergänzt Duplikat-Prüfung der Tipps
 
   // Live + nächstes Spiel
   let liveHtml = live.length ? live.map(m=>matchLineRow(m)).join('') : '<div class="empty">Keine laufenden Spiele</div>';
@@ -466,6 +466,39 @@ function viewOverview(host){
   host.appendChild(el(`<div class="card fade">
     <div class="syne" style="font-weight:800;margin-bottom:10px;">⏭️ Nächstes Spiel</div>
     ${next? matchLineRow(next) : '<div class="empty">Kein anstehendes Spiel</div>'}</div>`));
+}
+
+// Health-Check inkl. asynchroner Prüfung: kein Nutzer darf zwei Tipps zum selben Spiel haben.
+// Quelle: bets – pro (user_id, match_id) darf es nur eine Zeile geben.
+async function renderHealthBody(syncWarns){
+  const warns=[...syncWarns];
+  const { data:bets, error } = await pagedSelect('bets','id,user_id,match_id');
+  const body=$('health-body');
+  if(!body) return; // Ansicht inzwischen gewechselt
+  if(error){
+    warns.push(`Tipp-Duplikatprüfung fehlgeschlagen: ${esc(error.message)}`);
+  } else {
+    const seen=new Map();
+    (bets||[]).forEach(b=>{ const k=b.user_id+'|'+b.match_id; seen.set(k,(seen.get(k)||0)+1); });
+    const dups=[...seen.entries()].filter(([,n])=>n>1);
+    if(dups.length){
+      const affUsers=new Set(dups.map(([k])=>k.split('|')[0])).size;
+      const affMatches=new Set(dups.map(([k])=>k.split('|')[1])).size;
+      const detail=dups.slice(0,15).map(([k,n])=>{
+        const [uid,mid]=k.split('|');
+        const m=A.cache.matches.find(x=>String(x.id)===String(mid));
+        const u=(A.cache.profById&&A.cache.profById[uid]?.display_name)||uid.slice(0,8);
+        const ml=m?`${teamName(m,'home')} – ${teamName(m,'away')}`:('Spiel #'+mid);
+        return `${esc(u)} · ${ml} <span class="mut">(${n}×)</span>`;
+      });
+      let w=`<b>${dups.length}</b> doppelte Tipps (gleicher Nutzer & Spiel) – je Nutzer ist pro Spiel nur ein Tipp erlaubt · ${affUsers} Nutzer, ${affMatches} Spiele`;
+      w+=`<div style="font-size:11.5px;margin-top:5px;font-weight:400;color:var(--text-2);line-height:1.7">${detail.join('<br>')}${dups.length>detail.length?`<br>… und ${dups.length-detail.length} weitere`:''}</div>`;
+      warns.push(w);
+    }
+  }
+  body.innerHTML = warns.length
+    ? warns.map(w=>`<div style="padding:6px 0;color:var(--accent)">⚠ ${w}</div>`).join('')
+    : '<div style="color:var(--green)">✓ Keine Auffälligkeiten</div>';
 }
 function teamName(m,side){ const t=m[side+'_team']; return t?`${t.flag_url&&!t.flag_url.startsWith('http')?t.flag_url+' ':''}${esc(t.name)}`:('#'+m[side+'_team_id']); }
 function matchLineRow(m){
