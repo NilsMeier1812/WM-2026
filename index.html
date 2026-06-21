@@ -2653,6 +2653,14 @@ async function renderBonusOverview(cards) {
   const byQ={};
   (bRes.data||[]).forEach(b=>{(byQ[b.question_id]??=[]).push(b);});
 
+  // Spielernamen der gesetzten Lösungen (correct_player_id) leichtgewichtig per ID nachladen.
+  const neededPlayerIds=[...new Set(questions.map(q=>q.correct_player_id).filter(Boolean))];
+  const corrPlayers={};
+  if (neededPlayerIds.length) {
+    const {data:pl}=await db.from('players').select('id,name').in('id',neededPlayerIds);
+    (pl||[]).forEach(p=>{corrPlayers[p.id]=p;});
+  }
+
   const formatAnswer=(q,bet)=>{
     let ans=bet?.bet_value||'-';
     if (q.answer_type==='teams'||q.answer_type==='players'||/^group\s+/i.test(q.answer_type||'')) {
@@ -2662,15 +2670,17 @@ async function renderBonusOverview(cards) {
     return ans;
   };
 
-  // Normalisierter Schlüssel für Tipp/Lösung-Vergleich (team_id bevorzugt, sonst Name)
-  const normKey=(teamId,value)=>{
-    if (teamId) return 't:'+String(teamId);
-    if (value) {
-      const v=value.trim();
-      const t=S.teams.find(x=>String(x.name).trim().toLowerCase()===v.toLowerCase());
-      return t?('t:'+t.id):('n:'+v.toLowerCase());
-    }
-    return null;
+  // Lösungs-/Tipp-Vergleich auf ID-Basis: Ergebnis steht in correct_player_id / correct_team_id
+  // (Spieler vor Team, da Spieler-Tipps auch ein bet_team_id tragen).
+  const correctKey=q=> q.correct_player_id?('p:'+q.correct_player_id)
+                     : q.correct_team_id ?('t:'+q.correct_team_id) : null;
+  const betKey=bet=> bet?.bet_player_id?('p:'+bet.bet_player_id)
+                   : bet?.bet_team_id ?('t:'+bet.bet_team_id) : null;
+  const teamFlag=t=>(t&&t.flag_url&&!t.flag_url.startsWith('http')&&!t.flag_url.startsWith('/'))?t.flag_url+' ':'';
+  const correctLabel=q=>{
+    if (q.correct_player_id){ const p=corrPlayers[q.correct_player_id]; return p?p.name:('Spieler #'+q.correct_player_id); }
+    if (q.correct_team_id){ const t=S.teams.find(x=>String(x.id)===String(q.correct_team_id)); return t?(teamFlag(t)+t.name):('Team #'+q.correct_team_id); }
+    return q.correct_answer||null; // Fallback für Textfragen ohne ID-Spalte
   };
 
   // Fragen mit gleichem group_key zu einer Karte zusammenfassen, Reihenfolge ab erstem Vorkommen
@@ -2714,8 +2724,9 @@ async function renderBonusOverview(cards) {
       </div>`;
     }).join('');
 
+    const sol=correctLabel(q);
     let headerRight=locked
-      ? (q.correct_answer?`<span style="font-size:10px;color:#6EE7B7;font-weight:700;">✓ ${q.correct_answer}</span>`:`<span style="font-size:10px;color:rgba(255,255,255,.4);">Ausstehend</span>`)
+      ? (sol?`<span style="font-size:10px;color:#6EE7B7;font-weight:700;">✓ ${sol}</span>`:`<span style="font-size:10px;color:rgba(255,255,255,.4);">Ausstehend</span>`)
       : `<span class="mono" style="font-size:10px;font-weight:700;background:rgba(255,255,255,.1);padding:3px 8px;border-radius:6px;white-space:nowrap;">Frist: ${fmtDate(q.deadline)}</span>`;
 
     return `<div class="card" style="overflow:hidden;">
@@ -2734,13 +2745,13 @@ async function renderBonusOverview(cards) {
     const pointsPerHit=Number(firstQ.points)||0;
 
     const correctSet=new Set();
-    qs.forEach(q=>{ const k=normKey(null,q.correct_answer); if (k) correctSet.add(k); });
-    const correctLabels=qs.map(q=>(q.correct_answer||'').trim()).filter(Boolean);
+    qs.forEach(q=>{ const k=correctKey(q); if (k) correctSet.add(k); });
+    const correctLabels=qs.map(q=>correctLabel(q)).filter(Boolean);
 
     const playerData=S.leaderboard.map(player=>{
       const bets=qs.map(q=>({q,bet:(byQ[q.id]||[]).find(x=>x.user_id===player.id)}));
       const picksSet=new Set();
-      bets.forEach(({bet})=>{ const k=normKey(bet?.bet_team_id,bet?.bet_value); if (k) picksSet.add(k); });
+      bets.forEach(({bet})=>{ const k=betKey(bet); if (k) picksSet.add(k); });
       let hits=0; picksSet.forEach(p=>{ if (correctSet.has(p)) hits++; });
       return { player, bets, computedPoints: hits*pointsPerHit, hasAnyBet: bets.some(x=>x.bet) };
     });
@@ -2765,7 +2776,7 @@ async function renderBonusOverview(cards) {
         picksHtml=bets.map(({q,bet})=>{
           if (!bet) return '<span style="color:var(--text-3);font-size:11px;font-weight:500;">–</span>';
           const ans=formatAnswer(q,bet);
-          const k=normKey(bet.bet_team_id,bet.bet_value);
+          const k=betKey(bet);
           const isCorrect=locked&&k&&correctSet.has(k);
           const color=isCorrect?'#059669':'var(--text)';
           const weight=isCorrect?700:500;
