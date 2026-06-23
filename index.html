@@ -3511,8 +3511,19 @@ async function loadTabelleData(filterType) {
 
   const unit=filterType==='total'||filterType==='inverted'||filterType==='bonus'||filterType.startsWith('phase_')?'Pkt':'×';
 
+  const inv = filterType === 'inverted';
+  const rankAsc = (arr, idx) => {
+    const v = arr[idx].value;
+    let r = 1;
+    for (let j = 0; j < arr.length; j++) if (j !== idx && arr[j].value < v) r++;
+    return r;
+  };
   c.innerHTML=`<div style="display:flex;flex-direction:column;gap:2px;">`+ranked.map((p,i)=>{
-    const isMe=p.id===S.user.id, rn=calculateRank(ranked, i), displayRn=getDisplayRank(ranked, i);
+    const rn = inv ? rankAsc(ranked, i) : calculateRank(ranked, i);
+    const displayRn = inv
+      ? (i === 0 ? rn : (rankAsc(ranked, i - 1) === rn ? '°' : rn))
+      : getDisplayRank(ranked, i);
+    const isMe=p.id===S.user.id;
     const rankDisplay=displayRn==='°'?`<span style="font-weight:800;font-size:16px;color:var(--text-3);line-height:1;display:flex;align-items:center;justify-content:center;">•</span>`:`<span style="font-weight:800;font-size:13px;color:var(--text-3);">${displayRn}</span>`;
     return `<div class="lb-row ${isMe?'me':''}" data-tabelle-user="${p.id}" ${!isMe ? `onclick="openH2H('${p.id}')" style="cursor:pointer;"` : ''}>
       <div style="display:flex;align-items:center;gap:10px;">
