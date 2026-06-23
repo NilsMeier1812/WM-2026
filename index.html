@@ -1190,19 +1190,27 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
   const otherBonus = bonusBy[rightId] || 0;
 
   // Häufigste Tipps – 1:0 und 0:1 zählen zusammen (richtungsunabhängig)
+  const matchById = new Map(S.matches.map(m => [m.id, m]));
   const topTipsFor = (betsMap) => {
-    const counts = {};
+    const stats = {}; // key -> { count, points }
     let total = 0;
-    Object.values(betsMap || {}).forEach(b => {
+    Object.entries(betsMap || {}).forEach(([mid, b]) => {
       if (!b || b.home_score === null || b.home_score === undefined) return;
       if (b.away_score === null || b.away_score === undefined) return;
       const hi = Math.max(b.home_score, b.away_score);
       const lo = Math.min(b.home_score, b.away_score);
       const key = `${hi}:${lo}`;
-      counts[key] = (counts[key] || 0) + 1;
+      const m = matchById.get(Number(mid)) || matchById.get(mid);
+      const pts = m ? calcBetPoints(m, b) : 0;
+      if (!stats[key]) stats[key] = { count: 0, points: 0 };
+      stats[key].count++;
+      stats[key].points += pts;
       total++;
     });
-    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const sorted = Object.entries(stats)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 10)
+      .map(([score, s]) => [score, s.count, s.points]);
     return { sorted, total };
   };
   const myTopTips = topTipsFor(myBetsMap);
@@ -1403,24 +1411,34 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
         if (max === 0) return `<p style="text-align:center; color:var(--text-3); padding:18px 0; font-size:12px;">Noch keine Tipps abgegeben.</p>`;
         const fmt = (entry, total, color) => {
           if (!entry) return `<div style="color:var(--text-3); font-size:12px;">–</div>`;
-          const [score, cnt] = entry;
+          const [score, cnt, pts] = entry;
           const pct = total > 0 ? Math.round((cnt / total) * 100) : 0;
+          const avg = cnt > 0 ? (pts / cnt) : 0;
+          const avgStr = (Math.round(avg * 10) / 10).toFixed(1);
           return `
-            <div style="display:flex; align-items:baseline; gap:8px;">
-              <span class="mono" style="font-weight:800; font-size:14px; color:${color}; min-width:34px;">${score}</span>
-              <span class="syne" style="font-weight:800; font-size:13px; color:var(--text);">${cnt}×</span>
-              <span style="font-size:11px; color:var(--text-3); font-weight:600;">${pct}%</span>
+            <div style="display:flex; flex-direction:column; gap:1px;">
+              <div style="display:flex; align-items:baseline; gap:8px;">
+                <span class="mono" style="font-weight:800; font-size:14px; color:${color}; min-width:34px;">${score}</span>
+                <span class="syne" style="font-weight:800; font-size:13px; color:var(--text);">${cnt}×</span>
+                <span style="font-size:11px; color:var(--text-3); font-weight:600;">${pct}%</span>
+              </div>
+              <div style="font-size:10px; color:var(--text-2); font-weight:600; padding-left:42px;">Ø ${avgStr} P./Spiel</div>
             </div>`;
         };
         const fmtRight = (entry, total, color) => {
           if (!entry) return `<div style="color:var(--text-3); font-size:12px; text-align:right;">–</div>`;
-          const [score, cnt] = entry;
+          const [score, cnt, pts] = entry;
           const pct = total > 0 ? Math.round((cnt / total) * 100) : 0;
+          const avg = cnt > 0 ? (pts / cnt) : 0;
+          const avgStr = (Math.round(avg * 10) / 10).toFixed(1);
           return `
-            <div style="display:flex; align-items:baseline; gap:8px; justify-content:flex-end;">
-              <span style="font-size:11px; color:var(--text-3); font-weight:600;">${pct}%</span>
-              <span class="syne" style="font-weight:800; font-size:13px; color:var(--text);">${cnt}×</span>
-              <span class="mono" style="font-weight:800; font-size:14px; color:${color}; min-width:34px; text-align:right;">${score}</span>
+            <div style="display:flex; flex-direction:column; gap:1px; align-items:flex-end;">
+              <div style="display:flex; align-items:baseline; gap:8px; justify-content:flex-end;">
+                <span style="font-size:11px; color:var(--text-3); font-weight:600;">${pct}%</span>
+                <span class="syne" style="font-weight:800; font-size:13px; color:var(--text);">${cnt}×</span>
+                <span class="mono" style="font-weight:800; font-size:14px; color:${color}; min-width:34px; text-align:right;">${score}</span>
+              </div>
+              <div style="font-size:10px; color:var(--text-2); font-weight:600; padding-right:42px;">Ø ${avgStr} P./Spiel</div>
             </div>`;
         };
         for (let i = 0; i < max; i++) {
