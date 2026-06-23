@@ -642,7 +642,8 @@ const S = {
   h2hLeft: null,               // user_id linke Seite (Standard: man selbst)
   h2hRight: null,              // user_id rechte Seite
   h2hCache: {},                // bereits geladene Bets anderer Spieler
-  h2hCollapsed: {}             // eingeklappte Spieltag-Gruppen im H2H
+  h2hCollapsed: {},            // eingeklappte Spieltag-Gruppen im H2H
+  h2hView: 'stats'             // 'stats' | 'matches' – Sub-Ansicht innerhalb H2H
 };
 
 // ──────────────────────────────────────────
@@ -1188,6 +1189,25 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
   const myBonus = bonusBy[leftId] || 0;
   const otherBonus = bonusBy[rightId] || 0;
 
+  // Häufigste Tipps – 1:0 und 0:1 zählen zusammen (richtungsunabhängig)
+  const topTipsFor = (betsMap) => {
+    const counts = {};
+    let total = 0;
+    Object.values(betsMap || {}).forEach(b => {
+      if (!b || b.home_score === null || b.home_score === undefined) return;
+      if (b.away_score === null || b.away_score === undefined) return;
+      const hi = Math.max(b.home_score, b.away_score);
+      const lo = Math.min(b.home_score, b.away_score);
+      const key = `${hi}:${lo}`;
+      counts[key] = (counts[key] || 0) + 1;
+      total++;
+    });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    return { sorted, total };
+  };
+  const myTopTips = topTipsFor(myBetsMap);
+  const otherTopTips = topTipsFor(otherBetsMap);
+
   // Hilfsfunktion für Stat-Zeilen — flach, optional Sub-Label & eigener Vergleichswert, neutral möglich
   const statRow = (label, myVal, otherVal, opts = {}) => {
     const { sub = '', myCmp = myVal, otherCmp = otherVal, neutral = false, last = false } = opts;
@@ -1345,6 +1365,18 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
       </div>
     </div>
 
+    <!-- Stats / Spiele Umschalter -->
+    <div style="padding:14px 16px 0;">
+      <div class="chart-view-toggle" style="margin-bottom:0;">
+        <button class="chart-view-btn${S.h2hView === 'stats' ? ' is-active' : ''}" onclick="setH2HView('stats')">Stats</button>
+        <button class="chart-view-btn${S.h2hView === 'matches' ? ' is-active' : ''}" onclick="setH2HView('matches')">Spiele</button>
+      </div>
+    </div>
+
+    ${S.h2hView === 'matches' ? `
+      <div style="margin-top:8px;"></div>
+      ${matchesHtml}
+    ` : `
     <!-- Stats Grid -->
     <div style="margin:14px 16px 0; background:var(--surface); border:1px solid var(--border-light); border-radius:12px; overflow:hidden;">
       ${statRow('Bessere Tipps', myWins, otherWins)}
@@ -1358,9 +1390,56 @@ function renderH2H(leftId, rightId, leftMap, rightMap, container) {
       ${statRow('Pechsträhne', dual(myExtra.curWorst, myExtra.worst), dual(otherExtra.curWorst, otherExtra.worst), { sub: 'aktuell / längste', neutral: true, last: true })}
     </div>
 
-    <div class="section-label" style="margin:18px 16px 6px;">Spiele</div>
-    ${matchesHtml}
+    <!-- Häufigste Tipps -->
+    <div class="section-label" style="margin:18px 16px 6px;">Häufigste Tipps</div>
+    <div style="margin:0 16px 0; background:var(--surface); border:1px solid var(--border-light); border-radius:12px; overflow:hidden;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0; padding:10px 12px 6px; border-bottom:1px solid var(--border-light); background:#F8F6F2;">
+        <div style="font-size:11px; font-weight:800; color:var(--blue); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${leftNameShort}</div>
+        <div style="font-size:11px; font-weight:800; color:var(--text); text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${rightNameShort}</div>
+      </div>
+      ${(() => {
+        const rows = [];
+        const max = Math.max(myTopTips.sorted.length, otherTopTips.sorted.length);
+        if (max === 0) return `<p style="text-align:center; color:var(--text-3); padding:18px 0; font-size:12px;">Noch keine Tipps abgegeben.</p>`;
+        const fmt = (entry, total, color) => {
+          if (!entry) return `<div style="color:var(--text-3); font-size:12px;">–</div>`;
+          const [score, cnt] = entry;
+          const pct = total > 0 ? Math.round((cnt / total) * 100) : 0;
+          return `
+            <div style="display:flex; align-items:baseline; gap:8px;">
+              <span class="mono" style="font-weight:800; font-size:14px; color:${color}; min-width:34px;">${score}</span>
+              <span class="syne" style="font-weight:800; font-size:13px; color:var(--text);">${cnt}×</span>
+              <span style="font-size:11px; color:var(--text-3); font-weight:600;">${pct}%</span>
+            </div>`;
+        };
+        const fmtRight = (entry, total, color) => {
+          if (!entry) return `<div style="color:var(--text-3); font-size:12px; text-align:right;">–</div>`;
+          const [score, cnt] = entry;
+          const pct = total > 0 ? Math.round((cnt / total) * 100) : 0;
+          return `
+            <div style="display:flex; align-items:baseline; gap:8px; justify-content:flex-end;">
+              <span style="font-size:11px; color:var(--text-3); font-weight:600;">${pct}%</span>
+              <span class="syne" style="font-weight:800; font-size:13px; color:var(--text);">${cnt}×</span>
+              <span class="mono" style="font-weight:800; font-size:14px; color:${color}; min-width:34px; text-align:right;">${score}</span>
+            </div>`;
+        };
+        for (let i = 0; i < max; i++) {
+          rows.push(`
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:8px 12px; ${i === max - 1 ? '' : 'border-bottom:1px solid var(--border-light);'} align-items:center;">
+              ${fmt(myTopTips.sorted[i], myTopTips.total, 'var(--blue)')}
+              ${fmtRight(otherTopTips.sorted[i], otherTopTips.total, 'var(--text)')}
+            </div>`);
+        }
+        return rows.join('');
+      })()}
+    </div>
+    `}
   `;
+}
+
+window.setH2HView = function(view) {
+  S.h2hView = view;
+  loadH2HInline();
 }
 
 function jumpToMatch(phase, matchId) {
