@@ -3222,6 +3222,7 @@ function renderSubView_Tabelle(c) {
           <option value="exact"        ${S.tabelleFilter === 'exact' ? 'selected' : ''}>Anzahl Exakte Treffer</option>
           <option value="trend"        ${S.tabelleFilter === 'trend' ? 'selected' : ''}>Anzahl Richtige Tendenz</option>
           <option value="first_scorer" ${S.tabelleFilter === 'first_scorer' ? 'selected' : ''}>Erster Torschütze (korrekt)</option>
+          <option value="bonus"        ${S.tabelleFilter === 'bonus' ? 'selected' : ''}>Bonus Punkte</option>
           <optgroup label="Stand nach Spielphase">${phaseOpts}</optgroup>
         </select>
         <div style="pointer-events:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--text-2);">
@@ -3363,12 +3364,15 @@ async function loadTabelleData(filterType) {
     S.allBetsCache=data||[];
   }
 
-  // Phasen-Stand: Bonus-Punkte des verknüpften Spiels zählen zur jeweiligen Phase mit
-  if (filterType.startsWith('phase_')) await ensureExtraCaches();
+  if (filterType==='bonus') await ensureExtraCaches();
 
   let ranked=[];
   if (filterType==='total') {
     ranked=S.liveLeaderboard.map(p=>({id:p.id,display_name:p.display_name,value:p.total_points??0}));
+  } else if (filterType==='bonus') {
+    const bonusBy=bonusPointsByUser();
+    ranked=S.leaderboard.map(p=>({id:p.id,display_name:p.display_name,value:bonusBy[p.id]||0}));
+    ranked.sort((a,b)=>b.value-a.value);
   } else {
     const scores={};
     S.leaderboard.forEach(p=>scores[p.id]={name:p.display_name,val:0});
@@ -3399,17 +3403,11 @@ async function loadTabelleData(filterType) {
         if (m.phase===filterType.replace('phase_','')) scores[b.user_id].val+=pts;
       }
     });
-    if (filterType.startsWith('phase_')) {
-      const ph=filterType.replace('phase_','');
-      extraPointEvents().forEach(ev=>{
-        if (ev.phase===ph && scores[ev.userId]) scores[ev.userId].val+=ev.pts;
-      });
-    }
     ranked=Object.keys(scores).map(id=>({id,display_name:scores[id].name,value:scores[id].val}));
     ranked.sort((a,b)=>b.value-a.value);
   }
 
-  const unit=filterType==='total'||filterType.startsWith('phase_')?'Pkt':'×';
+  const unit=filterType==='total'||filterType==='bonus'||filterType.startsWith('phase_')?'Pkt':'×';
 
   c.innerHTML=`<div style="display:flex;flex-direction:column;gap:2px;">`+ranked.map((p,i)=>{
     const isMe=p.id===S.user.id, rn=calculateRank(ranked, i), displayRn=getDisplayRank(ranked, i);
