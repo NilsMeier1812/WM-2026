@@ -3593,7 +3593,7 @@ async function renderPointsChart(container) {
   //     Y summiert (kumulativ) oder pro Tag/Spiel (nicht summiert; nur Punkteverlauf)
   if (S.chartView !== 'table') S.chartView = 'points';
   if (S.chartXMode !== 'matches') S.chartXMode = 'days';
-  if (S.chartYMode !== 'per') S.chartYMode = 'cumulative';
+  if (S.chartYMode !== 'per' && S.chartYMode !== 'diff') S.chartYMode = 'cumulative';
   const view = S.chartView, xMode = S.chartXMode, yMode = S.chartYMode;
 
   const fmtDate = ds => {
@@ -3678,6 +3678,15 @@ async function renderPointsChart(container) {
         series[uid].push({ value: pos });
       });
     });
+  } else if (yMode === 'diff') {
+    // Differenz zum Durchschnitt aller Spieler je Intervall (Null-Linie = Mittel)
+    const cum = {}; userIds.forEach(uid => { cum[uid] = 0; series[uid] = []; });
+    intervals.forEach(iv => {
+      userIds.forEach(uid => { cum[uid] += (iv.pts[uid] || 0); });
+      const sum = userIds.reduce((s, uid) => s + cum[uid], 0);
+      const avg = userIds.length ? sum / userIds.length : 0;
+      userIds.forEach(uid => series[uid].push({ value: cum[uid] - avg }));
+    });
   } else {
     userIds.forEach(uid => {
       const arr = [];
@@ -3705,11 +3714,16 @@ async function renderPointsChart(container) {
   const xAt = i => padL + i * xStep;
 
   // Y-Abbildung: Punkte → Wertachse (0 unten); Tabelle → feste Rangskala (1 oben … N unten)
+  //              Differenz → symmetrisch um 0 (Null-Linie in der Mitte)
   const nRanks = Math.max(1, userIds.length);
-  const maxY = Math.max(1, ...userIds.flatMap(uid => series[uid].map(p => p.value)));
+  const allVals = userIds.flatMap(uid => series[uid].map(p => p.value));
+  const maxY = Math.max(1, ...allVals);
+  const diffAbs = Math.max(1, ...allVals.map(v => Math.abs(v)));
   const yAt = (view === 'table')
     ? (rank => padT + ((rank - 1) / Math.max(1, nRanks - 1)) * chartH)
-    : (v => padT + chartH - (v * (chartH / maxY)));
+    : (yMode === 'diff'
+        ? (v => padT + chartH / 2 - (v * (chartH / 2) / diffAbs))
+        : (v => padT + chartH - (v * (chartH / maxY))));
 
   // Sichtbarkeits-State (welche Linien sind ausgeblendet)
   if (!S.chartHidden) S.chartHidden = new Set();
@@ -3724,6 +3738,16 @@ async function renderPointsChart(container) {
       yGrid += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#E5DFD2" stroke-width="0.5" />`;
       if (r === 1 || r === nRanks || (r - 1) % rankStep === 0)
         yGrid += `<text x="${padL - 5}" y="${y + 3}" text-anchor="end" font-size="9" fill="#9CA3AF" font-family="DM Mono">${r}.</text>`;
+    }
+  } else if (yMode === 'diff') {
+    const yTicks = 4; // 2 oberhalb, 0-Linie, 2 unterhalb
+    for (let i = -yTicks/2; i <= yTicks/2; i++) {
+      const val = (diffAbs / (yTicks/2)) * i;
+      const y = yAt(val);
+      const isZero = i === 0;
+      yGrid += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="${isZero ? '#9CA3AF' : '#E5DFD2'}" stroke-width="${isZero ? 1 : 0.5}" />`;
+      const label = isZero ? '0' : (val > 0 ? '+' : '') + Math.round(val);
+      yGrid += `<text x="${padL - 5}" y="${y + 3}" text-anchor="end" font-size="9" fill="#9CA3AF" font-family="DM Mono">${label}</text>`;
     }
   } else {
     const yTicks = 5;
@@ -3794,6 +3818,7 @@ async function renderPointsChart(container) {
         <div class="chart-seg">
           <button class="chart-seg-btn${yMode === 'cumulative' ? ' is-active' : ''}" onclick="setChartYMode('cumulative')">Summiert</button>
           <button class="chart-seg-btn${yMode === 'per' ? ' is-active' : ''}" onclick="setChartYMode('per')">${perLabel}</button>
+          <button class="chart-seg-btn${yMode === 'diff' ? ' is-active' : ''}" onclick="setChartYMode('diff')">Differenz</button>
         </div>
       </div>` : '';
 
@@ -3845,7 +3870,7 @@ window.setChartXMode = function(mode) {
 };
 
 window.setChartYMode = function(mode) {
-  S.chartYMode = (mode === 'per') ? 'per' : 'cumulative';
+  S.chartYMode = (mode === 'per' || mode === 'diff') ? mode : 'cumulative';
   if (S.chartContainer) renderPointsChart(S.chartContainer);
 };
 
