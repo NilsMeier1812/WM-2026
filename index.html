@@ -3665,7 +3665,7 @@ async function renderPointsChart(container) {
   // 4) Datenreihen pro User
   //    Punkteverlauf: Punkte — kumulativ (mit 0-Ursprung) oder pro Intervall
   //    Tabellenverlauf: Position 1..N je Intervall (aus kumulierten Punkten)
-  const hasOrigin = (view === 'points' && yMode === 'cumulative');
+  const hasOrigin = (view === 'points' && (yMode === 'cumulative' || yMode === 'diff'));
   const series = {};
   if (view === 'table') {
     const cumPts = {};
@@ -3680,7 +3680,7 @@ async function renderPointsChart(container) {
     });
   } else if (yMode === 'diff') {
     // Differenz zum Durchschnitt aller Spieler je Intervall (Null-Linie = Mittel)
-    const cum = {}; userIds.forEach(uid => { cum[uid] = 0; series[uid] = []; });
+    const cum = {}; userIds.forEach(uid => { cum[uid] = 0; series[uid] = [{ value: 0 }]; });
     intervals.forEach(iv => {
       userIds.forEach(uid => { cum[uid] += (iv.pts[uid] || 0); });
       const sum = userIds.reduce((s, uid) => s + cum[uid], 0);
