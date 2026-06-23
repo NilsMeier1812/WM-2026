@@ -3309,7 +3309,6 @@ function renderTabelleSubContent() {
 // ── Sub-View 1: Tabelle ──────────────────────────────
 function renderSubView_Tabelle(c) {
   const phaseOpts = matchPhases().map(p => `<option value="phase_${p}" ${S.tabelleFilter === `phase_${p}` ? 'selected' : ''}>${p}</option>`).join('');
-  const showInverted = !!(S.profile && S.profile.role);
 
   c.innerHTML = `
     <div style="padding:14px 16px 12px;">
@@ -3321,7 +3320,7 @@ function renderSubView_Tabelle(c) {
           <option value="trend"        ${S.tabelleFilter === 'trend' ? 'selected' : ''}>Anzahl Richtige Tendenz</option>
           <option value="first_scorer" ${S.tabelleFilter === 'first_scorer' ? 'selected' : ''}>Erster Torschütze (korrekt)</option>
           <option value="bonus"        ${S.tabelleFilter === 'bonus' ? 'selected' : ''}>Bonus Punkte</option>
-          ${showInverted ? `<option value="inverted"     ${S.tabelleFilter === 'inverted' ? 'selected' : ''}>Invertiert</option>` : ''}
+          <option value="inverted"     ${S.tabelleFilter === 'inverted' ? 'selected' : ''}>Invertiert</option>
           <optgroup label="Stand nach Spielphase">${phaseOpts}</optgroup>
         </select>
         <div style="pointer-events:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--text-2);">
