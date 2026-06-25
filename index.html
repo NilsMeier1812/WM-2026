@@ -853,7 +853,7 @@ async function viewExtraQuestions(host){
       <td><button class="btn sm" onclick='editExtraQ(${q.id})'>✎</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">Keine Fragen</td></tr>'}</tbody></table></div>`;
 }
 async function editExtraQ(id){
-  let q={question_text:'',points:5,answer_type:'text',correct_answer:'',deadline:''};
+  let q={question_text:'',points:5,answer_type:'teams',deadline:''};
   if(id){ const {data}=await A.db.from('extra_questions').select('*').eq('id',id).single(); if(data) q=data; }
   openModal(`<h3>${id?'Frage #'+id:'Neue Extra-Frage'}</h3>
     <label class="fld">Fragetext</label><textarea id="q-text" rows="2" style="margin-bottom:10px">${esc(q.question_text)}</textarea>
@@ -938,13 +938,13 @@ function qCat(q){
   if(t==='players'||t==='player') return 'player';
   return 'text';
 }
-// Ergebnis gesetzt? Quelle ist correct_team_id / correct_player_id (Text nur Fallback).
-function hasResult(q){ return !!(q.correct_team_id||q.correct_player_id||q.correct_answer); }
-// Lesbare Lösung aus den ID-Spalten (bzw. Text-Fallback).
+// Ergebnis gesetzt? Quelle ist correct_team_id / correct_player_id.
+function hasResult(q){ return !!(q.correct_team_id||q.correct_player_id); }
+// Lesbare Lösung aus den ID-Spalten.
 function resultLabel(q){
   if(q.correct_team_id){ const t=(A.cache.teamById&&A.cache.teamById[q.correct_team_id])||matchTeam(q.correct_team_id); return t?t.name:('Team #'+q.correct_team_id); }
   if(q.correct_player_id){ const p=(A.cache.playerById&&A.cache.playerById[q.correct_player_id])||(A.cache.players||[]).find(x=>String(x.id)===String(q.correct_player_id)); return p?p.name:('Spieler #'+q.correct_player_id); }
-  return q.correct_answer||null;
+  return null;
 }
 function matchTeam(id){ return (A.cache.teams||[]).find(x=>String(x.id)===String(id))||null; }
 
@@ -1000,13 +1000,8 @@ function bonusInput(q){
       <select id="res-${q.id}"><option value="">Spieler …</option></select>
     </div>`;
   }
-  // Textfragen behalten correct_answer (keine passende ID-Spalte)
-  const ca=q.correct_answer||'';
-  if(type==='boolean'){
-    return `<input id="res-${q.id}" list="bool-${q.id}" value="${esc(ca)}" placeholder="Ja / Nein">
-      <datalist id="bool-${q.id}"><option>Ja</option><option>Nein</option></datalist>`;
-  }
-  return `<input id="res-${q.id}" type="${type==='number'?'number':'text'}" value="${esc(ca)}" placeholder="Antwort eintragen …">`;
+  // Andere Typen werden nicht unterstützt (keine ID-Spalte, kein correct_answer mehr)
+  return `<div class="mut" style="font-size:12px;padding:8px 0">Antworttyp „${esc(q.answer_type)}" wird hier nicht unterstützt (nur Team-/Spieler-Fragen).</div>`;
 }
 window.bonusFillPlayers=function(qId, teamId, selectPlayerId){
   const sel=$('res-'+qId); if(!sel) return;
@@ -1017,12 +1012,12 @@ window.saveBonusResult=async function(qId, clear){
   const q=(A._resQs||[]).find(x=>x.id===qId);
   const cat=q?qCat(q):'text';
   const raw = clear ? '' : (($('res-'+qId)?.value)||'').trim();
-  // Ergebnis je nach Typ in die passende Spalte; die jeweils anderen werden geleert.
-  const values = { correct_answer:null, correct_team_id:null, correct_player_id:null };
+  if(cat!=='team' && cat!=='player'){ toast('Antworttyp wird nicht unterstützt (nur Team/Spieler)','err'); return; }
+  // Ergebnis je nach Typ in die passende ID-Spalte; die andere wird geleert.
+  const values = { correct_team_id:null, correct_player_id:null };
   if(!clear){
     if(cat==='team') values.correct_team_id = num(raw);
     else if(cat==='player') values.correct_player_id = num(raw);
-    else values.correct_answer = raw||null;
   }
   // Zeitlicher Anker (verknüpftes Spiel) unverändert mitschreiben
   const matchSel=$('res-match-'+qId);
@@ -1031,8 +1026,8 @@ window.saveBonusResult=async function(qId, clear){
   const btn=$('res-save-'+qId); if(btn){ btn.disabled=true; btn.textContent='…'; }
   const { error } = await adminWrite('extra_questions','update',{ id:qId, values });
   if(error){ toast(error.message,'err'); if(btn){ btn.disabled=false; btn.textContent='Speichern'; } return; }
-  if(q){ q.correct_answer=values.correct_answer; q.correct_team_id=values.correct_team_id; q.correct_player_id=values.correct_player_id; if(matchId!==undefined) q.match_id=matchId; }
-  const setAny = values.correct_team_id||values.correct_player_id||values.correct_answer;
+  if(q){ q.correct_team_id=values.correct_team_id; q.correct_player_id=values.correct_player_id; if(matchId!==undefined) q.match_id=matchId; }
+  const setAny = values.correct_team_id||values.correct_player_id;
   toast(clear?'Ergebnis gelöscht':(setAny?'Gespeichert':'Verknüpfung gespeichert')); renderView();
 };
 
