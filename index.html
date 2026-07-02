@@ -824,8 +824,11 @@ function phaseTabs(activePhase, onclickFn) {
 }
 
 function getFinalScore(m, type) {
-  if (type==='home') return m.home_score_extratime!==null ? m.home_score_extratime : m.home_score;
-  if (type==='away') return m.away_score_extratime!==null ? m.away_score_extratime : m.away_score;
+  // home_score/away_score enthalten bereits das Endergebnis inkl. Verlängerung
+  // (aus der API: goals.home/away). home_score_extratime/penalty sind nur
+  // Zusatzinfos für die n.V./n.E.-Anzeige und dürfen NICHT als Endstand dienen.
+  if (type==='home') return m.home_score;
+  if (type==='away') return m.away_score;
   return null;
 }
 
@@ -3565,8 +3568,8 @@ async function loadTabelleData(filterType) {
     S.allBetsCache.forEach(b=>{
       if (!scores[b.user_id]) return;
       const m=b.match;
-      const finalH=m.home_score_extratime!==null?m.home_score_extratime:m.home_score;
-      const finalA=m.away_score_extratime!==null?m.away_score_extratime:m.away_score;
+      const finalH=m.home_score;
+      const finalA=m.away_score;
       const pts=calcBetPoints(m,b);
       if (filterType==='exact') {
         if (finalH!==null&&b.home_score===finalH&&b.away_score===finalA) scores[b.user_id].val++;
