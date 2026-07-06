@@ -618,6 +618,23 @@ const SUPABASE_ANON_KEY = IS_DEV
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Lädt ALLE Zeilen einer Abfrage seitenweise ein. Supabase/PostgREST liefert pro
+// Request serverseitig maximal 1000 Zeilen – bei Tabellen, die über alle Spieler
+// wachsen (z. B. bets), reicht ein einzelner Request daher irgendwann nicht mehr.
+// makeQuery(from, to) muss bei JEDEM Aufruf eine frische Abfrage bauen und den
+// übergebenen Range setzen; für stabile Seitengrenzen sollte sie nach einer
+// eindeutigen Spalte (z. B. id) sortieren.
+async function fetchAllPaged(makeQuery, pageSize = 1000) {
+  const all = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await makeQuery(from, from + pageSize - 1);
+    if (error) return { data: null, error };
+    all.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+  return { data: all, error: null };
+}
+
 // ──────────────────────────────────────────
 // STATE
 // ──────────────────────────────────────────
@@ -877,8 +894,10 @@ function calcBetPoints(m, b, udCounts=null) {
 // (user_rankings). Fallback auf extra_bets, falls die View noch nicht existiert.
 async function ensureExtraCaches() {
   if (!S.allExtraBetsCache) {
-    let { data, error } = await db.from('extra_bet_scores').select('user_id,question_id,points_awarded');
-    if (error) ({ data } = await db.from('extra_bets').select('user_id,question_id,points_awarded'));
+    let { data, error } = await fetchAllPaged((from, to) =>
+      db.from('extra_bet_scores').select('user_id,question_id,points_awarded').order('id').range(from, to));
+    if (error) ({ data } = await fetchAllPaged((from, to) =>
+      db.from('extra_bets').select('user_id,question_id,points_awarded').order('id').range(from, to)));
     S.allExtraBetsCache = data || [];
   }
   if (!S.allExtraQuestionsCache) {
@@ -1638,9 +1657,9 @@ async function fetchData(showLoadingState=true, silent = false) {
     const [matchRes,betRes,profRes,teamsRes,rankRes] = await Promise.all([
       db.from('matches').select('*, home_team:teams!home_team_id(id,name,flag_url), away_team:teams!away_team_id(id,name,flag_url), first_goalscorer:players!first_goalscorer_id(id,name,team_id)').order('kickoff_time',{ascending:true}),
       db.from('bets').select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)').eq('user_id',S.user.id),
-      db.from('profiles').select('id,display_name'),
+      fetchAllPaged((from, to) => db.from('profiles').select('id,display_name').order('id').range(from, to)),
       db.from('teams').select('*').order('name',{ascending:true}),
-      db.from('user_rankings').select('*')
+      fetchAllPaged((from, to) => db.from('user_rankings').select('*').order('user_id').range(from, to))
     ]);
 
     if (matchRes.error) throw matchRes.error;
@@ -1917,7 +1936,8 @@ async function computeWelcomeSummary(lastSeenIso) {
   // "jetzt" = autoritative Tabellen-Totals; "vorher" = abzüglich der im Fenster erzielten Punkte.
   const totalsNow = {}, winPts = {};
   S.leaderboard.forEach(p => { totalsNow[p.id] = p.total_points || 0; });
-  const { data: winBets } = await db.from('bets').select('user_id,points_awarded,match_id').in('match_id', [...windowIds]);
+  const { data: winBets } = await fetchAllPaged((from, to) =>
+    db.from('bets').select('user_id,points_awarded,match_id').in('match_id', [...windowIds]).order('id').range(from, to));
   (winBets || []).forEach(b => { winPts[b.user_id] = (winPts[b.user_id] || 0) + Number(b.points_awarded || 0); });
   const allIds = S.leaderboard.map(p => p.id);
   const before = id => (totalsNow[id] || 0) - (winPts[id] || 0);
@@ -2751,8 +2771,8 @@ window.setOverviewPhase = async function(p) {
 async function renderBonusOverview(cards) {
   const [qRes,bRes,sRes]=await Promise.all([
     db.from('extra_questions').select('*').order('id',{ascending:true}),
-    db.from('extra_bets').select('*'),
-    db.from('extra_bet_scores').select('id,points_awarded')   // berechnete Punkte (View)
+    fetchAllPaged((from, to) => db.from('extra_bets').select('*').order('id').range(from, to)),
+    fetchAllPaged((from, to) => db.from('extra_bet_scores').select('id,points_awarded').order('id').range(from, to))   // berechnete Punkte (View)
   ]);
   if (qRes.error) { cards.innerHTML=`<p style="color:var(--red);padding:16px;">${qRes.error.message}</p>`; return; }
   const questions=qRes.data||[];
@@ -3021,9 +3041,9 @@ window.toggleBonusOverview = function(key) {
 // ohne die Ansicht zu leeren. Eine verdächtig leere Antwort ersetzt den Cache nicht.
 async function refreshOverviewBets() {
   if (!S.matches.length) return;
-  const { data, error } = await db.from('bets')
+  const { data, error } = await fetchAllPaged((from, to) => db.from('bets')
     .select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)')
-    .in('match_id', S.matches.map(m => m.id));
+    .in('match_id', S.matches.map(m => m.id)).order('id').range(from, to));
   if (error || !data) return;
   if (data.length === 0 && S.overviewAllBets && S.overviewAllBets.length > 0) return;
   S.overviewAllBets = data;
@@ -3054,9 +3074,9 @@ async function loadOverviewData() {
   cards.innerHTML = overviewSkeleton();
 
   // Einmalig ALLE Wetten (phasenübergreifend) laden und cachen
-  const { data: allBets, error } = await db.from('bets')
+  const { data: allBets, error } = await fetchAllPaged((from, to) => db.from('bets')
     .select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)')
-    .in('match_id', S.matches.map(m => m.id));
+    .in('match_id', S.matches.map(m => m.id)).order('id').range(from, to));
 
   if (error) {
     cards.innerHTML = `<p style="color:var(--red);font-size:13px;padding:16px;">${error.message}</p>`;
@@ -3502,9 +3522,9 @@ async function loadH2HInline() {
   // Underdog-Rarität pro Spiel (H2H selbst kennt nur die zwei Spieler).
   const ensureAllBets = async () => {
     if (S.overviewAllBets !== null) return;
-    const { data } = await db.from('bets')
+    const { data } = await fetchAllPaged((from, to) => db.from('bets')
       .select('*, goalscorer:players!first_goalscorer_id(id,name,team_id)')
-      .in('match_id', S.matches.map(m => m.id));
+      .in('match_id', S.matches.map(m => m.id)).order('id').range(from, to));
     if (data) S.overviewAllBets = data;
   };
 
@@ -3543,9 +3563,9 @@ async function loadTabelleData(filterType) {
   c.innerHTML=`<div style="display:flex;justify-content:center;padding:40px 0;"><div class="spinner" style="width:22px;height:22px;border-top-color:var(--navy);border-color:var(--border);"></div></div>`;
 
   if (!S.allBetsCache && filterType!=='total') {
-    const {data,error}=await db.from('bets')
+    const {data,error}=await fetchAllPaged((from, to) => db.from('bets')
       .select('user_id,home_score,away_score,first_goalscorer_id,is_goalless,is_boosted,points_awarded,match:matches!inner(id,phase,home_score,away_score,home_score_extratime,away_score_extratime,status,kickoff_time,first_goalscorer_id,is_goalless)')
-      .lte('match.kickoff_time', new Date().toISOString());
+      .lte('match.kickoff_time', new Date().toISOString()).order('id').range(from, to));
     if (error) { c.innerHTML=`<p style="color:var(--red);font-size:13px;">${error.message}</p>`; return; }
     S.allBetsCache=data||[];
   }
@@ -3642,9 +3662,9 @@ async function renderPointsChart(container) {
 
   // 1) Bets laden (falls Cache leer) — gleiche Query wie loadTabelleData
   if (!S.allBetsCache) {
-    const { data, error } = await db.from('bets')
+    const { data, error } = await fetchAllPaged((from, to) => db.from('bets')
       .select('user_id,home_score,away_score,first_goalscorer_id,is_goalless,is_boosted,points_awarded,match:matches!inner(id,phase,home_score,away_score,home_score_extratime,away_score_extratime,status,kickoff_time,first_goalscorer_id,is_goalless)')
-      .lte('match.kickoff_time', new Date().toISOString());
+      .lte('match.kickoff_time', new Date().toISOString()).order('id').range(from, to));
     if (error) {
       container.innerHTML = `<p style="font-size:13px;color:var(--red);text-align:center;padding:32px 0;">${error.message}</p>`;
       return;
@@ -4573,9 +4593,9 @@ function patchBettingMatchCard(matchId) {
 async function refreshLiveBets() {
   const liveMatches = S.matches.filter(m => isLocked(m) && !isFinished(m.status));
   if (liveMatches.length === 0) { S.liveBets = []; S.liveUdMap = {}; return; }
-  const { data, error } = await db.from('bets')
+  const { data, error } = await fetchAllPaged((from, to) => db.from('bets')
     .select('user_id,match_id,home_score,away_score,first_goalscorer_id,is_goalless,is_boosted,points_awarded')
-    .in('match_id', liveMatches.map(m => m.id));
+    .in('match_id', liveMatches.map(m => m.id)).order('id').range(from, to));
   if (!error) {
     S.liveBets = data || [];
     // Underdog-Counts pro laufendem Spiel cachen → Fallback für calcBetPoints.
